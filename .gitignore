@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment variables
+.env.local
+.env.*.local
+
+# WorkBuddy internal
+.workbuddy/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Temp
+.cache/
+.temp/
+
+*.bak.*
+*.backup.*
+src/lib/*.bak
+src/pages/*.bak
+functions/api/*.bak
+wrangler.jsonc.bak.*
+.wrangler/
+
+app.zip

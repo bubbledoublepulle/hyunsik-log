@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hyunsik.log</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
+    overflow: hidden;
+  }
+
+  .loading-screen {
+    position: fixed;
+    inset: 0;
+    background: #F8F9FA;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  /* Pulse circles */
+  .pulse {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(64px);
+    animation: pulse-scale 3s ease-in-out infinite;
+  }
+  .pulse-1 {
+    width: 600px; height: 600px;
+    background: rgba(186, 230, 253, 0.3);
+  }
+  .pulse-2 {
+    width: 400px; height: 400px;
+    background: rgba(125, 211, 252, 0.2);
+    animation-delay: 0.5s;
+  }
+
+  @keyframes pulse-scale {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+  }
+
+  /* Center content */
+  .center {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* CONNECTING... blink */
+  .connecting {
+    font-family: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", Menlo, Courier, monospace;
+    font-size: 14px;
+    color: rgba(14, 165, 233, 0.6);
+    letter-spacing: 0.3em;
+    margin-bottom: 24px;
+    animation: blink 1.5s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+  }
+
+  /* Brand name */
+  .brand {
+    font-size: 72px;
+    font-weight: 900;
+    letter-spacing: -3px;
+    color: #42B4E6;
+    margin-bottom: 48px;
+    animation: fadeInUp 0.8s ease-out;
+  }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Progress bar */
+  .progress-wrap {
+    width: 256px;
+    height: 3px;
+    background: #E5E7EB;
+    border-radius: 9999px;
+    overflow: hidden;
+  }
+  .progress-bar {
+    height: 100%;
+    border-radius: 9999px;
+    background: linear-gradient(90deg, #38BDF8, #0284C7);
+    width: 0%;
+    transition: width 0.1s linear;
+  }
+  .progress-pct {
+    font-family: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", Menlo, Courier, monospace;
+    font-size: 12px;
+    color: #D1D5DB;
+    margin-top: 12px;
+    opacity: 0;
+    animation: fadeIn 0.5s 0.5s ease-out forwards;
+  }
+
+  @keyframes fadeIn {
+    to { opacity: 1; }
+  }
+
+  /* Bottom text */
+  .bottom-text {
+    position: absolute;
+    bottom: 48px;
+    text-align: center;
+    padding: 0 32px;
+    color: #9CA3AF;
+    font-size: 14px;
+    letter-spacing: 2px;
+    opacity: 0;
+    animation: fadeIn 0.8s 1s ease-out forwards;
+  }
+
+  /* Mobile */
+  @media (max-width: 768px) {
+    .brand { font-size: 48px; letter-spacing: -2px; }
+    .pulse-1 { width: 350px; height: 350px; }
+    .pulse-2 { width: 250px; height: 250px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="loading-screen">
+  <div class="pulse pulse-1"></div>
+  <div class="pulse pulse-2"></div>
+
+  <div class="center">
+    <p class="connecting">CONNECTING...</p>
+    <h1 class="brand">Hyunsik.log</h1>
+
+    <div class="progress-wrap">
+      <div class="progress-bar" id="bar"></div>
+    </div>
+    <p class="progress-pct" id="pct">0%</p>
+  </div>
+
+  <p class="bottom-text">所思皆成真</p>
+</div>
+
+<script>
+(function () {
+  var bar = document.getElementById("bar");
+  var pct = document.getElementById("pct");
+  var progress = 0;
+  var total = 30; // 30 ticks × 100ms = 3s
+
+  var timer = setInterval(function () {
+    progress += 100 / total;
+    if (progress >= 100) {
+      progress = 100;
+      clearInterval(timer);
+    }
+    bar.style.width = progress + "%";
+    pct.textContent = Math.round(progress) + "%";
+  }, 100);
+})();
+</script>
+
+</body>
+</html>
