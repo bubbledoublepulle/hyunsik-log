@@ -224,28 +224,41 @@ export async function saveMusicData(data: MusicItem[]): Promise<{ error: string 
   saveLocalMusicData(data);
   if (!isSupabaseConfigured()) return { error: null };
 
-  // Upsert all current rows
-  if (data.length > 0) {
-    const { error } = await supabase.from("music").upsert(data.map(toDbRow), { onConflict: "id" });
+  const BATCH_SIZE = 20;
+  const rows = data.map(toDbRow);
+
+  // 分批 upsert，避免单请求过大导致超时或失败
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const batch = rows.slice(i, i + BATCH_SIZE);
+    const { error } = await supabase.from("music").upsert(batch, { onConflict: "id" });
     if (error) {
-      console.warn("[music] save to supabase failed:", error.message);
-      return { error: error.message };
+      console.warn(`[music] upsert batch ${i + 1}-${Math.min(i + BATCH_SIZE, rows.length)} failed:`, error.message);
+      return { error: `保存批次 ${Math.floor(i / BATCH_SIZE) + 1} 失败: ${error.message}` };
     }
   }
 
-  // Delete rows that no longer exist in current data
-  const currentIds = data.map((d) => d.id);
-  if (currentIds.length > 0) {
-    const { error: delError } = await supabase
-      .from("music")
-      .delete()
-      .not("id", "in", `(${currentIds.join(",")})`);
+  // 分批 delete：先获取所有远程 ID，找出不在 currentIds 中的，分批删除
+  const currentIds = new Set(data.map((d) => d.id));
+  const { data: remoteRows, error: fetchErr } = await supabase.from("music").select("id");
+  if (fetchErr) {
+    console.warn("[music] fetch ids for delete failed:", fetchErr.message);
+    return { error: null };
+  }
+
+  const idsToDelete = (remoteRows || [])
+    .filter((r: any) => !currentIds.has(r.id))
+    .map((r: any) => r.id);
+
+  for (let i = 0; i < idsToDelete.length; i += BATCH_SIZE) {
+    const batch = idsToDelete.slice(i, i + BATCH_SIZE);
+    const { error: delError } = await supabase.from("music").delete().in("id", batch);
     if (delError) {
-      console.warn("[music] delete stale rows failed:", delError.message);
+      console.warn("[music] delete batch failed:", delError.message);
     }
   }
 
   return { error: null };
+
 }
 
 export async function addMusicItem(item: MusicItem): Promise<void> {
