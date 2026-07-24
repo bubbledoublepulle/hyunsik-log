@@ -307,6 +307,8 @@ export default function ShowsPage() {
   };
 
   const handleSaveBatch = (items: ShowItem[]) => {
+    // 标记用户已修改，防止实时订阅覆盖本地数据
+    userModifiedRef.current = true;
     setShowData((prev) => [...prev, ...items]);
     toast.success(`已批量添加 ${items.length} 条综艺`, { description: "数据正在同步到云端..." });
     setFormOpen(false);
