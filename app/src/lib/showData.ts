@@ -306,6 +306,75 @@ export async function saveShowData(data: ShowItem[]): Promise<{ error: string | 
   }
 
   saveShowDataPromise = (async (): Promise<{ error: string | null }> => {
+    console.log("[saveShowData] 开始保存", data.length, "条数据");
+    saveLocalShowData(data);
+    if (!isSupabaseConfigured()) {
+      console.warn("[saveShowData] Supabase 未配置，仅保存到 localStorage");
+      return { error: null };
+    }
+
+    const BATCH_SIZE = 20;
+    const rows = data.map(toDbRow);
+    console.log("[saveShowData] 准备 upsert", rows.length, "条, 分", Math.ceil(rows.length / BATCH_SIZE), "批");
+
+    // 分批 upsert，避免单请求过大导致超时或失败
+    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+      const batch = rows.slice(i, i + BATCH_SIZE);
+      console.log(`[saveShowData] upsert 批次 ${Math.floor(i / BATCH_SIZE) + 1}:`, batch.map((r) => r.id));
+      const { error, data: upsertData } = await supabase.from("shows").upsert(batch, { onConflict: "id" }).select();
+      if (error) {
+        console.error(`[shows] upsert batch ${i + 1} failed:`, error.message, error);
+        return { error: `保存批次 ${Math.floor(i / BATCH_SIZE) + 1} 失败: ${error.message}` };
+      }
+      console.log(`[saveShowData] upsert 批次 ${Math.floor(i / BATCH_SIZE) + 1} 成功:`, upsertData?.length || 0, "条");
+    }
+    recordSyncTime();
+
+    // upsert 后验证：直接查询数据库确认数据真的写入了
+    const { data: verifyData, error: verifyErr } = await supabase.from("shows").select("id,title").limit(200);
+    if (verifyErr) {
+      console.error("[saveShowData] 验证查询失败:", verifyErr.message);
+    } else {
+      console.log("[saveShowData] 验证查询: 数据库中共有", verifyData?.length || 0, "条记录");
+      console.log("[saveShowData] 数据库中的 IDs:", verifyData?.map((r: any) => r.id));
+    }
+
+    // 分批 delete：先获取所有远程 ID，找出不在 currentIds 中的，分批删除
+    const currentIds = new Set(data.map((d) => d.id));
+    const { data: remoteRows, error: fetchErr } = await supabase.from("shows").select("id");
+    if (fetchErr) {
+      console.warn("[shows] fetch ids for delete failed:", fetchErr.message);
+      return { error: null }; // upsert 已成功，delete 失败不致命
+    }
+
+    const idsToDelete = (remoteRows || [])
+      .filter((r: any) => !currentIds.has(r.id))
+      .map((r: any) => r.id);
+    console.log("[saveShowData] 需要删除的 IDs:", idsToDelete);
+
+    for (let i = 0; i < idsToDelete.length; i += BATCH_SIZE) {
+      const batch = idsToDelete.slice(i, i + BATCH_SIZE);
+      console.log("[saveShowData] delete 批次", batch);
+      const { error: delError } = await supabase.from("shows").delete().in("id", batch);
+      if (delError) {
+        console.warn("[shows] delete batch failed:", delError.message);
+      }
+    }
+
+    console.log("[saveShowData] 保存完成");
+    return { error: null };
+  })();
+
+  const result = await saveShowDataPromise;
+  saveShowDataPromise = null;
+  return result;
+}
+  // 如果已有保存正在进行，等待它完成后再执行新的，避免并发竞态
+  if (saveShowDataPromise) {
+    await saveShowDataPromise;
+  }
+
+  saveShowDataPromise = (async (): Promise<{ error: string | null }> => {
     saveLocalShowData(data);
     if (!isSupabaseConfigured()) return { error: null };
 
