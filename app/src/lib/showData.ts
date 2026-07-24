@@ -1,5 +1,8 @@
 import { supabase, isSupabaseConfigured } from "./supabase";
 
+// 全局锁，防止 saveShowData 并发执行导致数据竞态
+let saveShowDataPromise: Promise<{ error: string | null }> | null = null;
+
 export type ShowMember =
   | "任炫植"
   | "徐恩光"
@@ -297,8 +300,14 @@ export async function syncShowData(): Promise<ShowItem[]> {
 }
 
 export async function saveShowData(data: ShowItem[]): Promise<{ error: string | null }> {
-  saveLocalShowData(data);
-  if (!isSupabaseConfigured()) return { error: null };
+  // 如果已有保存正在进行，等待它完成后再执行新的，避免并发竞态
+  if (saveShowDataPromise) {
+    await saveShowDataPromise;
+  }
+
+  saveShowDataPromise = (async (): Promise<{ error: string | null }> => {
+    saveLocalShowData(data);
+    if (!isSupabaseConfigured()) return { error: null };
 
   const BATCH_SIZE = 20;
   const rows = data.map(toDbRow);
@@ -335,7 +344,12 @@ export async function saveShowData(data: ShowItem[]): Promise<{ error: string | 
     }
   }
 
-  return { error: null };
+    return { error: null };
+  })();
+
+  const result = await saveShowDataPromise;
+  saveShowDataPromise = null;
+  return result;
 }
 
 export async function addShowItem(item: ShowItem): Promise<void> {

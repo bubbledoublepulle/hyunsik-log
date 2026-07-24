@@ -1,5 +1,8 @@
 import { supabase, isSupabaseConfigured } from "./supabase";
 
+// 全局锁，防止 saveMusicData 并发执行导致数据竞态
+let saveMusicDataPromise: Promise<{ error: string | null }> | null = null;
+
 export type MusicRole = "演唱" | "作曲" | "作词" | "编曲";
 export type MusicType = "团体" | "SOLO" | "OST" | "合作";
 
@@ -221,8 +224,14 @@ export async function syncMusicData(): Promise<MusicItem[]> {
 }
 
 export async function saveMusicData(data: MusicItem[]): Promise<{ error: string | null }> {
-  saveLocalMusicData(data);
-  if (!isSupabaseConfigured()) return { error: null };
+  // 如果已有保存正在进行，等待它完成后再执行新的，避免并发竞态
+  if (saveMusicDataPromise) {
+    await saveMusicDataPromise;
+  }
+
+  saveMusicDataPromise = (async (): Promise<{ error: string | null }> => {
+    saveLocalMusicData(data);
+    if (!isSupabaseConfigured()) return { error: null };
 
   const BATCH_SIZE = 20;
   const rows = data.map(toDbRow);
@@ -257,8 +266,12 @@ export async function saveMusicData(data: MusicItem[]): Promise<{ error: string 
     }
   }
 
-  return { error: null };
+    return { error: null };
+  })();
 
+  const result = await saveMusicDataPromise;
+  saveMusicDataPromise = null;
+  return result;
 }
 
 export async function addMusicItem(item: MusicItem): Promise<void> {
