@@ -7,12 +7,12 @@ import {
 import { toast } from "sonner";
 import type { ShowItem, ShowMember, VideoLink } from "@/lib/showData";
 import { detectPlatform, fetchVideoInfo, type VideoInfo, type FetchError } from "@/lib/videoFetcher";
-import { useShowSync } from "@/hooks/useShowSync";
 
 interface ShowFormModalProps {
   open: boolean;
   onClose: () => void;
   onSave: (item: ShowItem) => void | Promise<void>;
+  onSaveBatch?: (items: ShowItem[]) => void | Promise<void>;
   editingItem: ShowItem | null;
 }
 
@@ -37,11 +37,8 @@ const gradientPresets = [
 type FetchState = "idle" | "fetching" | "done" | "error";
 
 export default function ShowFormModal({
-  open, onClose, onSave, editingItem,
+  open, onClose, onSave, onSaveBatch, editingItem,
 }: ShowFormModalProps) {
-  useShowSync(() => {
-    setTitle(loadShowData());
-  });
   const [title, setTitle] = useState("");
   const [platform, setPlatform] = useState("Mnet");
   const [date, setDate] = useState("");
@@ -345,9 +342,14 @@ export default function ShowFormModal({
   }
 
   async function saveAllBatch() {
-    for (const item of batchResults) {
-      await Promise.resolve(onSave(item));
-      await new Promise((r) => setTimeout(r, 100));
+    if (onSaveBatch) {
+      await Promise.resolve(onSaveBatch(batchResults));
+    } else {
+      // 向后兼容：逐个保存（存在并发竞态风险）
+      for (const item of batchResults) {
+        await Promise.resolve(onSave(item));
+        await new Promise((r) => setTimeout(r, 100));
+      }
     }
     setBatchMode(false);
     setBatchUrls("");

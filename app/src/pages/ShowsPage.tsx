@@ -307,6 +307,13 @@ export default function ShowsPage() {
     setEditingItem(null);
   };
 
+  const handleSaveBatch = (items: ShowItem[]) => {
+    setShowData((prev) => [...prev, ...items]);
+    toast.success(`已批量添加 ${items.length} 条综艺`, { description: "数据正在同步到云端..." });
+    setFormOpen(false);
+    setEditingItem(null);
+  };
+
   const handleDelete = (item: ShowItem) => {
     setShowData((prev) => prev.filter((s) => s.id !== item.id));
     toast.success("已删除", { description: item.title });
@@ -763,6 +770,7 @@ export default function ShowsPage() {
           setEditingItem(null);
         }}
         onSave={handleSave}
+        onSaveBatch={handleSaveBatch}
         editingItem={editingItem}
       />
 
