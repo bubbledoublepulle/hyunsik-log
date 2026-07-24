@@ -202,20 +202,19 @@ export default function ShowsPage() {
     refreshAbortRef.current = true;
     setMetaRefreshing(true);
     toast.info("正在抓取视频元数据...", { description: "封面、时长、播放量更新中" });
-        try {
+    try {
       for (const item of showData) {
         await fetchShowMetadata(item, true);
         // 每抓取一个就更新一次 UI
         setMetaVersion((v) => v + 1);
       }
-      // 将抓取到的元数据写回 showData，确保保存到 Supabase 时是最新数据
+      // 将抓取到的元数据写回 showData
       const updated = applyCachedMetadataToItems(showData);
+      // 使用 initialLoadRef 跳过 useEffect 的自动保存，
+      // 避免和 useEffect 的 saveShowData 并行执行造成竞态。
+      // useEffect 检测到 showData 变化后会自动调用 saveShowData。
+      initialLoadRef.current = true;
       setShowData(updated);
-      // 标记用户已修改，触发 saveShowData 自动同步到云端
-      userModifiedRef.current = true;
-      saveShowData(updated).then(({ error }) => {
-        if (error) toast.error("云端同步失败", { description: error });
-      }).catch(() => {});
 
       const now = new Date().toLocaleString("zh-CN");
       setLastSync(now);
@@ -303,6 +302,15 @@ export default function ShowsPage() {
       setShowData((prev) => [...prev, item]);
       toast.success("综艺已添加", { description: item.title });
     }
+    setFormOpen(false);
+    setEditingItem(null);
+  };
+
+  const handleSaveBatch = (items: ShowItem[]) => {
+    // 标记用户已修改，防止实时订阅覆盖本地数据
+    userModifiedRef.current = true;
+    setShowData((prev) => [...prev, ...items]);
+    toast.success(`已批量添加 ${items.length} 条综艺`, { description: "数据正在同步到云端..." });
     setFormOpen(false);
     setEditingItem(null);
   };
@@ -763,6 +771,7 @@ export default function ShowsPage() {
           setEditingItem(null);
         }}
         onSave={handleSave}
+        onSaveBatch={handleSaveBatch}
         editingItem={editingItem}
       />
 

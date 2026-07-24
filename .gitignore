@@ -37,4 +37,3 @@ functions/api/*.bak
 wrangler.jsonc.bak.*
 .wrangler/
 
-app.zip

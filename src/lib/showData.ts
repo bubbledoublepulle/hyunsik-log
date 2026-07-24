@@ -1,5 +1,8 @@
 import { supabase, isSupabaseConfigured } from "./supabase";
 
+// 全局锁，防止 saveShowData 并发执行导致数据竞态
+let saveShowDataPromise: Promise<{ error: string | null }> | null = null;
+
 export type ShowMember =
   | "任炫植"
   | "徐恩光"
@@ -192,6 +195,11 @@ export const initialShowData: ShowItem[] = [
 ];
 
 const STORAGE_KEY = "hsik_shows_data";
+const SYNC_AT_KEY = "hsik_shows_sync_at";
+
+function recordSyncTime() {
+  try { localStorage.setItem(SYNC_AT_KEY, Date.now().toString()); } catch {}
+}
 const META_CACHE_KEY = "hsik_show_metadata_cache";
 /** 缓存格式版本号，修改此值可强制清空旧格式缓存 */
 const CACHE_VERSION = "v3";
@@ -287,35 +295,79 @@ export async function syncShowData(): Promise<ShowItem[]> {
   }
   const items = (data || []).map(fromDbRow);
   saveLocalShowData(items);
+  recordSyncTime();
   return items;
 }
 
 export async function saveShowData(data: ShowItem[]): Promise<{ error: string | null }> {
-  saveLocalShowData(data);
-  if (!isSupabaseConfigured()) return { error: null };
-
-  // Upsert all current rows
-  if (data.length > 0) {
-    const { error } = await supabase.from("shows").upsert(data.map(toDbRow), { onConflict: "id" });
-    if (error) {
-      console.warn("[shows] save to supabase failed:", error.message);
-      return { error: error.message };
-    }
+  // 如果已有保存正在进行，等待它完成后再执行新的，避免并发竞态
+  if (saveShowDataPromise) {
+    await saveShowDataPromise;
   }
 
-  // Delete rows that no longer exist in current data
-  const currentIds = data.map((d) => d.id);
-  if (currentIds.length > 0) {
-    const { error: delError } = await supabase
-      .from("shows")
-      .delete()
-      .not("id", "in", `(${currentIds.join(",")})`);
-    if (delError) {
-      console.warn("[shows] delete stale rows failed:", delError.message);
+  saveShowDataPromise = (async (): Promise<{ error: string | null }> => {
+    console.log("[saveShowData] 开始保存", data.length, "条数据");
+    saveLocalShowData(data);
+    if (!isSupabaseConfigured()) {
+      console.warn("[saveShowData] Supabase 未配置，仅保存到 localStorage");
+      return { error: null };
     }
-  }
 
-  return { error: null };
+    const BATCH_SIZE = 20;
+    const rows = data.map(toDbRow);
+    console.log("[saveShowData] 准备 upsert", rows.length, "条, 分", Math.ceil(rows.length / BATCH_SIZE), "批");
+
+    // 分批 upsert，避免单请求过大导致超时或失败
+    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+      const batch = rows.slice(i, i + BATCH_SIZE);
+      console.log(`[saveShowData] upsert 批次 ${Math.floor(i / BATCH_SIZE) + 1}:`, batch.map((r) => r.id));
+      const { error, data: upsertData } = await supabase.from("shows").upsert(batch, { onConflict: "id" }).select();
+      if (error) {
+        console.error(`[shows] upsert batch ${i + 1} failed:`, error.message, error);
+        return { error: `保存批次 ${Math.floor(i / BATCH_SIZE) + 1} 失败: ${error.message}` };
+      }
+      console.log(`[saveShowData] upsert 批次 ${Math.floor(i / BATCH_SIZE) + 1} 成功:`, upsertData?.length || 0, "条");
+    }
+    recordSyncTime();
+
+    // upsert 后验证：直接查询数据库确认数据真的写入了
+    const { data: verifyData, error: verifyErr } = await supabase.from("shows").select("id,title").limit(200);
+    if (verifyErr) {
+      console.error("[saveShowData] 验证查询失败:", verifyErr.message);
+    } else {
+      console.log("[saveShowData] 验证查询: 数据库中共有", verifyData?.length || 0, "条记录");
+      console.log("[saveShowData] 数据库中的 IDs:", verifyData?.map((r: any) => r.id));
+    }
+
+    // 分批 delete：先获取所有远程 ID，找出不在 currentIds 中的，分批删除
+    const currentIds = new Set(data.map((d) => d.id));
+    const { data: remoteRows, error: fetchErr } = await supabase.from("shows").select("id");
+    if (fetchErr) {
+      console.warn("[shows] fetch ids for delete failed:", fetchErr.message);
+      return { error: null }; // upsert 已成功，delete 失败不致命
+    }
+
+    const idsToDelete = (remoteRows || [])
+      .filter((r: any) => !currentIds.has(r.id))
+      .map((r: any) => r.id);
+    console.log("[saveShowData] 需要删除的 IDs:", idsToDelete);
+
+    for (let i = 0; i < idsToDelete.length; i += BATCH_SIZE) {
+      const batch = idsToDelete.slice(i, i + BATCH_SIZE);
+      console.log("[saveShowData] delete 批次", batch);
+      const { error: delError } = await supabase.from("shows").delete().in("id", batch);
+      if (delError) {
+        console.warn("[shows] delete batch failed:", delError.message);
+      }
+    }
+
+    console.log("[saveShowData] 保存完成");
+    return { error: null };
+  })();
+
+  const result = await saveShowDataPromise;
+  saveShowDataPromise = null;
+  return result;
 }
 
 export async function addShowItem(item: ShowItem): Promise<void> {
@@ -902,4 +954,39 @@ export function applyCachedMetadataToItems(items: ShowItem[]): ShowItem[] {
 
 export function getPlatformStyle(platform: string) {
   return platformStyles[platform] || platformStyles["其他"];
+}
+
+
+// ==================== 实时同步 ====================
+
+/** 订阅 shows 表实时变更（INSERT / UPDATE / DELETE） */
+export function subscribeShowChanges(onChange: (items: ShowItem[]) => void): () => void {
+  if (!isSupabaseConfigured()) return () => {};
+  const channel = supabase
+    .channel("shows_realtime")
+    .on("postgres_changes", { event: "*", schema: "public", table: "shows" }, async () => {
+      console.log("[realtime] shows updated");
+      const fresh = await syncShowData();
+      onChange(fresh);
+    })
+    .subscribe();
+  return () => { supabase.removeChannel(channel); };
+}
+
+/** 检查远程是否有更新，有则同步并返回新数据 */
+export async function checkRemoteUpdates(): Promise<ShowItem[] | null> {
+  if (!isSupabaseConfigured()) return null;
+  const { count, error } = await supabase.from("shows").select("*", { count: "exact", head: true });
+  if (error) return null;
+  if (count !== null && count !== loadShowData().length) {
+    console.log("[sync] remote count changed, refreshing...");
+    return syncShowData();
+  }
+  // 每 5 分钟强制全量对比一次（防止删一条加一条导致 count 不变）
+  const lastFullSync = parseInt(localStorage.getItem("hsik_shows_full_sync") || "0", 10);
+  if (Date.now() - lastFullSync > 5 * 60 * 1000) {
+    localStorage.setItem("hsik_shows_full_sync", Date.now().toString());
+    return syncShowData();
+  }
+  return null;
 }

@@ -520,7 +520,15 @@ export async function fetchVideoInfo(url: string): Promise<VideoInfo> {
     try {
       const workerResult = await fetchYouTubeViaWorkerProxy(videoId);
       if (workerResult && workerResult.title) {
-        result = workerResult;
+        result = {
+          ...result,
+          ...workerResult,
+          viewCountFormatted: workerResult.viewCountFormatted || result?.viewCountFormatted || "",
+          publishedAt: workerResult.publishedAt || result?.publishedAt || "",
+          duration: workerResult.duration || result?.duration || "",
+          durationFormatted: workerResult.durationFormatted || result?.durationFormatted || "",
+          thumbnail: workerResult.thumbnail || result?.thumbnail || "",
+        };
       }
     } catch {
       // Worker 失败，继续用预取数据
@@ -531,8 +539,12 @@ export async function fetchVideoInfo(url: string): Promise<VideoInfo> {
       const apiResult = await fetchYouTubeViaAPI(videoId);
       if (apiResult) {
         result = {
+          ...result,
           ...apiResult,
-          title: apiResult.title || result?.title || "",
+          viewCountFormatted: apiResult.viewCountFormatted || result?.viewCountFormatted || "",
+          publishedAt: apiResult.publishedAt || result?.publishedAt || "",
+          duration: apiResult.duration || result?.duration || "",
+          durationFormatted: apiResult.durationFormatted || result?.durationFormatted || "",
           thumbnail: apiResult.thumbnail || result?.thumbnail || "",
         };
       }
