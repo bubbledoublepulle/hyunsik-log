@@ -6,7 +6,23 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type { ShowItem, ShowMember, VideoLink } from "@/lib/showData";
+import { extractYouTubeId, extractBilibiliId } from "@/lib/showData";
 import { detectPlatform, fetchVideoInfo, type VideoInfo, type FetchError } from "@/lib/videoFetcher";
+
+// ========== 新增：批量导入用的辅助函数 ==========
+function fmtDuration(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function fmtViews(views: number): string {
+  if (views >= 100000000) return `${(views / 100000000).toFixed(1).replace(/\.0$/, "")}亿`;
+  if (views >= 10000) return `${(views / 10000).toFixed(1).replace(/\.0$/, "")}万`;
+  return views.toLocaleString();
+}
 
 interface ShowFormModalProps {
   open: boolean;
@@ -273,7 +289,7 @@ export default function ShowFormModal({
     }
   }
 
-  // ========== 批量导入 ==========
+  // ========== 批量导入（核心修改在这里）==========
 
   async function handleBatchImport() {
     const lines = batchUrls.split("\n").map((l) => l.trim()).filter(Boolean);
@@ -293,8 +309,62 @@ export default function ShowFormModal({
       setBatchProgress({ current: i + 1, total: lines.length, success: successCount, failed: failedCount });
 
       try {
-        const info = await fetchVideoInfo(url);
+        let info: VideoInfo;
         const detected = detectPlatform(url);
+
+        // ========== YouTube：走服务端 API（能拿到完整数据）==========
+        if (detected === "youtube") {
+          const videoId = extractYouTubeId(url);
+          if (videoId) {
+            const apiUrl = `/api/youtube-meta?videoId=${videoId}`;
+            const res = await fetch(apiUrl, { signal: AbortSignal.timeout(15000) });
+            if (!res.ok) throw new Error(`API 请求失败: ${res.status}`);
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            
+            info = {
+              title: data.title || "",
+              thumbnail: data.thumbnail || "",
+              duration: data.duration || data.lengthSeconds?.toString() || "",
+              durationFormatted: data.durationFormatted || (data.lengthSeconds ? fmtDuration(data.lengthSeconds) : ""),
+              viewCount: data.viewCount || 0,
+              viewCountFormatted: data.viewCountFormatted || (data.viewCount ? fmtViews(data.viewCount) : ""),
+              publishedAt: data.publishedAt || "",
+              platform: "youtube",
+            };
+          } else {
+            info = await fetchVideoInfo(url);
+          }
+        }
+        // ========== Bilibili：走服务端 API（能拿到完整数据）==========
+        else if (detected === "bilibili") {
+          const bvid = extractBilibiliId(url);
+          if (bvid) {
+            const apiUrl = `/api/bilibili-meta?bvid=${bvid}`;
+            const res = await fetch(apiUrl, { signal: AbortSignal.timeout(15000) });
+            if (!res.ok) throw new Error(`API 请求失败: ${res.status}`);
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            
+            info = {
+              title: data.title || "",
+              thumbnail: data.thumbnail || "",
+              duration: data.duration || "",
+              durationFormatted: data.durationFormatted || "",
+              viewCount: data.viewCount || 0,
+              viewCountFormatted: data.viewCountFormatted || "",
+              publishedAt: data.publishedAt || "",
+              platform: "bilibili",
+            };
+          } else {
+            info = await fetchVideoInfo(url);
+          }
+        }
+        // ========== 其他平台：走原来的客户端抓取（大概率拿不到日期和播放量）==========
+        else {
+          info = await fetchVideoInfo(url);
+        }
+
         const linkPlatform = detected === "youtube" ? "YouTube" : detected === "bilibili" ? "Bilibili" : "其他";
         const grad = gradientPresets[Math.floor(Math.random() * gradientPresets.length)];
 
@@ -302,9 +372,9 @@ export default function ShowFormModal({
           id: `s${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
           title: info.title || "未识别标题",
           platform: linkPlatform,
-          date: info.publishedAt || new Date().toISOString().split("T")[0],
-          duration: info.duration || "",
-          views: info.viewCountFormatted || "",
+          date: info.publishedAt || "",  // ← 关键修改：抓不到就留空，不再填今天！
+          duration: info.durationFormatted || info.duration || "",
+          views: info.viewCountFormatted || "",  // ← 关键修改：抓不到就留空
           members: ["全体"],
           status: "待补档",
           thumbnailFrom: grad.from,
@@ -320,7 +390,7 @@ export default function ShowFormModal({
         failedCount++;
         setBatchProgress({ current: i + 1, total: lines.length, success: successCount, failed: failedCount });
         toast.error(`解析失败: ${url.slice(0, 50)}...`, {
-          description: (e as FetchError)?.message || "无法识别该链接",
+          description: (e as FetchError)?.message || (e as Error)?.message || "无法识别该链接",
         });
       }
 
@@ -333,8 +403,15 @@ export default function ShowFormModal({
     setFetchState(results.length > 0 ? "done" : "error");
 
     if (results.length > 0) {
+      const emptyDateCount = results.filter(r => !r.date).length;
+      const emptyViewsCount = results.filter(r => !r.views).length;
+      let desc = "";
+      if (emptyDateCount > 0) desc += `${emptyDateCount} 条缺少发布日期`;
+      if (emptyViewsCount > 0) desc += `${emptyDateCount > 0 && emptyViewsCount > 0 ? "，" : ""}${emptyViewsCount} 条缺少播放量`;
+      if (!desc) desc = "所有数据已完整抓取";
+      
       toast.success(`成功导入 ${results.length} 条视频`, {
-        description: failedCount > 0 ? `${failedCount} 条解析失败，可手动添加` : "点击下方「全部保存」添加到档案",
+        description: failedCount > 0 ? `${failedCount} 条解析失败。${desc}` : desc,
       });
     } else {
       toast.error("没有成功解析任何视频，请检查链接格式");
@@ -400,7 +477,7 @@ export default function ShowFormModal({
       description: description.trim(),
       links: validLinks,
     });
-  };;
+  };
 
   // 抓取到的字段显示绿色标记
   const fieldBadge = (field: string) =>
@@ -522,8 +599,16 @@ export default function ShowFormModal({
                             <span className="text-gray-400 w-5 shrink-0">{i + 1}</span>
                             <span className="truncate flex-1 font-medium text-gray-700">{item.title}</span>
                             <span className="text-gray-400 shrink-0">{item.platform}</span>
-                            {item.date && <span className="text-blue-500 shrink-0">{item.date}</span>}
-                            {item.views && <span className="text-emerald-600 shrink-0">{item.views}</span>}
+                            {item.date ? (
+                              <span className="text-blue-500 shrink-0">{item.date}</span>
+                            ) : (
+                              <span className="text-amber-500 shrink-0">⚠️ 缺日期</span>
+                            )}
+                            {item.views ? (
+                              <span className="text-emerald-600 shrink-0">{item.views}</span>
+                            ) : (
+                              <span className="text-amber-500 shrink-0">⚠️ 缺播放量</span>
+                            )}
                           </div>
                         ))}
                       </div>
