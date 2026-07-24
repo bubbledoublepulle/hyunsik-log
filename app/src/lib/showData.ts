@@ -369,57 +369,6 @@ export async function saveShowData(data: ShowItem[]): Promise<{ error: string | 
   saveShowDataPromise = null;
   return result;
 }
-  // 如果已有保存正在进行，等待它完成后再执行新的，避免并发竞态
-  if (saveShowDataPromise) {
-    await saveShowDataPromise;
-  }
-
-  saveShowDataPromise = (async (): Promise<{ error: string | null }> => {
-    saveLocalShowData(data);
-    if (!isSupabaseConfigured()) return { error: null };
-
-  const BATCH_SIZE = 20;
-  const rows = data.map(toDbRow);
-
-  // 分批 upsert，避免单请求过大导致超时或失败
-  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-    const batch = rows.slice(i, i + BATCH_SIZE);
-    const { error } = await supabase.from("shows").upsert(batch, { onConflict: "id" });
-    if (error) {
-      console.warn(`[shows] upsert batch ${i + 1}-${Math.min(i + BATCH_SIZE, rows.length)} failed:`, error.message);
-      return { error: `保存批次 ${Math.floor(i / BATCH_SIZE) + 1} 失败: ${error.message}` };
-    }
-  }
-  recordSyncTime();
-
-  // 分批 delete：先获取所有远程 ID，找出不在 currentIds 中的，分批删除
-  // 避免 not("id", "in", "(id1,id2,...)") URL 过长导致失败
-  const currentIds = new Set(data.map((d) => d.id));
-  const { data: remoteRows, error: fetchErr } = await supabase.from("shows").select("id");
-  if (fetchErr) {
-    console.warn("[shows] fetch ids for delete failed:", fetchErr.message);
-    return { error: null }; // upsert 已成功，delete 失败不致命
-  }
-
-  const idsToDelete = (remoteRows || [])
-    .filter((r: any) => !currentIds.has(r.id))
-    .map((r: any) => r.id);
-
-  for (let i = 0; i < idsToDelete.length; i += BATCH_SIZE) {
-    const batch = idsToDelete.slice(i, i + BATCH_SIZE);
-    const { error: delError } = await supabase.from("shows").delete().in("id", batch);
-    if (delError) {
-      console.warn("[shows] delete batch failed:", delError.message);
-    }
-  }
-
-    return { error: null };
-  })();
-
-  const result = await saveShowDataPromise;
-  saveShowDataPromise = null;
-  return result;
-}
 
 export async function addShowItem(item: ShowItem): Promise<void> {
   const current = loadShowData();
