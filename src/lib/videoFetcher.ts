@@ -212,7 +212,7 @@ async function fetchYouTubeViaAPI(videoId: string): Promise<VideoInfo | null> {
     `?part=snippet,statistics,contentDetails` +
     `&id=${videoId}&key=${apiKey}`;
 
-  const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
+  const resp = await fetch(url, { signal: ((() => { const c = new AbortController(); setTimeout(() => c.abort(), 10000); return c.signal; })()) });
 
   if (resp.status === 403) {
     throw new FetchError("已达到 API 调用限额", "quota-exceeded");
@@ -270,7 +270,7 @@ async function fetchYouTubeViaWorkerProxy(videoId: string): Promise<VideoInfo | 
   const url = `https://hyunsik-log.siklog.workers.dev/api/youtube-meta?videoId=${videoId}`;
 
   try {
-    const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    const resp = await fetch(url, { signal: ((() => { const c = new AbortController(); setTimeout(() => c.abort(), 10000); return c.signal; })()) });
     if (!resp.ok) {
       console.warn(`[worker] ${videoId}: HTTP ${resp.status}`);
       return null;
@@ -324,7 +324,7 @@ async function fetchYouTubeViaOEmbed(videoId: string): Promise<VideoInfo | null>
   try {
     const resp = await fetch(
       `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`,
-      { signal: AbortSignal.timeout(8000) }
+      { signal: ((() => { const c = new AbortController(); setTimeout(() => c.abort(), 8000); return c.signal; })()) }
     );
     if (resp.ok) {
       const data = await resp.json();
@@ -436,7 +436,7 @@ async function fetchBilibiliViaProxy(bvid: string): Promise<VideoInfo | null> {
   for (const buildUrl of BILIBILI_PROXY_SERVICES) {
     try {
       const resp = await fetch(buildUrl(apiUrl), {
-        signal: AbortSignal.timeout(12000),
+        signal: ((() => { const c = new AbortController(); setTimeout(() => c.abort(), 12000); return c.signal; })()),
       });
       if (!resp.ok) continue;
       const data = await resp.json();
@@ -461,7 +461,7 @@ async function fetchBilibiliViaAPI(bvid: string): Promise<VideoInfo | null> {
     try {
       const resp = await fetch(
         `/api/bilibili/x/web-interface/view?bvid=${bvid}`,
-        { signal: AbortSignal.timeout(10000) }
+        { signal: ((() => { const c = new AbortController(); setTimeout(() => c.abort(), 10000); return c.signal; })()) }
       );
       if (resp.ok) {
         const data = await resp.json();

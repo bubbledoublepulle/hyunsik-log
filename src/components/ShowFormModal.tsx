@@ -309,61 +309,9 @@ export default function ShowFormModal({
       setBatchProgress({ current: i + 1, total: lines.length, success: successCount, failed: failedCount });
 
       try {
-        let info: VideoInfo;
         const detected = detectPlatform(url);
-
-        // ========== YouTube：走服务端 API（能拿到完整数据）==========
-        if (detected === "youtube") {
-          const videoId = extractYouTubeId(url);
-          if (videoId) {
-            const apiUrl = `/api/youtube-meta?videoId=${videoId}`;
-            const res = await fetch(apiUrl, { signal: AbortSignal.timeout(15000) });
-            if (!res.ok) throw new Error(`API 请求失败: ${res.status}`);
-            const data = await res.json();
-            if (data.error) throw new Error(data.error);
-            
-            info = {
-              title: data.title || "",
-              thumbnail: data.thumbnail || "",
-              duration: data.duration || data.lengthSeconds?.toString() || "",
-              durationFormatted: data.durationFormatted || (data.lengthSeconds ? fmtDuration(data.lengthSeconds) : ""),
-              viewCount: data.viewCount || 0,
-              viewCountFormatted: data.viewCountFormatted || (data.viewCount ? fmtViews(data.viewCount) : ""),
-              publishedAt: data.publishedAt || "",
-              platform: "youtube",
-            };
-          } else {
-            info = await fetchVideoInfo(url);
-          }
-        }
-        // ========== Bilibili：走服务端 API（能拿到完整数据）==========
-        else if (detected === "bilibili") {
-          const bvid = extractBilibiliId(url);
-          if (bvid) {
-            const apiUrl = `/api/bilibili-meta?bvid=${bvid}`;
-            const res = await fetch(apiUrl, { signal: AbortSignal.timeout(15000) });
-            if (!res.ok) throw new Error(`API 请求失败: ${res.status}`);
-            const data = await res.json();
-            if (data.error) throw new Error(data.error);
-            
-            info = {
-              title: data.title || "",
-              thumbnail: data.thumbnail || "",
-              duration: data.duration || "",
-              durationFormatted: data.durationFormatted || "",
-              viewCount: data.viewCount || 0,
-              viewCountFormatted: data.viewCountFormatted || "",
-              publishedAt: data.publishedAt || "",
-              platform: "bilibili",
-            };
-          } else {
-            info = await fetchVideoInfo(url);
-          }
-        }
-        // ========== 其他平台：走原来的客户端抓取（大概率拿不到日期和播放量）==========
-        else {
-          info = await fetchVideoInfo(url);
-        }
+        // 统一走 fetchVideoInfo，自动调用 Cloudflare Worker 上的 YouTube API
+        const info: VideoInfo = await fetchVideoInfo(url);
 
         const linkPlatform = detected === "youtube" ? "YouTube" : detected === "bilibili" ? "Bilibili" : "其他";
         const grad = gradientPresets[Math.floor(Math.random() * gradientPresets.length)];
