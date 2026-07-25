@@ -7,7 +7,7 @@ import { toast } from "sonner";
 export default function Navbar() {
   const location = useLocation();
   const { isAdmin, setAuthModalOpen, logout } = useAuth();
-  const isAdminDomain = typeof window !== "undefined" && window.location.hostname === "hyunsik-log.siklog.workers.dev";
+  const isAdminDomain = typeof window !== "undefined" && window.location.hostname === "siklog.work" || window.location.hostname === "www.siklog.work";
 
   const navItems = [
     { path: "/", label: "首页", icon: Home },

@@ -10,7 +10,7 @@ export async function onRequestGet(context) {
     });
   }
 
-  // 尝试方法1: YouTube 内部 API (innertube)
+  // ========== 方法1: YouTube 内部 API (innertube) ==========
   try {
     const resp = await fetch('https://www.youtube.com/youtubei/v1/player?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8', {
       method: 'POST',
@@ -38,7 +38,8 @@ export async function onRequestGet(context) {
     if (resp.ok) {
       const data = await resp.json();
 
-      if (!data.error && data.videoDetails) {
+      // 关键修复：innertube 可能返回空数据，检查 title 是否有效
+      if (!data.error && data.videoDetails?.title) {
         const videoDetails = data.videoDetails;
         const microformat = data.microformat?.playerMicroformatRenderer;
 
@@ -49,7 +50,7 @@ export async function onRequestGet(context) {
         }
 
         return new Response(JSON.stringify({
-          title: videoDetails?.title || '',
+          title: videoDetails.title,
           viewCount: parseInt(videoDetails?.viewCount || '0', 10),
           lengthSeconds: parseInt(videoDetails?.lengthSeconds || '0', 10),
           publishedAt: microformat?.publishDate || microformat?.uploadDate || '',
@@ -62,12 +63,14 @@ export async function onRequestGet(context) {
           }
         });
       }
+      // 如果 innertube 返回了空 title，继续 fallback 到方法2
+      console.log('innertube returned empty data, falling back to Data API');
     }
   } catch (e) {
     console.log('YouTube internal API failed:', e.message);
   }
 
-  // 尝试方法2: YouTube Data API v3 (需要配置 YOUTUBE_API_KEY)
+  // ========== 方法2: YouTube Data API v3 (需要配置 YOUTUBE_API_KEY) ==========
   if (env.YOUTUBE_API_KEY) {
     try {
       const apiUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${videoId}&key=${env.YOUTUBE_API_KEY}`;
@@ -114,15 +117,21 @@ export async function onRequestGet(context) {
     }
   }
 
-  // 方法3: 返回错误，让前端 fallback 到 oEmbed
-  return new Response(JSON.stringify({ 
-    error: 'Failed to fetch video metadata',
-    fallback: true 
+  // ========== 方法3: 返回空对象，让前端 fallback 到 oEmbed ==========
+  // 关键修复：不要返回 500，前端对 500 会 return null 不再继续
+  // 返回空数据，前端会合并 oEmbed 保底数据
+  return new Response(JSON.stringify({
+    title: '',
+    viewCount: 0,
+    lengthSeconds: 0,
+    publishedAt: '',
+    thumbnail: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
   }), {
-    status: 500,
-    headers: { 
+    status: 200,
+    headers: {
       'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*'
+      'Access-Control-Allow-Origin': '*',
+      'Cache-Control': 'public, max-age=3600'
     }
   });
 }

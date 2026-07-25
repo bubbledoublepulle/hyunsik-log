@@ -371,13 +371,19 @@ export async function saveShowData(data: ShowItem[]): Promise<{ error: string | 
 }
 
 export async function addShowItem(item: ShowItem): Promise<void> {
-  const current = loadShowData();
+  let current = loadShowData();
+  if (current.length === 0) {
+    current = await syncShowData();
+  }
   const updated = [...current, item];
   await saveShowData(updated);
 }
 
 export async function updateShowItem(item: ShowItem): Promise<void> {
-  const current = loadShowData();
+  let current = loadShowData();
+  if (current.length === 0) {
+    current = await syncShowData();
+  }
   const updated = current.map((s) => (s.id === item.id ? item : s));
   await saveShowData(updated);
 }

@@ -340,13 +340,6 @@ export default function ShowsPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-      {/* 实时同步状态 */}
-      <div style={{ position: "fixed", top: 80, right: 16, zIndex: 50 }}>
-        <span style={{ fontSize: 12, padding: "4px 8px", borderRadius: 20, background: isSubscribed ? "#dcfce7" : "#fef3c7", color: isSubscribed ? "#166534" : "#92400e" }}>
-          {isSubscribed ? "🟢 实时同步中" : "🟡 连接中..."}
-        </span>
-      </div>
-      {/* Page toolbar */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
           <div className="px-3 py-1.5 rounded-lg bg-gray-900 text-white text-sm font-bold">

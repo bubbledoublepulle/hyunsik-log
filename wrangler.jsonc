@@ -5,5 +5,17 @@
   "assets": {
     "directory": "./dist",
     "not_found_handling": "single-page-application"
-  }
+  },
+  "routes": [
+    {
+      "pattern": "www.siklog.work",
+      "zone_name": "siklog.work",
+      "custom_domain": true
+    },
+    {
+      "pattern": "siklog.work",
+      "zone_name": "siklog.work",
+      "custom_domain": true
+    }
+  ]
 }

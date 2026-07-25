@@ -267,7 +267,7 @@ async function fetchYouTubeViaAPI(videoId: string): Promise<VideoInfo | null> {
  * 这是无需 API Key 的首选方案，比 CORS 代理爬取更可靠。
  */
 async function fetchYouTubeViaWorkerProxy(videoId: string): Promise<VideoInfo | null> {
-  const url = `https://hyunsik-log.siklog.workers.dev/api/youtube-meta?videoId=${videoId}`;
+  const url = `https://siklog.work/api/youtube-meta?videoId=${videoId}`;
 
   try {
     const resp = await fetch(url, { signal: ((() => { const c = new AbortController(); setTimeout(() => c.abort(), 10000); return c.signal; })()) });
