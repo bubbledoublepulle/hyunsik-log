@@ -6,23 +6,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type { ShowItem, ShowMember, VideoLink } from "@/lib/showData";
-import { extractYouTubeId, extractBilibiliId } from "@/lib/showData";
 import { detectPlatform, fetchVideoInfo, type VideoInfo, type FetchError } from "@/lib/videoFetcher";
 
-// ========== 新增：批量导入用的辅助函数 ==========
-function fmtDuration(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
 
-function fmtViews(views: number): string {
-  if (views >= 100000000) return `${(views / 100000000).toFixed(1).replace(/\.0$/, "")}亿`;
-  if (views >= 10000) return `${(views / 10000).toFixed(1).replace(/\.0$/, "")}万`;
-  return views.toLocaleString();
-}
 
 interface ShowFormModalProps {
   open: boolean;
