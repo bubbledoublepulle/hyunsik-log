@@ -63,7 +63,7 @@ type ViewMode = "archive" | "stats";
 
 export default function ShowsPage() {
   const { isAdmin } = useAuth();
-  const { data: rtShowData, isSubscribed } = useRealtimeData("shows");
+  const { data: rtShowData } = useRealtimeData("shows");
 
   const [showData, setShowData] = useState<ShowItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -307,16 +307,20 @@ export default function ShowsPage() {
   };
 
   const handleSaveBatch = (items: ShowItem[]) => {
-    // 标记用户已修改，防止实时订阅覆盖本地数据
     userModifiedRef.current = true;
-    setShowData((prev) => [...prev, ...items]);
+    const newData = [...showData, ...items];
+    setShowData(newData);
+    saveShowData(newData);
     toast.success(`已批量添加 ${items.length} 条综艺`, { description: "数据正在同步到云端..." });
     setFormOpen(false);
     setEditingItem(null);
   };
 
   const handleDelete = (item: ShowItem) => {
-    setShowData((prev) => prev.filter((s) => s.id !== item.id));
+    userModifiedRef.current = true;
+    const newData = showData.filter((s) => s.id !== item.id);
+    setShowData(newData);
+    saveShowData(newData);
     toast.success("已删除", { description: item.title });
   };
 

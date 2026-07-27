@@ -340,6 +340,10 @@ export async function saveShowData(data: ShowItem[]): Promise<{ error: string | 
     }
 
     // 分批 delete：先获取所有远程 ID，找出不在 currentIds 中的，分批删除
+    if (data.length === 0) {
+      console.log("[saveShowData] data 为空，跳过删除");
+      return { error: null };
+    }
     const currentIds = new Set(data.map((d) => d.id));
     const { data: remoteRows, error: fetchErr } = await supabase.from("shows").select("id");
     if (fetchErr) {
