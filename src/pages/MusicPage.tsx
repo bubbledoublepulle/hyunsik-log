@@ -15,6 +15,7 @@ import {
   Album,
   Music,
   Calendar,
+  Link2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -30,6 +31,7 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import FilterSidebar from "@/components/FilterSidebar";
 import MusicFormModal from "@/components/MusicFormModal";
+import BatchImportModal from "@/components/BatchImportModal";
 import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
 import { StatCard } from "@/components/StatCard";
 import { useRealtimeData } from "@/hooks/useRealtimeData";
@@ -57,6 +59,7 @@ export default function MusicPage() {
 
   // Modals
   const [formOpen, setFormOpen] = useState(false);
+  const [batchImportOpen, setBatchImportOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MusicItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<MusicItem | null>(null);
 
@@ -250,6 +253,12 @@ export default function MusicPage() {
     setEditingItem(null);
   };
 
+  const handleBatchSave = (items: MusicItem[]) => {
+    setMusicData((prev) => [...prev, ...items]);
+    toast.success(`已批量添加 ${items.length} 首歌曲`, { description: "数据正在同步到云端..." });
+    setBatchImportOpen(false);
+  };
+
   const handleDelete = (item: MusicItem) => {
     setMusicData((prev) => prev.filter((m) => m.id !== item.id));
     toast.success("已删除", { description: item.title });
@@ -304,6 +313,13 @@ export default function MusicPage() {
               >
                 <Plus className="w-4 h-4" />
                 添加歌曲
+              </button>
+              <button
+                onClick={() => setBatchImportOpen(true)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-400 text-white text-sm font-medium hover:bg-emerald-500 transition-colors shadow-md shadow-emerald-200"
+              >
+                <Link2 className="w-4 h-4" />
+                批量导入
               </button>
             </>
           )}
@@ -681,6 +697,12 @@ export default function MusicPage() {
         editingItem={editingItem}
       />
 
+      <BatchImportModal
+        open={batchImportOpen}
+        onClose={() => setBatchImportOpen(false)}
+        onSave={handleBatchSave}
+      />
+
       <DeleteConfirmDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
@@ -691,4 +713,3 @@ export default function MusicPage() {
     </div>
   );
 }
-
