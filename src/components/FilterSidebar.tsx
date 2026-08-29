@@ -60,36 +60,24 @@ export default function FilterSidebar({
           )}
         </div>
 
-        {/* Type filter */}
+        {/* Type filter - 横向排列，不换行 */}
         <div className="mb-5">
           <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2.5">
             类型
           </p>
-          <div className="space-y-1.5">
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
             {types.map((type) => (
-              <label
+              <button
                 key={type}
-                className="flex items-center gap-2.5 cursor-pointer group"
+                onClick={() => onToggleType(type)}
+                className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all whitespace-nowrap ${
+                  selectedTypes.has(type)
+                    ? "bg-sky-400 text-white border-sky-400"
+                    : "bg-white text-gray-500 border-gray-200 hover:border-sky-300"
+                }`}
               >
-                <div className="relative">
-                  <input
-                    type="checkbox"
-                    checked={selectedTypes.has(type)}
-                    onChange={() => onToggleType(type)}
-                    className="peer sr-only"
-                  />
-                  <div className="w-4 h-4 rounded border-2 border-gray-200 peer-checked:border-sky-400 peer-checked:bg-sky-400 transition-all flex items-center justify-center">
-                    {selectedTypes.has(type) && (
-                      <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
-                    )}
-                  </div>
-                </div>
-                <span className="text-sm text-gray-600 group-hover:text-gray-900 transition-colors">
-                  {type}
-                </span>
-              </label>
+                {type}
+              </button>
             ))}
           </div>
         </div>
