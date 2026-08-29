@@ -639,14 +639,11 @@ export default function ShowsPage() {
                       </h3>
 
                       <div className="flex flex-wrap gap-1 mb-3">
-                        {item.members.slice(0, 4).map((member) => (
+                        {item.members.map((member) => (
                           <span key={member} className={`text-xs px-1.5 py-0.5 rounded border font-medium ${memberColors[member]}`}>
                             {member}
                           </span>
                         ))}
-                        {item.members.length > 4 && (
-                          <span className="text-xs px-1.5 py-0.5 rounded border border-gray-200 text-gray-400 font-medium">+{item.members.length - 4}</span>
-                        )}
                       </div>
 
                       <div className="flex items-center gap-3 text-xs text-gray-400">
