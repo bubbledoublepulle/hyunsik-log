@@ -367,7 +367,7 @@ export async function saveShowData(data: ShowItem[]): Promise<{ error: string | 
       return { error: null };
     }
     const currentIds = new Set(data.map((d) => d.id));
-    const { data: remoteRows, error: fetchErr } = await supabase.from("shows").select("id");
+   const { data: remoteRows, error: fetchErr } = await supabase.from("shows").select("id").limit(9995);
     if (fetchErr) {
       console.warn("[shows] fetch ids for delete failed:", fetchErr.message);
       return { error: null }; // upsert 已成功，delete 失败不致命
