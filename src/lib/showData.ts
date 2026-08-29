@@ -288,12 +288,34 @@ export async function syncShowData(): Promise<ShowItem[]> {
   if (!isSupabaseConfigured()) {
     return loadShowData();
   }
-  const { data, error } = await supabase.from("shows").select("*").order("created_at", { ascending: false });
-  if (error) {
-    console.warn("[shows] sync failed:", error.message);
-    return loadShowData();
+
+  const PAGE_SIZE = 100;
+  let allRows: any[] = [];
+  let from = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data, error } = await supabase
+      .from("shows")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (error) {
+      console.warn("[shows] sync failed:", error.message);
+      return loadShowData();
+    }
+
+    if (data && data.length > 0) {
+      allRows = allRows.concat(data);
+      hasMore = data.length === PAGE_SIZE;
+      from += PAGE_SIZE;
+    } else {
+      hasMore = false;
+    }
   }
-  const items = (data || []).map(fromDbRow);
+
+  const items = allRows.map(fromDbRow);
   saveLocalShowData(items);
   recordSyncTime();
   return items;
