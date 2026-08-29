@@ -36,7 +36,7 @@ export default function BatchImportModal({ open, onClose, onSave }: BatchImportM
     // 精确匹配要跳过的行
     const skipExact = [
       'NO', '곡명', '아티스트', '앨범', '좋아요', '뮤비', '다운',
-      '재생 담기', '뮤직비디오', '전체선택', '전체'
+      '재생 담기', '뮤직비디오', '전체선택', '전체', 'HOT', 'NEW', '아티스트명 더보기'
     ];
     
     const songs: any[] = [];
@@ -51,6 +51,15 @@ export default function BatchImportModal({ open, onClose, onSave }: BatchImportM
       // 跳过 "좋아요 8,296" 格式
       if (line.startsWith('좋아요')) continue;
       
+      // 跳过 "타이틀 곡 xxx" 格式（标题曲标记）
+      if (line.startsWith('타이틀 곡')) continue;
+      
+      // 跳过 "인기 곡 xxx" 格式（人气歌曲标记）
+      if (line.startsWith('인기 곡')) continue;
+      
+      // 跳过 "HOT xxx" / "NEW xxx" 格式
+      if (line.startsWith('HOT') || line.startsWith('NEW')) continue;
+      
       // 纯数字 = 新歌曲开始
       if (/^\d+$/.test(line)) {
         if (currentSong && currentSong.title) {
@@ -62,18 +71,14 @@ export default function BatchImportModal({ open, onClose, onSave }: BatchImportM
       
       if (!currentSong) continue;
       
-      // 跳过 "타이틀 곡 xxx" 格式（标题曲标记）
-      if (line.startsWith('타이틀 곡')) continue;
-      
       // 如果歌名还没设置，这一行就是歌名
       if (!currentSong.title) {
         currentSong.title = line;
         continue;
       }
       
-      // 跳过与歌名 trim 后完全相同的行（Melon 页面上的重复歌名显示，如" 불씨"）
-      // 但只在歌手还没设置时跳过，避免把和歌名相同的专辑名误跳过
-      if (!currentSong.artist && line.trim() === currentSong.title) continue;
+      // 跳过与歌名完全相同的行（Melon 页面上的重复歌名显示）
+      if (!currentSong.artist && line === currentSong.title) continue;
       
       // 如果歌手还没设置
       if (!currentSong.artist) {
@@ -226,7 +231,7 @@ export default function BatchImportModal({ open, onClose, onSave }: BatchImportM
                   <p>2. 按 <kbd className="px-1 py-0.5 bg-gray-100 rounded text-gray-700 font-mono">Ctrl+A</kbd> 全选，<kbd className="px-1 py-0.5 bg-gray-100 rounded text-gray-700 font-mono">Ctrl+C</kbd> 复制</p>
                   <p>3. 粘贴到下方，点击智能解析</p>
                 </div>
-                <textarea value={pastedText} onChange={(e) => setPastedText(e.target.value)} placeholder={`粘贴后内容示例（Melon 页面复制）：&#10;NO&#10;곡명&#10;아티스트&#10;앨범&#10;...&#10;1&#10;재생 담기 &#10;우리 다시&#10; 타이틀 곡 우리 다시&#10;비투비&#10;우리 다시&#10;좋아요 8,296&#10;뮤직비디오&#10;다운&#10;...`} rows={10} className="w-full px-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50/50 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 transition-all resize-none font-mono" />
+                <textarea value={pastedText} onChange={(e) => setPastedText(e.target.value)} placeholder={`粘贴后内容示例（Melon 页面复制）：&#10;NO&#10;곡명&#10;아티스트&#10;앨범&#10;...&#10;53&#10;재생 담기 &#10;Blue Moon&#10; 인기 곡 Blue Moon&#10;비투비&#10;THIS IS US&#10;좋아요 45,743&#10;뮤직비디오&#10;다운&#10;...`} rows={10} className="w-full px-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50/50 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 transition-all resize-none font-mono" />
                 <button onClick={parsePastedText} disabled={!pastedText.trim()} className="mt-3 px-4 py-2 rounded-xl bg-sky-400 text-white text-sm font-medium hover:bg-sky-500 transition-colors disabled:opacity-50">智能解析</button>
               </div>
             </div>
