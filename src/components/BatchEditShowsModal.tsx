@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, Check, Users, Type, Replace, UserPlus, UserMinus } from "lucide-react";
+import { X, Users, Type, Replace, UserPlus, UserMinus } from "lucide-react";
 import type { ShowItem, ShowMember } from "@/lib/showData";
 
 const allMembers: ShowMember[] = [
