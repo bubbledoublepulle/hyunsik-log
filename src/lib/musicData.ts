@@ -270,7 +270,7 @@ export async function saveMusicData(data: MusicItem[]): Promise<{ error: string 
 
   // 分批 delete：先获取所有远程 ID，找出不在 currentIds 中的，分批删除
   const currentIds = new Set(data.map((d) => d.id));
-  const { data: remoteRows, error: fetchErr } = await supabase.from("music").select("id");
+  const { data: remoteRows, error: fetchErr } = await supabase.from("music").select("id").limit(9995);
   if (fetchErr) {
     console.warn("[music] fetch ids for delete failed:", fetchErr.message);
     return { error: null };
