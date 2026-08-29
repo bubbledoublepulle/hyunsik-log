@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, Loader2, Link2, FileText, Check } from "lucide-react";
+import { X, Loader2, Link2, FileText, Check, ClipboardPaste } from "lucide-react";
 import type { MusicItem, MusicRole, MusicType } from "@/lib/musicData";
 
 interface BatchImportModalProps {
@@ -9,8 +9,9 @@ interface BatchImportModalProps {
 }
 
 export default function BatchImportModal({ open, onClose, onSave }: BatchImportModalProps) {
-  const [mode, setMode] = useState<"melon" | "manual">("melon");
+  const [mode, setMode] = useState<"melon" | "paste" | "manual">("paste");
   const [url, setUrl] = useState("");
+  const [pastedText, setPastedText] = useState("");
   const [manualText, setManualText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -20,6 +21,126 @@ export default function BatchImportModal({ open, onClose, onSave }: BatchImportM
   const extractArtistId = (input: string): string | null => {
     const match = input.match(/artistId=(\d+)/);
     return match ? match[1] : null;
+  };
+
+  // 智能解析从 Melon 页面复制的文字
+  const parsePastedText = () => {
+    const text = pastedText.trim();
+    if (!text) {
+      setError("请先粘贴内容");
+      return;
+    }
+
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const songs: any[] = [];
+
+    // 要跳过的标签/表头
+    const skipWords = ['곡명', '앨범명', '발매일', '좋아요', '순위', '듣기', '담기', '더보기', '전체선택', '곡', '앨범', '아티스트', '재생', '가사', '편곡', '작사', '작곡'];
+    
+    // 清理每行，去掉常见噪音
+    const cleanLines = lines.filter(line => {
+      if (skipWords.includes(line)) return false;
+      if (line === '전체') return false;
+      if (line.startsWith('좋아요 총')) return false;
+      if (line.startsWith('총')) return false;
+      if (/^\d{1,2}:\d{2}$/.test(line)) return false; // 跳过时长 03:45
+      return true;
+    });
+
+    // 尝试模式1: 每3-4行一首歌 (序号, 歌名, 专辑, 日期)
+    let i = 0;
+    while (i < cleanLines.length) {
+      const line = cleanLines[i];
+      
+      // 跳过纯数字序号
+      if (/^\d+$/.test(line)) {
+        i++;
+        continue;
+      }
+
+      // 识别日期行 YYYY.MM.DD 或 YYYY-MM-DD
+      const dateMatch = line.match(/^(\d{4})[.\-/](\d{2})[.\-/](\d{2})$/);
+      if (dateMatch && songs.length > 0 && !songs[songs.length - 1].date) {
+        songs[songs.length - 1].date = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
+        i++;
+        continue;
+      }
+
+      // 如果当前行看起来像歌名（有文字，不是日期，不是纯数字）
+      if (line.length > 0 && !/^\d+$/.test(line) && !dateMatch) {
+        // 看看后面几行有没有日期
+        let date = "";
+        let album = "";
+        let lookAhead = i + 1;
+        let linesConsumed = 0;
+        
+        while (lookAhead < cleanLines.length && linesConsumed < 3) {
+          const nextLine = cleanLines[lookAhead];
+          const dm = nextLine.match(/^(\d{4})[.\-/](\d{2})[.\-/](\d{2})$/);
+          
+          if (dm) {
+            date = `${dm[1]}-${dm[2]}-${dm[3]}`;
+            linesConsumed++;
+            lookAhead++;
+            break;
+          } else if (!/^\d+$/.test(nextLine) && nextLine.length > 0 && !album) {
+            // 可能是专辑名
+            album = nextLine;
+            linesConsumed++;
+            lookAhead++;
+          } else {
+            linesConsumed++;
+            lookAhead++;
+          }
+        }
+
+        songs.push({
+          title: line,
+          album: album || "未知专辑",
+          date: date,
+          type: "团体",
+          roles: ["演唱"],
+          plays: "",
+          link: "",
+          isSelfComposed: false,
+        });
+        
+        i = lookAhead;
+        continue;
+      }
+      
+      i++;
+    }
+
+    // 去重
+    const seen = new Set();
+    const unique = songs.filter(s => {
+      const key = s.title + "|" + s.album;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).filter(s => s.title && s.title !== "곡명");
+
+    if (unique.length === 0) {
+      setError("未能从粘贴内容中解析出歌曲，请尝试手动模式或检查粘贴内容。");
+      return;
+    }
+
+    const items: MusicItem[] = unique.map((s: any, idx: number) => ({
+      id: `m-batch-${Date.now()}-${idx}`,
+      title: s.title,
+      album: s.album,
+      releaseDate: s.date || "",
+      type: (s.type as MusicType) || "团体",
+      roles: (s.roles as MusicRole[]) || ["演唱"],
+      plays: s.plays || "",
+      link: s.link || "",
+      isSelfComposed: s.isSelfComposed || false,
+    }));
+
+    setPreview(items);
+    setSelectedIds(new Set(items.map((item) => item.id)));
+    setError("");
   };
 
   const parseMelon = async () => {
@@ -32,17 +153,16 @@ export default function BatchImportModal({ open, onClose, onSave }: BatchImportM
     setError("");
     setPreview([]);
     try {
-      // 通过 CORS 代理直接抓取 Melon
       const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://www.melon.com/artist/songList.htm?artistId=${artistId}`)}`;
       const res = await fetch(proxyUrl);
       if (!res.ok) {
-        setError("Melon 抓取失败，可能是反爬限制。请切换到手动模式。");
+        setError("Melon 抓取失败，请尝试「粘贴页面文字」模式。");
         return;
       }
       const html = await res.text();
       
       if (!html.includes("ellipsis")) {
-        setError("无法解析 Melon 页面，请切换到手动模式。");
+        setError("无法解析 Melon 页面，请尝试「粘贴页面文字」模式。");
         return;
       }
 
@@ -78,7 +198,7 @@ export default function BatchImportModal({ open, onClose, onSave }: BatchImportM
       });
 
       if (unique.length === 0) {
-        setError("未解析到任何歌曲，请切换到手动模式。");
+        setError("未解析到任何歌曲，请尝试「粘贴页面文字」模式。");
         return;
       }
 
@@ -96,7 +216,7 @@ export default function BatchImportModal({ open, onClose, onSave }: BatchImportM
       setPreview(items);
       setSelectedIds(new Set(items.map((item) => item.id)));
     } catch (e: any) {
-      setError(`请求失败: ${e.message}，请切换到手动模式。`);
+      setError(`请求失败: ${e.message}，请尝试「粘贴页面文字」模式。`);
     } finally {
       setLoading(false);
     }
@@ -146,11 +266,12 @@ export default function BatchImportModal({ open, onClose, onSave }: BatchImportM
 
   const reset = () => {
     setUrl("");
+    setPastedText("");
     setManualText("");
     setPreview([]);
     setSelectedIds(new Set());
     setError("");
-    setMode("melon");
+    setMode("paste");
   };
 
   const handleClose = () => {
@@ -172,6 +293,15 @@ export default function BatchImportModal({ open, onClose, onSave }: BatchImportM
 
         <div className="flex p-1 mx-6 mt-4 bg-gray-100 rounded-xl">
           <button
+            onClick={() => setMode("paste")}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all ${
+              mode === "paste" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"
+            }`}
+          >
+            <ClipboardPaste className="w-4 h-4" />
+            粘贴页面文字
+          </button>
+          <button
             onClick={() => setMode("melon")}
             className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all ${
               mode === "melon" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"
@@ -192,7 +322,46 @@ export default function BatchImportModal({ open, onClose, onSave }: BatchImportM
         </div>
 
         <div className="flex-1 overflow-auto px-6 py-4">
-          {mode === "melon" ? (
+          {mode === "paste" && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  从 Melon 页面复制的文字
+                </label>
+                <div className="text-xs text-gray-500 mb-2 space-y-0.5">
+                  <p>操作步骤：</p>
+                  <p>1. 打开 Melon 歌手歌曲列表页面</p>
+                  <p>2. 按 <kbd className="px-1 py-0.5 bg-gray-100 rounded text-gray-700 font-mono">Ctrl+A</kbd> 全选，<kbd className="px-1 py-0.5 bg-gray-100 rounded text-gray-700 font-mono">Ctrl+C</kbd> 复制</p>
+                  <p>3. 粘贴到下方文本框，点击解析</p>
+                </div>
+                <textarea
+                  value={pastedText}
+                  onChange={(e) => setPastedText(e.target.value)}
+                  placeholder={`粘贴后内容示例：
+1
+그리워하다 (Missing You)
+Brother Act.
+2017.10.16
+2
+너 없는 날 (A Day Without You)
+Brother Act.
+2017.10.16
+...`}
+                  rows={10}
+                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50/50 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 transition-all resize-none font-mono"
+                />
+                <button
+                  onClick={parsePastedText}
+                  disabled={!pastedText.trim()}
+                  className="mt-3 px-4 py-2 rounded-xl bg-sky-400 text-white text-sm font-medium hover:bg-sky-500 transition-colors disabled:opacity-50"
+                >
+                  智能解析
+                </button>
+              </div>
+            </div>
+          )}
+
+          {mode === "melon" && (
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -216,11 +385,13 @@ export default function BatchImportModal({ open, onClose, onSave }: BatchImportM
                   </button>
                 </div>
                 <p className="text-xs text-gray-400 mt-1.5">
-                  支持格式：melon.com/artist/song.htm?artistId=xxx
+                  如果解析失败，请使用「粘贴页面文字」模式
                 </p>
               </div>
             </div>
-          ) : (
+          )}
+
+          {mode === "manual" && (
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
