@@ -4,11 +4,12 @@ import { supabase, isSupabaseConfigured } from "./supabase";
 let saveMusicDataPromise: Promise<{ error: string | null }> | null = null;
 
 export type MusicRole = "演唱" | "作曲" | "作词" | "编曲";
-export type MusicType = "团体" | "SOLO" | "OST" | "合作";
+export type MusicType = "录音室" | "live" | "OST" | "合作" | "仅制作";
 
 export interface MusicItem {
   id: string;
   title: string;
+  artist: string;
   album: string;
   releaseDate: string;
   type: MusicType;
@@ -22,9 +23,10 @@ export const initialMusicData: MusicItem[] = [
   {
     id: "m01",
     title: "Missing You",
+    artist: "비투비",
     album: "Brother Act.",
     releaseDate: "2017-10-16",
-    type: "团体",
+    type: "录音室",
     roles: ["演唱", "作曲", "作词"],
     plays: "",
     link: "https://music.apple.com",
@@ -33,9 +35,10 @@ export const initialMusicData: MusicItem[] = [
   {
     id: "m02",
     title: "Beautiful Pain",
+    artist: "비투비",
     album: "Brother Act.",
     releaseDate: "2017-10-16",
-    type: "团体",
+    type: "录音室",
     roles: ["演唱", "作曲", "作词", "编曲"],
     plays: "",
     link: "https://music.apple.com",
@@ -44,9 +47,10 @@ export const initialMusicData: MusicItem[] = [
   {
     id: "m03",
     title: "The Girl",
+    artist: "임현식",
     album: "Walk and Talk",
     releaseDate: "2024-02-29",
-    type: "SOLO",
+    type: "录音室",
     roles: ["演唱", "作曲", "作词", "编曲"],
     plays: "",
     link: "https://music.apple.com",
@@ -55,9 +59,10 @@ export const initialMusicData: MusicItem[] = [
   {
     id: "m04",
     title: "Sweety",
+    artist: "임현식",
     album: "Sweety",
     releaseDate: "2023-04-03",
-    type: "SOLO",
+    type: "录音室",
     roles: ["演唱", "作曲", "作词"],
     plays: "",
     link: "https://music.apple.com",
@@ -66,9 +71,10 @@ export const initialMusicData: MusicItem[] = [
   {
     id: "m05",
     title: "Raining",
+    artist: "임현식",
     album: "HR2",
     releaseDate: "2020-09-28",
-    type: "SOLO",
+    type: "录音室",
     roles: ["演唱", "作曲", "作词", "编曲"],
     plays: "",
     link: "https://music.apple.com",
@@ -77,9 +83,10 @@ export const initialMusicData: MusicItem[] = [
   {
     id: "m06",
     title: "Born to Beat",
+    artist: "비투비",
     album: "Born to Beat",
     releaseDate: "2012-03-21",
-    type: "团体",
+    type: "录音室",
     roles: ["演唱"],
     plays: "",
     link: "https://music.apple.com",
@@ -88,9 +95,10 @@ export const initialMusicData: MusicItem[] = [
   {
     id: "m07",
     title: "Insane",
+    artist: "비투비",
     album: "Born to Beat",
     releaseDate: "2012-03-21",
-    type: "团体",
+    type: "录音室",
     roles: ["演唱", "作曲"],
     plays: "",
     link: "https://music.apple.com",
@@ -99,6 +107,7 @@ export const initialMusicData: MusicItem[] = [
   {
     id: "m08",
     title: "Can't Come Back",
+    artist: "비투비",
     album: "Press Play",
     releaseDate: "2016-02-29",
     type: "OST",
@@ -110,6 +119,7 @@ export const initialMusicData: MusicItem[] = [
   {
     id: "m09",
     title: "Melody",
+    artist: "임현식",
     album: "Melody",
     releaseDate: "2025-01-20",
     type: "合作",
@@ -121,9 +131,10 @@ export const initialMusicData: MusicItem[] = [
   {
     id: "m10",
     title: "Star",
+    artist: "임현식",
     album: "HR2",
     releaseDate: "2020-09-28",
-    type: "SOLO",
+    type: "录音室",
     roles: ["演唱", "作曲", "作词", "编曲"],
     plays: "",
     link: "https://music.apple.com",
@@ -132,9 +143,10 @@ export const initialMusicData: MusicItem[] = [
   {
     id: "m11",
     title: "Whatta Man",
+    artist: "비투비",
     album: "WHATTAMAN",
     releaseDate: "2024-11-07",
-    type: "团体",
+    type: "录音室",
     roles: ["演唱", "作曲"],
     plays: "",
     link: "https://music.apple.com",
@@ -143,6 +155,7 @@ export const initialMusicData: MusicItem[] = [
   {
     id: "m12",
     title: "Time Traveler",
+    artist: "임현식",
     album: "OST",
     releaseDate: "2023-07-15",
     type: "OST",
@@ -161,6 +174,7 @@ function toDbRow(item: MusicItem) {
   return {
     id: item.id,
     title: item.title,
+    artist: item.artist,
     album: item.album,
     release_date: item.releaseDate,
     type: item.type,
@@ -175,6 +189,7 @@ export function fromDbRow(row: Record<string, unknown>): MusicItem {
   return {
     id: String(row.id),
     title: String(row.title),
+    artist: String(row.artist ?? ""),
     album: String(row.album),
     releaseDate: String(row.release_date),
     type: String(row.type) as MusicType,
@@ -191,7 +206,12 @@ export function loadMusicData(): MusicItem[] {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
-      return JSON.parse(stored);
+      const data = JSON.parse(stored);
+      // 兼容旧数据：补充 artist 字段
+      return data.map((item: any) => ({
+        ...item,
+        artist: item.artist ?? "",
+      }));
     }
   } catch {
     // ignore parse errors
