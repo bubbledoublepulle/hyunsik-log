@@ -32,17 +32,57 @@ export default function BatchImportModal({ open, onClose, onSave }: BatchImportM
     setError("");
     setPreview([]);
     try {
-      const res = await fetch(`/api/melon-songs?artistId=${artistId}`);
-      const data = await res.json();
-      if (data.error && (!data.songs || data.songs.length === 0)) {
-        setError(data.error);
+      // 通过 CORS 代理直接抓取 Melon
+      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://www.melon.com/artist/songList.htm?artistId=${artistId}`)}`;
+      const res = await fetch(proxyUrl);
+      if (!res.ok) {
+        setError("Melon 抓取失败，可能是反爬限制。请切换到手动模式。");
         return;
       }
-      if (!data.songs || data.songs.length === 0) {
-        setError("未解析到任何歌曲，Melon 可能启用了反爬保护。请切换到手动模式。");
+      const html = await res.text();
+      
+      if (!html.includes("ellipsis")) {
+        setError("无法解析 Melon 页面，请切换到手动模式。");
         return;
       }
-      const items: MusicItem[] = data.songs.map((s: any, i: number) => ({
+
+      const songs: any[] = [];
+      const titleMatches = [...html.matchAll(/<a[^>]*class="ellipsis"[^>]*title="([^"]*)"[^>]*>/g)];
+      const dateMatches = [...html.matchAll(/<td[^>]*class="t_center"[^>]*>([\d.]+)<\/td>/g)];
+      
+      for (let i = 0; i < titleMatches.length - 1; i += 2) {
+        const title = titleMatches[i][1].replace(/&amp;/g, "&").trim();
+        const album = (titleMatches[i + 1]?.[1] || "").replace(/&amp;/g, "&").trim();
+        const date = dateMatches[Math.floor(i / 2)]?.[1] || "";
+        
+        if (title && title !== "곡명") {
+          songs.push({
+            title,
+            album: album || "未知专辑",
+            date: date ? date.replace(/\./g, "-") : "",
+            type: "团体",
+            roles: ["演唱"],
+            plays: "",
+            link: "",
+            isSelfComposed: false,
+          });
+        }
+      }
+
+      const seen = new Set();
+      const unique = songs.filter(s => {
+        const key = s.title + "|" + s.album;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      if (unique.length === 0) {
+        setError("未解析到任何歌曲，请切换到手动模式。");
+        return;
+      }
+
+      const items: MusicItem[] = unique.map((s: any, i: number) => ({
         id: `m-batch-${Date.now()}-${i}`,
         title: s.title || "未知歌名",
         album: s.album || "未知专辑",
@@ -56,7 +96,7 @@ export default function BatchImportModal({ open, onClose, onSave }: BatchImportM
       setPreview(items);
       setSelectedIds(new Set(items.map((item) => item.id)));
     } catch (e: any) {
-      setError(`请求失败: ${e.message}`);
+      setError(`请求失败: ${e.message}，请切换到手动模式。`);
     } finally {
       setLoading(false);
     }
