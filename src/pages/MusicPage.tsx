@@ -260,11 +260,7 @@ export default function MusicPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-      <div style={{ position: "fixed", top: 80, right: 16, zIndex: 50 }}>
-        <span style={{ fontSize: 12, padding: "4px 8px", borderRadius: 20, background: isSubscribed ? "#dcfce7" : "#fef3c7", color: isSubscribed ? "#166534" : "#92400e" }}>
-          {isSubscribed ? "🟢 实时同步中" : "🟡 连接中..."}
-        </span>
-      </div>
+     
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
