@@ -51,13 +51,11 @@ export default function MusicPage() {
   const [sortBy, setSortBy] = useState<SortBy>("date-desc");
   const [viewMode, setViewMode] = useState<ViewMode>("table");
 
-  // Filters
   const [selectedTypes, setSelectedTypes] = useState<Set<MusicType>>(new Set());
   const [selectedYears, setSelectedYears] = useState<Set<number>>(new Set());
   const [selectedRoles, setSelectedRoles] = useState<Set<MusicRole>>(new Set());
   const [onlySelfComposed, setOnlySelfComposed] = useState(false);
 
-  // Modals
   const [formOpen, setFormOpen] = useState(false);
   const [batchImportOpen, setBatchImportOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MusicItem | null>(null);
@@ -75,9 +73,7 @@ export default function MusicPage() {
       setMusicData(items);
       try {
         localStorage.setItem("hsik_music_data", JSON.stringify(items));
-      } catch {
-        // ignore
-      }
+      } catch {}
       if (!isAdmin && rtMusicNotifiedRef.current && rtMusicData.length !== prevRtMusicCountRef.current) {
         toast.info("数据已更新", { description: "管理员发布了最新音乐数据" });
       }
@@ -89,9 +85,7 @@ export default function MusicPage() {
   useEffect(() => {
     setMusicData(loadMusicData());
     syncMusicData().then((data) => {
-      if (!userModifiedRef.current) {
-        setMusicData(data);
-      }
+      if (!userModifiedRef.current) setMusicData(data);
     }).catch(() => {});
   }, []);
 
@@ -103,9 +97,7 @@ export default function MusicPage() {
       }
       userModifiedRef.current = true;
       saveMusicData(musicData).then(({ error }) => {
-        if (error) {
-          toast.error("云端同步失败", { description: error });
-        }
+        if (error) toast.error("云端同步失败", { description: error });
       }).catch(() => {});
     }
   }, [musicData]);
@@ -121,38 +113,29 @@ export default function MusicPage() {
 
   const filteredData = useMemo(() => {
     let result = [...musicData];
-
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      result = result.filter(
-        (item) =>
-          item.title.toLowerCase().includes(q) ||
-          item.album.toLowerCase().includes(q) ||
-          item.artist.toLowerCase().includes(q)
+      result = result.filter((item) =>
+        item.title.toLowerCase().includes(q) ||
+        item.album.toLowerCase().includes(q) ||
+        item.artist.toLowerCase().includes(q)
       );
     }
-
     if (selectedTypes.size > 0) {
       result = result.filter((item) => selectedTypes.has(item.type));
     }
-
     if (selectedYears.size > 0) {
       result = result.filter((item) => {
         const year = new Date(item.releaseDate).getFullYear();
         return selectedYears.has(year);
       });
     }
-
     if (selectedRoles.size > 0) {
-      result = result.filter((item) =>
-        item.roles.some((r) => selectedRoles.has(r))
-      );
+      result = result.filter((item) => item.roles.some((r) => selectedRoles.has(r)));
     }
-
     if (onlySelfComposed) {
       result = result.filter((item) => item.isSelfComposed);
     }
-
     switch (sortBy) {
       case "date-desc":
         result.sort((a, b) => new Date(b.releaseDate).getTime() - new Date(a.releaseDate).getTime());
@@ -164,7 +147,6 @@ export default function MusicPage() {
         result.sort((a, b) => a.title.localeCompare(b.title));
         break;
     }
-
     return result;
   }, [musicData, searchQuery, selectedTypes, selectedYears, selectedRoles, onlySelfComposed, sortBy]);
 
@@ -260,7 +242,6 @@ export default function MusicPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-     
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -273,7 +254,6 @@ export default function MusicPage() {
             </span>
           </div>
           <h1 className="text-2xl font-bold text-gray-900">音乐档案</h1>
-          <p className="text-sm text-gray-500 mt-0.5">任炫植音乐作品结构化档案</p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
