@@ -361,12 +361,34 @@ export async function syncSocialData(): Promise<SocialPost[]> {
   if (!isSupabaseConfigured()) {
     return loadSocialData();
   }
-  const { data, error } = await supabase.from("social_posts").select("*").order("created_at", { ascending: false });
-  if (error) {
-    console.warn("[social] sync failed:", error.message);
-    return loadSocialData();
+
+  const PAGE_SIZE = 100;
+  let allRows: any[] = [];
+  let from = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data, error } = await supabase
+      .from("social_posts")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (error) {
+      console.warn("[social] sync failed:", error.message);
+      return loadSocialData();
+    }
+
+    if (data && data.length > 0) {
+      allRows = allRows.concat(data);
+      hasMore = data.length === PAGE_SIZE;
+      from += PAGE_SIZE;
+    } else {
+      hasMore = false;
+    }
   }
-  const items = (data || []).map(fromDbRow);
+
+  const items = allRows.map(fromDbRow);
   saveLocalSocialData(items);
   return items;
 }
