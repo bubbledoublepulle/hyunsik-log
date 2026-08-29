@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "../supabaseClient";
 
 export function useRealtimeData(tableName, options = {}) {
-  const { orderBy = "created_at", ascending = false, limit = 100 } = options;
+  const { orderBy = "created_at", ascending = false } = options;
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -12,12 +12,33 @@ export function useRealtimeData(tableName, options = {}) {
   const fetchData = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const { data: d, error: e } = await supabase.from(tableName).select("*").order(orderBy, { ascending }).limit(limit);
-      if (e) throw e;
-      setData(d || []);
+      // 分页获取所有数据，突破 100 条限制
+      const PAGE_SIZE = 100;
+      let allRows = [];
+      let from = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data: d, error: e } = await supabase
+          .from(tableName)
+          .select("*")
+          .order(orderBy, { ascending })
+          .range(from, from + PAGE_SIZE - 1);
+
+        if (e) throw e;
+        if (d && d.length > 0) {
+          allRows = allRows.concat(d);
+          hasMore = d.length === PAGE_SIZE;
+          from += PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      setData(allRows);
     } catch (err) { setError(err.message); }
     finally { setLoading(false); }
-  }, [tableName, orderBy, ascending, limit]);
+  }, [tableName, orderBy, ascending]);
 
   useEffect(() => {
     fetchData();
