@@ -44,7 +44,7 @@ type ViewMode = "table" | "album";
 
 export default function MusicPage() {
   const { isAdmin } = useAuth();
-  const { data: rtMusicData, isSubscribed } = useRealtimeData("music");
+  const { data: rtMusicData } = useRealtimeData("music");
 
   const [musicData, setMusicData] = useState<MusicItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
