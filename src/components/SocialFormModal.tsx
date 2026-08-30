@@ -270,13 +270,12 @@ export default function SocialFormModal({
     }
   }
 
-  const validate = () => {
+    const validate = () => {
     const e: Record<string, string> = {};
     if (!author.trim()) e.author = "请输入发布者名称";
     if (!content.trim() && images.filter((i) => i.trim()).length === 0) {
-      e.content = "请至少填写文字内容或一张图片";
+      e.content = "请至少填写文字内容或上传一张图片";
     }
-    // postUrl 为可选字段，不再校验
     if (!postDate) e.postDate = "请选择发布时间";
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -404,26 +403,26 @@ export default function SocialFormModal({
                   </select>
                 </div>
 
-                <div>
-                  <label className="text-sm font-medium text-gray-700 mb-1.5 flex items-center">
-                    发布者 <span className="text-red-400 ml-0.5">*</span>
-                    {fieldBadge("author")}
-                  </label>
-                  <input
-                    type="text"
-                    value={author}
-                    onChange={(e) => setAuthor(e.target.value)}
-                    placeholder="@username 或名称"
-                    className={`w-full px-3.5 py-2.5 rounded-xl border-2 transition-all outline-none ${
-                      errors.author
-                        ? "border-red-300 bg-red-50"
-                        : fetchedFields.has("author")
-                        ? "border-emerald-200 bg-emerald-50/30"
-                        : "border-gray-100 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-                    }`}
-                  />
-                  {errors.author && <p className="text-xs text-red-500 mt-1">{errors.author}</p>}
-                </div>
+                              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1.5 flex items-center">
+                  文字内容
+                  {fieldBadge("content")}
+                </label>
+                <textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder="输入动态内容...（可留空，但至少填写文字或上传一张图片）"
+                  rows={4}
+                  className={`w-full px-3.5 py-2.5 rounded-xl border-2 transition-all outline-none resize-none ${
+                    errors.content
+                      ? "border-red-300 bg-red-50"
+                      : fetchedFields.has("content")
+                      ? "border-emerald-200 bg-emerald-50/30"
+                      : "border-gray-100 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                  }`}
+                />
+                {errors.content && <p className="text-xs text-red-500 mt-1">{errors.content}</p>}
+              </div>
               </div>
 
               {/* Member */}
