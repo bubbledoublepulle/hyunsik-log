@@ -21,7 +21,6 @@ import {
   loadShowData,
   syncShowData,
   getPreferredThumbnail,
-  getPreferredSource,
   getDisplayDuration,
   getDisplayViews,
   getDisplayDate,
