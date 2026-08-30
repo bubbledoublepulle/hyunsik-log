@@ -120,43 +120,61 @@ export default function HomePage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-      {/* Hero */}
+            {/* Hero */}
       <motion.section
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
-        className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-sky-50 via-white to-sky-50/50 border border-sky-100/50 p-10 md:p-16 mb-10"
+        className="relative overflow-hidden rounded-3xl border border-sky-100/50 mb-10 min-h-[420px] md:min-h-[480px] flex items-end"
       >
-        {/* Background decorations */}
-        <div className="absolute top-0 right-0 w-96 h-96 bg-sky-200/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-sky-300/10 rounded-full blur-2xl translate-y-1/2 -translate-x-1/4" />
+        {/* 背景图片 */}
+        <div
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          style={{
+            backgroundImage: "url('/IMG_1515.jpg')",
+          }}
+        />
+        {/* 底部渐变遮罩：图片底部自然过渡到页面背景 #F8F9FA */}
+        <div
+          className="absolute bottom-0 left-0 right-0 h-56"
+          style={{
+            background: "linear-gradient(to bottom, transparent 0%, #F8F9FA 100%)",
+          }}
+        />
+        {/* 顶部暗化层：让白色文字在亮色图片上也能看清 */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background: "linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.1) 50%, transparent 100%)",
+          }}
+        />
 
-        <div className="relative z-10">
+        <div className="relative z-10 w-full p-10 md:p-16">
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.2 }}
-            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sky-100 text-sky-600 text-xs font-medium mb-4"
+            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-white text-xs font-medium mb-4 border border-white/20"
           >
             <Sparkles className="w-3.5 h-3.5" />
             BTOB · 任炫植 个人数据站
           </motion.div>
 
-          <h1 className="text-5xl md:text-6xl font-black tracking-tight text-gray-900 mb-3">
+          <h1 className="text-5xl md:text-6xl font-black tracking-tight text-white mb-3 drop-shadow-lg">
             sik.log
           </h1>
-          <p className="text-lg text-gray-500 mb-8">
+          <p className="text-lg text-white/90 mb-8 drop-shadow-md">
             任炫植的专属档案室
           </p>
 
-          <p className="text-gray-600 max-w-2xl leading-relaxed mb-8">
+          <p className="text-white/80 max-w-2xl leading-relaxed mb-8 drop-shadow-sm">
             Made by 任炫植.log
           </p>
 
           {!isAdmin && isAdminDomain && (
             <button
               onClick={() => setAuthModalOpen(true)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-sky-200 bg-white text-sky-600 text-sm font-medium hover:bg-sky-50 transition-colors"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-white/30 bg-white/15 backdrop-blur-md text-white text-sm font-medium hover:bg-white/25 transition-colors"
             >
               <Sparkles className="w-4 h-4" />
               进入管理模式
