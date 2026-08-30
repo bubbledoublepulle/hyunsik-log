@@ -266,12 +266,14 @@ export default function HomePage() {
             BTOB · 任炫植 个人数据站
           </motion.div>
 
-          <h1 className="text-5xl md:text-6xl font-black tracking-tight text-white mb-3 drop-shadow-lg">
-            sik.log
-          </h1>
-          <p className="text-lg text-white/90 mb-8 drop-shadow-md">
-            任炫植的专属档案室
-          </p>
+                    <div className="flex items-center gap-4 mb-3">
+            <div className="w-14 h-14 md:w-16 md:h-16 bg-gradient-to-br from-sky-400 to-sky-600 rounded-xl flex items-center justify-center shadow-lg shadow-sky-300/30 overflow-hidden shrink-0">
+              <img src="/logo.svg" alt="Logo" className="w-9 h-9 md:w-10 md:h-10 object-contain" />
+            </div>
+            <h1 className="text-5xl md:text-6xl font-black tracking-tight text-white drop-shadow-lg">
+              sik.log
+            </h1>
+          </div>
 
           <p className="text-white/80 max-w-2xl leading-relaxed mb-8 drop-shadow-sm">
             Made by 任炫植.log
