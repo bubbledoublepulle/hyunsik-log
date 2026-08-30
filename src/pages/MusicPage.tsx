@@ -386,12 +386,14 @@ export default function MusicPage() {
                               ))}
                             </div>
                           </td>
-                          <td className="px-4 py-3.5">
-                            <div className="flex items-center justify-end gap-1">
-                              <a href={item.link} target="_blank" rel="noopener noreferrer" className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-sky-50 hover:text-sky-500 transition-colors">
-                                <ExternalLink className="w-3.5 h-3.5" />
-                              </a>
-                              {isAdmin && (
+                         <td className="px-4 py-3.5">
+  <div className="flex items-center justify-end gap-1">
+    {item.link && (
+      <a href={item.link} target="_blank" rel="noopener noreferrer" className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-sky-50 hover:text-sky-500 transition-colors">
+        <ExternalLink className="w-3.5 h-3.5" />
+      </a>
+    )}
+    {isAdmin && (
                                 <>
                                   <button onClick={() => handleEdit(item)} className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-sky-50 hover:text-sky-500 transition-colors">
                                     <Pencil className="w-3.5 h-3.5" />
@@ -464,11 +466,13 @@ export default function MusicPage() {
                                 </span>
                               </div>
                             </div>
-                            <div className="flex items-center gap-0.5">
-                              <a href={item.link} target="_blank" rel="noopener noreferrer" className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-sky-50 hover:text-sky-500 transition-colors">
-                                <ExternalLink className="w-3.5 h-3.5" />
-                              </a>
-                              {isAdmin && (
+                           <div className="flex items-center gap-0.5">
+  {item.link && (
+    <a href={item.link} target="_blank" rel="noopener noreferrer" className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-sky-50 hover:text-sky-500 transition-colors">
+      <ExternalLink className="w-3.5 h-3.5" />
+    </a>
+  )}
+  {isAdmin && (
                                 <>
                                   <button onClick={() => handleEdit(item)} className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-sky-50 hover:text-sky-500 transition-colors">
                                     <Pencil className="w-3.5 h-3.5" />
