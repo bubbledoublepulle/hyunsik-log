@@ -131,7 +131,7 @@ export default function HomePage() {
         <div
           className="absolute inset-0 bg-cover bg-center bg-no-repeat"
           style={{
-            backgroundImage: "url('/IMG_1515.jpg')",
+            backgroundImage: "url('/IMG_1515 2.jpg')",
           }}
         />
         {/* 底部渐变遮罩：图片底部自然过渡到页面背景 #F8F9FA */}
