@@ -772,14 +772,14 @@ function ImageGrid({ images }: { images: string[] }) {
     );
   }
 
-  if (images.length === 3) {
+    if (images.length === 3) {
     return (
       <div className="grid grid-cols-2 gap-1 rounded-xl overflow-hidden">
         <img
           src={getProxiedImageUrl(images[0])}
           alt="动态图片 1"
           loading="lazy"
-          className="w-full h-48 object-cover row-span-2"
+          className="w-full h-48 object-cover"
           onError={(e) => {
             (e.currentTarget as HTMLImageElement).style.display = "none";
           }}
@@ -797,7 +797,7 @@ function ImageGrid({ images }: { images: string[] }) {
           src={getProxiedImageUrl(images[2])}
           alt="动态图片 3"
           loading="lazy"
-          className="w-full h-48 object-cover"
+          className="w-full h-48 object-cover col-span-2"
           onError={(e) => {
             (e.currentTarget as HTMLImageElement).style.display = "none";
           }}
@@ -805,7 +805,6 @@ function ImageGrid({ images }: { images: string[] }) {
       </div>
     );
   }
-
   return (
     <div className="grid grid-cols-2 gap-1 rounded-xl overflow-hidden">
       {images.slice(0, 4).map((img, i) => (
