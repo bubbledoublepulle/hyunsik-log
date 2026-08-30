@@ -47,6 +47,7 @@ function getProxiedThumbnail(url: string | null | undefined): string | null {
 import ShowFormModal from "@/components/ShowFormModal";
 import BatchEditShowsModal from "@/components/BatchEditShowsModal";
 import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
+import ScrollToTop from "@/components/ScrollToTop";
 import { useRealtimeData } from "@/hooks/useRealtimeData";
 
 const allMembers: ShowMember[] = [
@@ -681,6 +682,7 @@ export default function ShowsPage() {
       <ShowFormModal open={formOpen} onClose={() => { setFormOpen(false); setEditingItem(null); }} onSave={handleSave} onSaveBatch={handleSaveBatch} editingItem={editingItem} />
       <BatchEditShowsModal open={batchEditOpen} onClose={() => setBatchEditOpen(false)} items={showData.filter((item) => batchSelectedIds.has(item.id))} onSave={handleBatchEditSave} />
       <DeleteConfirmDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => deleteTarget && handleDelete(deleteTarget)} title="删除综艺" message={`确定要删除「${deleteTarget?.title}」吗？此操作不可撤销。`} />
+      <ScrollToTop />
     </div>
   );
 }
