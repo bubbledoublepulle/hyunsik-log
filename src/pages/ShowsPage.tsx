@@ -513,7 +513,7 @@ export default function ShowsPage() {
                   >
                     {batchEditMode ? `批量编辑 (${batchSelectedIds.size})` : "批量编辑"}
                   </button>
-                  {batchEditMode && (
+                                    {batchEditMode && (
                     <>
                       <button
                         onClick={() => setBatchSelectedIds(new Set(filteredData.map((item) => item.id)))}
