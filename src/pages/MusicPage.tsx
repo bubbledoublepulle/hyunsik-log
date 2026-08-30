@@ -356,7 +356,7 @@ export default function MusicPage() {
                             <span className="text-sm text-gray-600">{item.album}</span>
                           </td>
                           <td className="px-4 py-3.5 hidden lg:table-cell">
-                            <span className="text-xs px-2 py-1 rounded-md bg-gray-50 text-gray-500 font-medium">{item.type}</span>
+                            <span className="text-xs px-2 py-1 rounded-md bg-gray-50 text-gray-500 font-medium whitespace-nowrap">{item.type}</span>
                           </td>
                           <td className="px-4 py-3.5">
                             <div className="flex flex-wrap gap-1">
@@ -430,7 +430,7 @@ export default function MusicPage() {
                               <div className="flex items-center gap-2">
                                 <span className="font-medium text-gray-900 text-sm truncate">{item.title}</span>
                                 {item.isSelfComposed && <Sparkles className="w-3.5 h-3.5 text-sky-400 shrink-0" />}
-                                <span className="text-xs px-1.5 py-0.5 rounded-md bg-gray-50 text-gray-400 font-medium shrink-0">{item.type}</span>
+                                <span className="text-xs px-1.5 py-0.5 rounded-md bg-gray-50 text-gray-400 font-medium shrink-0 whitespace-nowrap">{item.type}</span>
                               </div>
                               <div className="flex items-center gap-2 mt-1 text-xs text-gray-400">
                                 <span className="text-sky-600 font-medium">{item.artist || "—"}</span>
