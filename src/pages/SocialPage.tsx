@@ -37,6 +37,7 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  Clock,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -108,12 +109,19 @@ function linkifyText(text: string): React.ReactNode[] {
   return result;
 }
 
+interface TimelineNode {
+  year: number;
+  months: { month: number; count: number }[];
+}
+
 export default function SocialPage() {
   const { isAdmin } = useAuth();
 
   const [socialData, setSocialData] = useState<SocialPost[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<Set<SocialCategory>>(new Set());
   const [selectedPlatforms, setSelectedPlatforms] = useState<Set<SocialPlatform>>(new Set());
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingPost, setEditingPost] = useState<SocialPost | null>(null);
@@ -148,24 +156,63 @@ export default function SocialPage() {
     }
   }, [socialData]);
 
+  const timelineData = useMemo((): TimelineNode[] => {
+    const map = new Map<number, Map<number, number>>();
+    socialData.forEach((post) => {
+      const date = new Date(post.postDate);
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+      if (!map.has(year)) map.set(year, new Map());
+      const monthMap = map.get(year)!;
+      monthMap.set(month, (monthMap.get(month) || 0) + 1);
+    });
+    return Array.from(map.entries())
+      .sort((a, b) => b[0] - a[0])
+      .map(([year, months]) => ({
+        year,
+        months: Array.from(months.entries())
+          .sort((a, b) => b[0] - a[0])
+          .map(([month, count]) => ({ month, count })),
+      }));
+  }, [socialData]);
+
   const toggleCategory = (cat: SocialCategory) => {
     const next = new Set(selectedCategories);
-    if (next.has(cat)) {
-      next.delete(cat);
-    } else {
-      next.add(cat);
-    }
+    if (next.has(cat)) next.delete(cat);
+    else next.add(cat);
     setSelectedCategories(next);
   };
 
   const togglePlatform = (plat: SocialPlatform) => {
     const next = new Set(selectedPlatforms);
-    if (next.has(plat)) {
-      next.delete(plat);
-    } else {
-      next.add(plat);
-    }
+    if (next.has(plat)) next.delete(plat);
+    else next.add(plat);
     setSelectedPlatforms(next);
+  };
+
+  const handleSelectYear = (year: number) => {
+    if (selectedYear === year) {
+      setSelectedYear(null);
+      setSelectedMonth(null);
+    } else {
+      setSelectedYear(year);
+      setSelectedMonth(null);
+    }
+  };
+
+  const handleSelectMonth = (year: number, month: number) => {
+    if (selectedYear === year && selectedMonth === month) {
+      setSelectedYear(null);
+      setSelectedMonth(null);
+    } else {
+      setSelectedYear(year);
+      setSelectedMonth(month);
+    }
+  };
+
+  const clearTimeFilter = () => {
+    setSelectedYear(null);
+    setSelectedMonth(null);
   };
 
   const sortedAndFilteredData = useMemo(() => {
@@ -179,6 +226,14 @@ export default function SocialPage() {
       result = result.filter((post) => selectedPlatforms.has(post.platform));
     }
 
+    if (selectedYear !== null) {
+      result = result.filter((post) => new Date(post.postDate).getFullYear() === selectedYear);
+    }
+
+    if (selectedMonth !== null && selectedYear !== null) {
+      result = result.filter((post) => new Date(post.postDate).getMonth() + 1 === selectedMonth);
+    }
+
     result.sort((a, b) => {
       if (a.pinned && !b.pinned) return -1;
       if (!a.pinned && b.pinned) return 1;
@@ -186,7 +241,7 @@ export default function SocialPage() {
     });
 
     return result;
-  }, [socialData, selectedCategories, selectedPlatforms]);
+  }, [socialData, selectedCategories, selectedPlatforms, selectedYear, selectedMonth]);
 
   const handleAdd = () => {
     setEditingPost(null);
@@ -224,8 +279,10 @@ export default function SocialPage() {
     });
   };
 
+  const hasTimeFilter = selectedYear !== null;
+
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
       {/* Page toolbar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
@@ -248,243 +305,344 @@ export default function SocialPage() {
         )}
       </div>
 
-      {/* Filter tags */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-6 space-y-3">
-        {/* Category filter */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-gray-400 mr-1">分类：</span>
-          {socialCategories.map((cat) => {
-            const isActive = selectedCategories.has(cat.key);
-            const style = categoryStyles[cat.key];
-            return (
-              <button
-                key={cat.key}
-                onClick={() => toggleCategory(cat.key)}
-                title={cat.desc}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
-                  isActive ? style.active : style.inactive
-                }`}
-              >
-                {isActive && <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />}
-                {cat.label}
-              </button>
-            );
-          })}
-          {selectedCategories.size > 0 && (
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* Left sidebar - Timeline filter */}
+        <motion.aside
+          initial={{ opacity: 0, x: -15 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="w-full lg:w-56 shrink-0"
+        >
+          <div className="lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-sky-500" />
+                <h3 className="font-bold text-gray-900 text-sm">时间轴</h3>
+              </div>
+              {hasTimeFilter && (
+                <button
+                  onClick={clearTimeFilter}
+                  className="text-xs text-gray-400 hover:text-red-500 flex items-center gap-0.5 transition-colors"
+                >
+                  <X className="w-3 h-3" />
+                  清除
+                </button>
+              )}
+            </div>
+
+            {/* All time */}
             <button
-              onClick={() => setSelectedCategories(new Set())}
-              className="px-3 py-1.5 rounded-full text-xs text-gray-400 hover:text-red-500 transition-colors ml-1"
+              onClick={clearTimeFilter}
+              className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all mb-2 ${
+                !hasTimeFilter
+                  ? "bg-sky-50 text-sky-600"
+                  : "text-gray-600 hover:bg-gray-50"
+              }`}
             >
-              清除分类
+              全部时间
+              <span className="ml-1.5 text-xs text-gray-400 font-normal">
+                ({socialData.length})
+              </span>
             </button>
-          )}
-        </div>
 
-        {/* Platform filter */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-gray-400 mr-1">平台：</span>
-          {allPlatforms.map((plat) => {
-            const isActive = selectedPlatforms.has(plat);
-            const style = platformVisualStyles[plat];
-            return (
-              <button
-                key={plat}
-                onClick={() => togglePlatform(plat)}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                  isActive
-                    ? style.bg + " " + style.text + " shadow-sm"
-                    : "bg-white text-gray-500 border border-gray-200 hover:border-gray-300"
-                }`}
-              >
-                {style.label}
-              </button>
-            );
-          })}
-          {selectedPlatforms.size > 0 && (
-            <button
-              onClick={() => setSelectedPlatforms(new Set())}
-              className="px-3 py-1.5 rounded-full text-xs text-gray-400 hover:text-red-500 transition-colors ml-1"
-            >
-              清除平台
-            </button>
-          )}
-          <span className="ml-auto text-xs text-gray-400">
-            {selectedCategories.size > 0 || selectedPlatforms.size > 0
-              ? `分类 ${selectedCategories.size} 个 · 平台 ${selectedPlatforms.size} 个 · ${sortedAndFilteredData.length} 条动态`
-              : `全部 · ${sortedAndFilteredData.length} 条动态`}
-          </span>
-        </div>
-      </div>
-
-      {/* Timeline layout - single column */}
-      <div className="space-y-4">
-        <AnimatePresence mode="popLayout">
-          {sortedAndFilteredData.map((post) => {
-            const platformStyle = platformVisualStyles[post.platform];
-            const catStyle = post.category ? categoryStyles[post.category] : categoryStyles["个人动态"];
-            return (
-              <motion.div
-                key={post.id}
-                layout
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ duration: 0.3 }}
-                className="group relative bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => { setSelectedPost(post); setDetailImageIdx(0); }}
-              >
-                {/* Card header */}
-                <div className="p-4 pb-2">
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div
-                        className={`shrink-0 w-7 h-7 rounded-lg ${platformStyle.bg} ${platformStyle.text} flex items-center justify-center text-xs font-bold`}
-                      >
-                        {platformStyle.label.charAt(0)}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-gray-900 truncate">
-                          {post.author}
-                        </p>
-                        <p className="text-[10px] text-gray-400">
-                          {platformStyle.label} · {formatRelativeTime(post.postDate)}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {post.pinned && (
-                        <div className="flex items-center gap-0.5 text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
-                          <Pin className="w-2.5 h-2.5" />
-                          置顶
-                        </div>
-                      )}
-
-                      {isAdmin && (
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleEdit(post); }}
-                            className="w-6 h-6 rounded-md bg-gray-50 flex items-center justify-center text-gray-500 hover:text-sky-500 hover:bg-sky-50 transition-colors"
-                          >
-                            <Pencil className="w-3 h-3" />
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); togglePin(post); }}
-                            className="w-6 h-6 rounded-md bg-gray-50 flex items-center justify-center text-gray-500 hover:text-amber-500 hover:bg-amber-50 transition-colors"
-                            title={post.pinned ? "取消置顶" : "置顶"}
-                          >
-                            <Pin className="w-3 h-3" />
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setDeleteTarget(post); }}
-                            className="w-6 h-6 rounded-md bg-gray-50 flex items-center justify-center text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-1.5">
+            {/* Year / Month tree */}
+            <div className="space-y-1">
+              {timelineData.map((node) => (
+                <div key={node.year}>
+                  <button
+                    onClick={() => handleSelectYear(node.year)}
+                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+                      selectedYear === node.year && selectedMonth === null
+                        ? "bg-sky-50 text-sky-600"
+                        : "text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
                     <span
-                      className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium ${catStyle.active}`}
-                    >
-                      {post.category}
+                      className={`w-2 h-2 rounded-full ${
+                        selectedYear === node.year && selectedMonth === null
+                          ? "bg-sky-400"
+                          : "bg-gray-300"
+                      }`}
+                    />
+                    {node.year}年
+                    <span className="ml-auto text-xs text-gray-400 font-normal">
+                      {node.months.reduce((sum, m) => sum + m.count, 0)}
                     </span>
-                    {post.member && (
-                      <span
-                        className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${memberColors[post.member as ShowMember]}`}
-                      >
-                        {post.member}
-                      </span>
-                    )}
-                  </div>
-                </div>
+                  </button>
 
-                {/* Content text with clickable links */}
-                {post.content && (
-                  <div className="px-4 pb-2">
-                    <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap line-clamp-6">
-                      {linkifyText(post.content)}
-                    </p>
-                  </div>
-                )}
-
-                {/* Images */}
-                {post.images.length > 0 && (
-                  <div className="px-4 pb-3">
-                    <ImageGrid images={post.images} />
-                  </div>
-                )}
-
-                {/* Videos */}
-                {post.videos && post.videos.length > 0 && (
-                  <div className="px-4 pb-3 space-y-2">
-                    {post.videos.map((videoUrl, vi) => {
-                      const embed = getVideoEmbedUrl(videoUrl);
-                      if (!embed) return null;
-                      return (
-                        <div
-                          key={vi}
-                          className="relative w-full rounded-xl overflow-hidden bg-black"
-                          style={{ aspectRatio: "16/9" }}
-                          onClick={(e) => e.stopPropagation()}
+                  {selectedYear === node.year && (
+                    <div className="ml-4 mt-1 space-y-0.5 border-l-2 border-gray-100 pl-3">
+                      {node.months.map((m) => (
+                        <button
+                          key={m.month}
+                          onClick={() => handleSelectMonth(node.year, m.month)}
+                          className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-all ${
+                            selectedMonth === m.month
+                              ? "bg-sky-50 text-sky-600 font-medium"
+                              : "text-gray-500 hover:bg-gray-50"
+                          }`}
                         >
-                          <iframe
-                            src={embed.src}
-                            className="absolute inset-0 w-full h-full"
-                            allowFullScreen
-                            title={`视频 ${vi + 1}`}
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              selectedMonth === m.month
+                                ? "bg-sky-400"
+                                : "bg-gray-200"
+                            }`}
                           />
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* Card footer */}
-                <div className="px-4 py-3 border-t border-gray-50 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 text-[10px] text-gray-400">
-                    <span className="flex items-center gap-1">
-                      <Calendar className="w-2.5 h-2.5" />
-                      {formatAbsoluteTime(post.postDate)}
-                    </span>
-                  </div>
-                  {post.postUrl && (
-                    <a
-                      href={post.postUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="flex items-center gap-1 text-[10px] text-sky-500 hover:text-sky-600 font-medium transition-colors"
-                    >
-                      <ExternalLink className="w-2.5 h-2.5" />
-                      查看原帖
-                    </a>
+                          {m.month}月
+                          <span className="ml-auto text-[10px] text-gray-400">
+                            {m.count}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </div>
-              </motion.div>
-            );
-          })}
-        </AnimatePresence>
-      </div>
-
-      {/* Empty state */}
-      {sortedAndFilteredData.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mb-3">
-            <MessageSquare className="w-8 h-8 text-gray-300" />
+              ))}
+            </div>
           </div>
-          <p className="text-sm text-gray-500 mb-1">没有找到匹配的动态</p>
-          <p className="text-xs text-gray-400">
-            {selectedCategories.size > 0
-              ? "尝试调整筛选标签或清除筛选"
-              : "管理员可点击「添加动态」创建内容"}
-          </p>
+        </motion.aside>
+
+        {/* Right content */}
+        <div className="flex-1 min-w-0">
+          {/* Filter tags */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-6 space-y-3">
+            {/* Category filter */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-gray-400 mr-1">分类：</span>
+              {socialCategories.map((cat) => {
+                const isActive = selectedCategories.has(cat.key);
+                const style = categoryStyles[cat.key];
+                return (
+                  <button
+                    key={cat.key}
+                    onClick={() => toggleCategory(cat.key)}
+                    title={cat.desc}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                      isActive ? style.active : style.inactive
+                    }`}
+                  >
+                    {isActive && <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />}
+                    {cat.label}
+                  </button>
+                );
+              })}
+              {selectedCategories.size > 0 && (
+                <button
+                  onClick={() => setSelectedCategories(new Set())}
+                  className="px-3 py-1.5 rounded-full text-xs text-gray-400 hover:text-red-500 transition-colors ml-1"
+                >
+                  清除分类
+                </button>
+              )}
+            </div>
+
+            {/* Platform filter */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-gray-400 mr-1">平台：</span>
+              {allPlatforms.map((plat) => {
+                const isActive = selectedPlatforms.has(plat);
+                const style = platformVisualStyles[plat];
+                return (
+                  <button
+                    key={plat}
+                    onClick={() => togglePlatform(plat)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                      isActive
+                        ? style.bg + " " + style.text + " shadow-sm"
+                        : "bg-white text-gray-500 border border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    {style.label}
+                  </button>
+                );
+              })}
+              {selectedPlatforms.size > 0 && (
+                <button
+                  onClick={() => setSelectedPlatforms(new Set())}
+                  className="px-3 py-1.5 rounded-full text-xs text-gray-400 hover:text-red-500 transition-colors ml-1"
+                >
+                  清除平台
+                </button>
+              )}
+              <span className="ml-auto text-xs text-gray-400">
+                {selectedCategories.size > 0 || selectedPlatforms.size > 0 || hasTimeFilter
+                  ? `分类 ${selectedCategories.size} 个 · 平台 ${selectedPlatforms.size} 个 · ${sortedAndFilteredData.length} 条动态`
+                  : `全部 · ${sortedAndFilteredData.length} 条动态`}
+              </span>
+            </div>
+          </div>
+
+          {/* Timeline layout - single column */}
+          <div className="space-y-4">
+            <AnimatePresence mode="popLayout">
+              {sortedAndFilteredData.map((post) => {
+                const platformStyle = platformVisualStyles[post.platform];
+                const catStyle = post.category ? categoryStyles[post.category] : categoryStyles["个人动态"];
+                return (
+                  <motion.div
+                    key={post.id}
+                    layout
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ duration: 0.3 }}
+                    className="group relative bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+                    onClick={() => { setSelectedPost(post); setDetailImageIdx(0); }}
+                  >
+                    {/* Card header */}
+                    <div className="p-4 pb-2">
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div
+                            className={`shrink-0 w-7 h-7 rounded-lg ${platformStyle.bg} ${platformStyle.text} flex items-center justify-center text-xs font-bold`}
+                          >
+                            {platformStyle.label.charAt(0)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-gray-900 truncate">
+                              {post.author}
+                            </p>
+                            <p className="text-[10px] text-gray-400">
+                              {platformStyle.label} · {formatRelativeTime(post.postDate)}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {post.pinned && (
+                            <div className="flex items-center gap-0.5 text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                              <Pin className="w-2.5 h-2.5" />
+                              置顶
+                            </div>
+                          )}
+
+                          {isAdmin && (
+                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleEdit(post); }}
+                                className="w-6 h-6 rounded-md bg-gray-50 flex items-center justify-center text-gray-500 hover:text-sky-500 hover:bg-sky-50 transition-colors"
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); togglePin(post); }}
+                                className="w-6 h-6 rounded-md bg-gray-50 flex items-center justify-center text-gray-500 hover:text-amber-500 hover:bg-amber-50 transition-colors"
+                                title={post.pinned ? "取消置顶" : "置顶"}
+                              >
+                                <Pin className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setDeleteTarget(post); }}
+                                className="w-6 h-6 rounded-md bg-gray-50 flex items-center justify-center text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium ${catStyle.active}`}
+                        >
+                          {post.category}
+                        </span>
+                        {post.member && (
+                          <span
+                            className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${memberColors[post.member as ShowMember]}`}
+                          >
+                            {post.member}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Content text with clickable links */}
+                    {post.content && (
+                      <div className="px-4 pb-2">
+                        <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap line-clamp-6">
+                          {linkifyText(post.content)}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Images */}
+                    {post.images.length > 0 && (
+                      <div className="px-4 pb-3">
+                        <ImageGrid images={post.images} />
+                      </div>
+                    )}
+
+                    {/* Videos */}
+                    {post.videos && post.videos.length > 0 && (
+                      <div className="px-4 pb-3 space-y-2">
+                        {post.videos.map((videoUrl, vi) => {
+                          const embed = getVideoEmbedUrl(videoUrl);
+                          if (!embed) return null;
+                          return (
+                            <div
+                              key={vi}
+                              className="relative w-full rounded-xl overflow-hidden bg-black"
+                              style={{ aspectRatio: "16/9" }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <iframe
+                                src={embed.src}
+                                className="absolute inset-0 w-full h-full"
+                                allowFullScreen
+                                title={`视频 ${vi + 1}`}
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Card footer */}
+                    <div className="px-4 py-3 border-t border-gray-50 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-2.5 h-2.5" />
+                          {formatAbsoluteTime(post.postDate)}
+                        </span>
+                      </div>
+                      {post.postUrl && (
+                        <a
+                          href={post.postUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center gap-1 text-[10px] text-sky-500 hover:text-sky-600 font-medium transition-colors"
+                        >
+                          <ExternalLink className="w-2.5 h-2.5" />
+                          查看原帖
+                        </a>
+                      )}
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </div>
+
+          {/* Empty state */}
+          {sortedAndFilteredData.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mb-3">
+                <MessageSquare className="w-8 h-8 text-gray-300" />
+              </div>
+              <p className="text-sm text-gray-500 mb-1">没有找到匹配的动态</p>
+              <p className="text-xs text-gray-400">
+                {selectedCategories.size > 0 || selectedPlatforms.size > 0 || hasTimeFilter
+                  ? "尝试调整筛选条件或清除筛选"
+                  : "管理员可点击「添加动态」创建内容"}
+              </p>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Detail Modal */}
       <AnimatePresence>
@@ -772,7 +930,7 @@ function ImageGrid({ images }: { images: string[] }) {
     );
   }
 
-    if (images.length === 3) {
+  if (images.length === 3) {
     return (
       <div className="grid grid-cols-2 gap-1 rounded-xl overflow-hidden">
         <img
@@ -805,6 +963,7 @@ function ImageGrid({ images }: { images: string[] }) {
       </div>
     );
   }
+
   return (
     <div className="grid grid-cols-2 gap-1 rounded-xl overflow-hidden">
       {images.slice(0, 4).map((img, i) => (
