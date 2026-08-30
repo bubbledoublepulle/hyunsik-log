@@ -38,6 +38,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -60,6 +61,7 @@ import { memberColors } from "@/lib/showData";
 import type { ShowMember } from "@/lib/showData";
 import { useAuth } from "@/context/AuthContext";
 import SocialFormModal from "@/components/SocialFormModal";
+import BatchEditSocialModal from "@/components/BatchEditSocialModal";
 import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
 
 /** 将视频 URL 转为嵌入链接（YouTube / Bilibili），非视频 URL 返回 null */
@@ -128,6 +130,11 @@ export default function SocialPage() {
   const [deleteTarget, setDeleteTarget] = useState<SocialPost | null>(null);
   const [selectedPost, setSelectedPost] = useState<SocialPost | null>(null);
   const [detailImageIdx, setDetailImageIdx] = useState(0);
+
+  // 批量编辑
+  const [batchEditOpen, setBatchEditOpen] = useState(false);
+  const [batchSelectedIds, setBatchSelectedIds] = useState<Set<string>>(new Set());
+  const [batchEditMode, setBatchEditMode] = useState(false);
 
   const initialLoadRef = useRef(true);
   const userModifiedRef = useRef(false);
@@ -243,6 +250,24 @@ export default function SocialPage() {
     return result;
   }, [socialData, selectedCategories, selectedPlatforms, selectedYear, selectedMonth]);
 
+  const toggleBatchSelect = (id: string) => {
+    const next = new Set(batchSelectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setBatchSelectedIds(next);
+  };
+
+  const handleBatchEditSave = (updatedItems: SocialPost[]) => {
+    setSocialData((prev) => prev.map((item) => {
+      const updated = updatedItems.find((u) => u.id === item.id);
+      return updated || item;
+    }));
+    toast.success(`已批量更新 ${updatedItems.length} 条动态文案`);
+    setBatchEditOpen(false);
+    setBatchSelectedIds(new Set());
+    setBatchEditMode(false);
+  };
+
   const handleAdd = () => {
     setEditingPost(null);
     setFormOpen(true);
@@ -293,7 +318,7 @@ export default function SocialPage() {
         </div>
 
         {isAdmin && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button
               onClick={handleAdd}
               className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-rose-400 to-sky-500 text-white text-sm font-medium hover:opacity-90 transition-opacity shadow-md shadow-sky-200 whitespace-nowrap"
@@ -301,6 +326,39 @@ export default function SocialPage() {
               <Plus className="w-4 h-4" />
               添加动态
             </button>
+            <button
+              onClick={() => {
+                if (batchEditMode) {
+                  if (batchSelectedIds.size > 0) {
+                    setBatchEditOpen(true);
+                  } else {
+                    setBatchEditMode(false);
+                  }
+                } else {
+                  setBatchEditMode(true);
+                  toast.info("批量编辑模式", { description: "点击卡片选择要编辑的动态" });
+                }
+              }}
+              className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors shadow-md whitespace-nowrap ${batchEditMode ? "bg-amber-400 text-white hover:bg-amber-500 shadow-amber-200" : "bg-violet-400 text-white hover:bg-violet-500 shadow-violet-200"}`}
+            >
+              {batchEditMode ? `批量编辑 (${batchSelectedIds.size})` : "批量编辑"}
+            </button>
+            {batchEditMode && (
+              <>
+                <button
+                  onClick={() => setBatchSelectedIds(new Set(sortedAndFilteredData.map((p) => p.id)))}
+                  className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-sky-200 text-sky-600 text-sm font-medium hover:bg-sky-50 transition-colors whitespace-nowrap"
+                >
+                  全选当前结果
+                </button>
+                <button
+                  onClick={() => { setBatchEditMode(false); setBatchSelectedIds(new Set()); }}
+                  className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-gray-200 text-gray-500 text-sm font-medium hover:bg-gray-50 transition-colors whitespace-nowrap"
+                >
+                  取消
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -329,7 +387,6 @@ export default function SocialPage() {
               )}
             </div>
 
-            {/* All time */}
             <button
               onClick={clearTimeFilter}
               className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all mb-2 ${
@@ -344,7 +401,6 @@ export default function SocialPage() {
               </span>
             </button>
 
-            {/* Year / Month tree */}
             <div className="space-y-1">
               {timelineData.map((node) => (
                 <div key={node.year}>
@@ -406,7 +462,6 @@ export default function SocialPage() {
         <div className="flex-1 min-w-0">
           {/* Filter tags */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-6 space-y-3">
-            {/* Category filter */}
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs text-gray-400 mr-1">分类：</span>
               {socialCategories.map((cat) => {
@@ -436,7 +491,6 @@ export default function SocialPage() {
               )}
             </div>
 
-            {/* Platform filter */}
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs text-gray-400 mr-1">平台：</span>
               {allPlatforms.map((plat) => {
@@ -472,12 +526,13 @@ export default function SocialPage() {
             </div>
           </div>
 
-          {/* Timeline layout - single column */}
+          {/* Timeline layout */}
           <div className="space-y-4">
             <AnimatePresence mode="popLayout">
               {sortedAndFilteredData.map((post) => {
                 const platformStyle = platformVisualStyles[post.platform];
                 const catStyle = post.category ? categoryStyles[post.category] : categoryStyles["个人动态"];
+                const isSelected = batchSelectedIds.has(post.id);
                 return (
                   <motion.div
                     key={post.id}
@@ -486,13 +541,29 @@ export default function SocialPage() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.3 }}
-                    className="group relative bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
-                    onClick={() => { setSelectedPost(post); setDetailImageIdx(0); }}
+                    className={`group relative bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow ${batchEditMode ? "cursor-pointer" : "cursor-pointer"} ${isSelected ? "ring-2 ring-sky-400 ring-offset-2" : ""}`}
+                    onClick={() => {
+                      if (batchEditMode) {
+                        toggleBatchSelect(post.id);
+                      } else {
+                        setSelectedPost(post);
+                        setDetailImageIdx(0);
+                      }
+                    }}
                   >
+                    {/* Batch select checkbox */}
+                    {batchEditMode && (
+                      <div className="absolute top-3 left-3 z-20">
+                        <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${isSelected ? "bg-sky-400 border-sky-400" : "bg-white/80 border-gray-300"}`}>
+                          {isSelected && <Check className="w-4 h-4 text-white" />}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Card header */}
                     <div className="p-4 pb-2">
                       <div className="flex items-center justify-between gap-2 mb-2">
-                        <div className="flex items-center gap-2 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0" style={batchEditMode ? { marginLeft: "2rem" } : undefined}>
                           <div
                             className={`shrink-0 w-7 h-7 rounded-lg ${platformStyle.bg} ${platformStyle.text} flex items-center justify-center text-xs font-bold`}
                           >
@@ -516,7 +587,7 @@ export default function SocialPage() {
                             </div>
                           )}
 
-                          {isAdmin && (
+                          {isAdmin && !batchEditMode && (
                             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleEdit(post); }}
@@ -542,7 +613,7 @@ export default function SocialPage() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5" style={batchEditMode ? { marginLeft: "2rem" } : undefined}>
                         <span
                           className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium ${catStyle.active}`}
                         >
@@ -558,9 +629,9 @@ export default function SocialPage() {
                       </div>
                     </div>
 
-                    {/* Content text with clickable links */}
+                    {/* Content */}
                     {post.content && (
-                      <div className="px-4 pb-2">
+                      <div className="px-4 pb-2" style={batchEditMode ? { marginLeft: "2rem" } : undefined}>
                         <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap line-clamp-6">
                           {linkifyText(post.content)}
                         </p>
@@ -569,14 +640,14 @@ export default function SocialPage() {
 
                     {/* Images */}
                     {post.images.length > 0 && (
-                      <div className="px-4 pb-3">
+                      <div className="px-4 pb-3" style={batchEditMode ? { marginLeft: "2rem" } : undefined}>
                         <ImageGrid images={post.images} />
                       </div>
                     )}
 
                     {/* Videos */}
                     {post.videos && post.videos.length > 0 && (
-                      <div className="px-4 pb-3 space-y-2">
+                      <div className="px-4 pb-3 space-y-2" style={batchEditMode ? { marginLeft: "2rem" } : undefined}>
                         {post.videos.map((videoUrl, vi) => {
                           const embed = getVideoEmbedUrl(videoUrl);
                           if (!embed) return null;
@@ -600,8 +671,8 @@ export default function SocialPage() {
                       </div>
                     )}
 
-                    {/* Card footer */}
-                    <div className="px-4 py-3 border-t border-gray-50 flex items-center justify-between gap-2">
+                    {/* Footer */}
+                    <div className="px-4 py-3 border-t border-gray-50 flex items-center justify-between gap-2" style={batchEditMode ? { marginLeft: "2rem" } : undefined}>
                       <div className="flex items-center gap-2 text-[10px] text-gray-400">
                         <span className="flex items-center gap-1">
                           <Calendar className="w-2.5 h-2.5" />
@@ -627,7 +698,6 @@ export default function SocialPage() {
             </AnimatePresence>
           </div>
 
-          {/* Empty state */}
           {sortedAndFilteredData.length === 0 && (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mb-3">
@@ -656,17 +726,18 @@ export default function SocialPage() {
         )}
       </AnimatePresence>
 
-      {/* Modals */}
       <SocialFormModal
         open={formOpen}
-        onClose={() => {
-          setFormOpen(false);
-          setEditingPost(null);
-        }}
+        onClose={() => { setFormOpen(false); setEditingPost(null); }}
         onSave={handleSave}
         editingPost={editingPost}
       />
-
+      <BatchEditSocialModal
+        open={batchEditOpen}
+        onClose={() => setBatchEditOpen(false)}
+        items={socialData.filter((item) => batchSelectedIds.has(item.id))}
+        onSave={handleBatchEditSave}
+      />
       <DeleteConfirmDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
@@ -678,7 +749,6 @@ export default function SocialPage() {
   );
 }
 
-/** 动态详情弹窗 */
 function DetailModal({
   post,
   imageIdx,
@@ -739,33 +809,15 @@ function DetailModal({
                 />
                 {post.images.length > 1 && (
                   <>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onImageIdxChange((imageIdx - 1 + post.images.length) % post.images.length);
-                      }}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/50 transition-colors"
-                    >
+                    <button onClick={(e) => { e.stopPropagation(); onImageIdxChange((imageIdx - 1 + post.images.length) % post.images.length); }} className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/50 transition-colors">
                       <ChevronLeft className="w-4 h-4" />
                     </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onImageIdxChange((imageIdx + 1) % post.images.length);
-                      }}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/50 transition-colors"
-                    >
+                    <button onClick={(e) => { e.stopPropagation(); onImageIdxChange((imageIdx + 1) % post.images.length); }} className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/50 transition-colors">
                       <ChevronRight className="w-4 h-4" />
                     </button>
                     <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
                       {post.images.map((_, i) => (
-                        <button
-                          key={i}
-                          onClick={(e) => { e.stopPropagation(); onImageIdxChange(i); }}
-                          className={`w-1.5 h-1.5 rounded-full transition-all ${
-                            i === imageIdx ? "bg-white w-3" : "bg-white/50"
-                          }`}
-                        />
+                        <button key={i} onClick={(e) => { e.stopPropagation(); onImageIdxChange(i); }} className={`w-1.5 h-1.5 rounded-full transition-all ${i === imageIdx ? "bg-white w-3" : "bg-white/50"}`} />
                       ))}
                     </div>
                   </>
@@ -780,18 +832,8 @@ function DetailModal({
                 const embed = getVideoEmbedUrl(videoUrl);
                 if (!embed) return null;
                 return (
-                  <div
-                    key={vi}
-                    className="relative w-full rounded-xl overflow-hidden bg-black"
-                    style={{ aspectRatio: "16/9" }}
-                  >
-                    <iframe
-                      src={embed.src}
-                      className="absolute inset-0 w-full h-full"
-                      allowFullScreen
-                      title={`视频 ${vi + 1}`}
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    />
+                  <div key={vi} className="relative w-full rounded-xl overflow-hidden bg-black" style={{ aspectRatio: "16/9" }}>
+                    <iframe src={embed.src} className="absolute inset-0 w-full h-full" allowFullScreen title={`视频 ${vi + 1}`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" />
                   </div>
                 );
               })}
@@ -800,79 +842,38 @@ function DetailModal({
 
           <div className="p-6 pt-5">
             <div className="flex items-center gap-3 mb-4">
-              <div
-                className={`shrink-0 w-10 h-10 rounded-xl ${platformStyle.bg} ${platformStyle.text} flex items-center justify-center text-sm font-bold`}
-              >
+              <div className={`shrink-0 w-10 h-10 rounded-xl ${platformStyle.bg} ${platformStyle.text} flex items-center justify-center text-sm font-bold`}>
                 {platformStyle.label.charAt(0)}
               </div>
               <div className="min-w-0">
                 <p className="text-base font-bold text-gray-900">{post.author}</p>
                 <p className="text-xs text-gray-400">
                   {platformStyle.label} · {formatAbsoluteTime(post.postDate)}
-                  {post.pinned && (
-                    <span className="ml-2 inline-flex items-center gap-0.5 text-amber-600">
-                      <Pin className="w-2.5 h-2.5" />
-                      置顶
-                    </span>
-                  )}
+                  {post.pinned && <span className="ml-2 inline-flex items-center gap-0.5 text-amber-600"><Pin className="w-2.5 h-2.5" />置顶</span>}
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-1.5 mb-4">
-              <span
-                className={`text-xs px-2 py-0.5 rounded-full border font-medium ${catStyle.active}`}
-              >
-                {post.category}
-              </span>
-              {post.member && (
-                <span
-                  className={`text-xs px-2 py-0.5 rounded border font-medium ${memberColors[post.member as ShowMember]}`}
-                >
-                  {post.member}
-                </span>
-              )}
+              <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${catStyle.active}`}>{post.category}</span>
+              {post.member && <span className={`text-xs px-2 py-0.5 rounded border font-medium ${memberColors[post.member as ShowMember]}`}>{post.member}</span>}
             </div>
 
-            {post.content && (
-              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap mb-4">
-                {linkifyText(post.content)}
-              </p>
-            )}
+            {post.content && <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap mb-4">{linkifyText(post.content)}</p>}
 
             {post.videos && post.videos.length > 0 && post.images.length > 0 && (
               <div className="space-y-2 mb-4">
                 {post.videos.map((videoUrl, vi) => {
                   const embed = getVideoEmbedUrl(videoUrl);
                   if (!embed) return null;
-                  return (
-                    <div
-                      key={vi}
-                      className="relative w-full rounded-xl overflow-hidden bg-black"
-                      style={{ aspectRatio: "16/9" }}
-                    >
-                      <iframe
-                        src={embed.src}
-                        className="absolute inset-0 w-full h-full"
-                        allowFullScreen
-                        title={`视频 ${vi + 1}`}
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      />
-                    </div>
-                  );
+                  return <div key={vi} className="relative w-full rounded-xl overflow-hidden bg-black" style={{ aspectRatio: "16/9" }}><iframe src={embed.src} className="absolute inset-0 w-full h-full" allowFullScreen title={`视频 ${vi + 1}`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" /></div>;
                 })}
               </div>
             )}
 
             {post.postUrl && (
-              <a
-                href={post.postUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-50 text-sm text-sky-600 hover:bg-sky-50 font-medium transition-colors"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                查看原帖
+              <a href={post.postUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-50 text-sm text-sky-600 hover:bg-sky-50 font-medium transition-colors">
+                <ExternalLink className="w-3.5 h-3.5" />查看原帖
               </a>
             )}
           </div>
@@ -882,31 +883,13 @@ function DetailModal({
   );
 }
 
-/** 图片网格组件，根据图片数量自动布局 */
 function ImageGrid({ images }: { images: string[] }) {
   if (images.length === 0) return null;
 
   if (images.length === 1) {
     return (
       <div className="rounded-xl overflow-hidden bg-gray-50">
-        <img
-          src={getProxiedImageUrl(images[0])}
-          alt="动态图片"
-          loading="lazy"
-          className="w-full h-auto max-h-[500px] object-contain"
-          onError={(e) => {
-            const target = e.currentTarget;
-            target.parentElement!.innerHTML = `
-              <div class="w-full h-40 flex items-center justify-center bg-gray-50 text-gray-300">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                  <circle cx="8.5" cy="8.5" r="1.5"/>
-                  <polyline points="21,15 16,10 5,21"/>
-                </svg>
-              </div>
-            `;
-          }}
-        />
+        <img src={getProxiedImageUrl(images[0])} alt="动态图片" loading="lazy" className="w-full h-auto max-h-[500px] object-contain" onError={(e) => { const target = e.currentTarget; target.parentElement!.innerHTML = `<div class="w-full h-40 flex items-center justify-center bg-gray-50 text-gray-300"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21,15 16,10 5,21"/></svg></div>`; }} />
       </div>
     );
   }
@@ -915,16 +898,7 @@ function ImageGrid({ images }: { images: string[] }) {
     return (
       <div className="grid grid-cols-2 gap-1 rounded-xl overflow-hidden">
         {images.map((img, i) => (
-          <img
-            key={i}
-            src={getProxiedImageUrl(img)}
-            alt={`动态图片 ${i + 1}`}
-            loading="lazy"
-            className="w-full h-48 object-cover"
-            onError={(e) => {
-              (e.currentTarget as HTMLImageElement).style.display = "none";
-            }}
-          />
+          <img key={i} src={getProxiedImageUrl(img)} alt={`动态图片 ${i + 1}`} loading="lazy" className="w-full h-48 object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
         ))}
       </div>
     );
@@ -933,33 +907,9 @@ function ImageGrid({ images }: { images: string[] }) {
   if (images.length === 3) {
     return (
       <div className="grid grid-cols-2 gap-1 rounded-xl overflow-hidden">
-        <img
-          src={getProxiedImageUrl(images[0])}
-          alt="动态图片 1"
-          loading="lazy"
-          className="w-full h-48 object-cover"
-          onError={(e) => {
-            (e.currentTarget as HTMLImageElement).style.display = "none";
-          }}
-        />
-        <img
-          src={getProxiedImageUrl(images[1])}
-          alt="动态图片 2"
-          loading="lazy"
-          className="w-full h-48 object-cover"
-          onError={(e) => {
-            (e.currentTarget as HTMLImageElement).style.display = "none";
-          }}
-        />
-        <img
-          src={getProxiedImageUrl(images[2])}
-          alt="动态图片 3"
-          loading="lazy"
-          className="w-full h-48 object-cover col-span-2"
-          onError={(e) => {
-            (e.currentTarget as HTMLImageElement).style.display = "none";
-          }}
-        />
+        <img src={getProxiedImageUrl(images[0])} alt="动态图片 1" loading="lazy" className="w-full h-48 object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+        <img src={getProxiedImageUrl(images[1])} alt="动态图片 2" loading="lazy" className="w-full h-48 object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+        <img src={getProxiedImageUrl(images[2])} alt="动态图片 3" loading="lazy" className="w-full h-48 object-cover col-span-2" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
       </div>
     );
   }
@@ -968,20 +918,8 @@ function ImageGrid({ images }: { images: string[] }) {
     <div className="grid grid-cols-2 gap-1 rounded-xl overflow-hidden">
       {images.slice(0, 4).map((img, i) => (
         <div key={i} className="relative">
-          <img
-            src={getProxiedImageUrl(img)}
-            alt={`动态图片 ${i + 1}`}
-            loading="lazy"
-            className="w-full h-40 object-cover"
-            onError={(e) => {
-              (e.currentTarget as HTMLImageElement).style.display = "none";
-            }}
-          />
-          {i === 3 && images.length > 4 && (
-            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-              <span className="text-white text-lg font-bold">+{images.length - 4}</span>
-            </div>
-          )}
+          <img src={getProxiedImageUrl(img)} alt={`动态图片 ${i + 1}`} loading="lazy" className="w-full h-40 object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+          {i === 3 && images.length > 4 && <div className="absolute inset-0 bg-black/50 flex items-center justify-center"><span className="text-white text-lg font-bold">+{images.length - 4}</span></div>}
         </div>
       ))}
     </div>
