@@ -24,6 +24,8 @@ import {
   syncMusicData,
   resetMusicData,
   fromDbRow,
+  allTypes,
+  allRoles,
   type MusicItem,
   type MusicType,
   type MusicRole,
@@ -35,9 +37,6 @@ import BatchImportModal from "@/components/BatchImportModal";
 import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
 import { StatCard } from "@/components/StatCard";
 import { useRealtimeData } from "@/hooks/useRealtimeData";
-
-const allTypes: MusicType[] = ["录音室", "live", "OST", "合作", "仅制作"];
-const allRoles: MusicRole[] = ["演唱", "作曲", "作词", "编曲"];
 
 type SortBy = "date-desc" | "date-asc" | "title-asc";
 type ViewMode = "table" | "album";
@@ -131,7 +130,10 @@ export default function MusicPage() {
       });
     }
     if (selectedRoles.size > 0) {
-      result = result.filter((item) => item.roles.some((r) => selectedRoles.has(r)));
+      result = result.filter((item) => {
+        const roles = Array.isArray(item.roles) ? item.roles : [];
+        return roles.some((r) => selectedRoles.has(r));
+      });
     }
     if (onlySelfComposed) {
       result = result.filter((item) => item.isSelfComposed);
@@ -350,10 +352,10 @@ export default function MusicPage() {
                             </div>
                           </td>
                           <td className="px-4 py-3.5 hidden md:table-cell max-w-[100px]">
-  <span className="text-sm text-gray-600 block truncate whitespace-nowrap" title={item.artist || "—"}>
-    {item.artist || "—"}
-  </span>
-</td>
+                            <span className="text-sm text-gray-600 block truncate whitespace-nowrap" title={item.artist || "—"}>
+                              {item.artist || "—"}
+                            </span>
+                          </td>
                           <td className="px-4 py-3.5 hidden md:table-cell">
                             <span className="text-sm text-gray-600">{item.album}</span>
                           </td>
