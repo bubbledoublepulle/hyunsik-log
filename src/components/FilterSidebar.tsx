@@ -43,7 +43,7 @@ export default function FilterSidebar({
       animate={{ opacity: 1, x: 0 }}
       className="w-full lg:w-64 shrink-0"
     >
-      <div className="lg:sticky lg:top-20 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
+      <div className="lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-sky-500" />
@@ -60,7 +60,6 @@ export default function FilterSidebar({
           )}
         </div>
 
-        {/* Type filter - 横向排列，不换行 */}
         <div className="mb-5">
           <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2.5">
             类型
@@ -82,7 +81,6 @@ export default function FilterSidebar({
           </div>
         </div>
 
-        {/* Year filter */}
         <div className="mb-5">
           <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2.5">
             年份
@@ -116,7 +114,6 @@ export default function FilterSidebar({
           </div>
         </div>
 
-        {/* Role filter */}
         <div className="mb-5">
           <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2.5">
             角色
@@ -150,7 +147,6 @@ export default function FilterSidebar({
           </div>
         </div>
 
-        {/* Self-composed toggle */}
         <div className="pt-4 border-t border-gray-50">
           <label className="flex items-center justify-between cursor-pointer">
             <span className="text-sm text-gray-600">仅自作曲</span>
