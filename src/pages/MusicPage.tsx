@@ -56,6 +56,22 @@ export default function MusicPage() {
   const [selectedRoles, setSelectedRoles] = useState<Set<MusicRole>>(new Set());
   const [onlySelfComposed, setOnlySelfComposed] = useState(false);
 
+    const [flashId, setFlashId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const hash = window.location.hash.slice(1);
+    if (hash) {
+      const t1 = setTimeout(() => {
+        const el = document.getElementById(hash);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          setFlashId(hash);
+        }
+      }, 500);
+      const t2 = setTimeout(() => setFlashId(null), 1500);
+      return () => { clearTimeout(t1); clearTimeout(t2); };
+    }
+  }, []);
   const [formOpen, setFormOpen] = useState(false);
   const [batchImportOpen, setBatchImportOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MusicItem | null>(null);
@@ -339,8 +355,8 @@ export default function MusicPage() {
                   <tbody>
                     <AnimatePresence mode="popLayout">
                       {filteredData.map((item, index) => (
-                        <motion.tr key={item.id} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.2 }}
-                          className={`group relative border-b border-gray-50 last:border-0 hover:bg-sky-50/30 transition-colors ${index % 2 === 1 ? "bg-gray-50/30" : ""} ${item.isSelfComposed ? "shadow-[inset_3px_0_0_0_#42B4E6]" : ""}`}>
+                                              <motion.tr key={item.id} id={item.id} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.2 }}
+                          className={`group relative border-b border-gray-50 last:border-0 hover:bg-sky-50/30 transition-colors ${index % 2 === 1 ? "bg-gray-50/30" : ""} ${item.isSelfComposed ? "shadow-[inset_3px_0_0_0_#42B4E6]" : ""} ${flashId === item.id ? "flash-highlight" : ""}`}>
                           <td className="px-4 py-3.5">
                             <div className="flex items-center gap-2.5">
                               <div>
