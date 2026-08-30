@@ -74,30 +74,37 @@ function getVideoEmbedUrl(url: string): { src: string; platform: "youtube" | "bi
   return null;
 }
 
-/** 将文本中的 URL 转换为可点击的超链接 */
+/** 将文本中的 URL 转换为可点击的超链接（无重复） */
 function linkifyText(text: string): React.ReactNode[] {
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
-  const parts = text.split(urlRegex);
-  const matches = text.match(urlRegex) || [];
-
+  const urlRegex = /https?:\/\/[^\s]+/g;
   const result: React.ReactNode[] = [];
-  parts.forEach((part, i) => {
-    result.push(<span key={`text-${i}`}>{part}</span>);
-    if (matches[i]) {
-      result.push(
-        <a
-          key={`link-${i}`}
-          href={matches[i]}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-sky-500 hover:text-sky-600 hover:underline break-all"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {matches[i]}
-        </a>
-      );
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = urlRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      result.push(<span key={`text-${lastIndex}`}>{text.slice(lastIndex, match.index)}</span>);
     }
-  });
+    const url = match[0];
+    result.push(
+      <a
+        key={`link-${match.index}`}
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-sky-500 hover:text-sky-600 hover:underline break-all"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {url}
+      </a>
+    );
+    lastIndex = match.index + url.length;
+  }
+
+  if (lastIndex < text.length) {
+    result.push(<span key={`text-end`}>{text.slice(lastIndex)}</span>);
+  }
+
   return result;
 }
 
@@ -346,10 +353,6 @@ export default function SocialPage() {
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <div className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${catStyle.inactive}`}>
-                        {post.category}
-                      </div>
-
                       {post.pinned && (
                         <div className="flex items-center gap-0.5 text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
                           <Pin className="w-2.5 h-2.5" />
@@ -732,7 +735,7 @@ function ImageGrid({ images }: { images: string[] }) {
           src={getProxiedImageUrl(images[0])}
           alt="动态图片"
           loading="lazy"
-          className="w-full max-h-80 object-cover"
+          className="w-full h-auto max-h-[500px] object-contain"
           onError={(e) => {
             const target = e.currentTarget;
             target.parentElement!.innerHTML = `
@@ -759,7 +762,7 @@ function ImageGrid({ images }: { images: string[] }) {
             src={getProxiedImageUrl(img)}
             alt={`动态图片 ${i + 1}`}
             loading="lazy"
-            className="w-full h-40 object-cover"
+            className="w-full h-48 object-cover"
             onError={(e) => {
               (e.currentTarget as HTMLImageElement).style.display = "none";
             }}
@@ -776,25 +779,25 @@ function ImageGrid({ images }: { images: string[] }) {
           src={getProxiedImageUrl(images[0])}
           alt="动态图片 1"
           loading="lazy"
-          className="w-full h-40 object-cover row-span-2"
+          className="w-full h-48 object-cover row-span-2"
           onError={(e) => {
             (e.currentTarget as HTMLImageElement).style.display = "none";
           }}
         />
         <img
-          src={images[1]}
+          src={getProxiedImageUrl(images[1])}
           alt="动态图片 2"
           loading="lazy"
-          className="w-full h-40 object-cover"
+          className="w-full h-48 object-cover"
           onError={(e) => {
             (e.currentTarget as HTMLImageElement).style.display = "none";
           }}
         />
         <img
-          src={images[2]}
+          src={getProxiedImageUrl(images[2])}
           alt="动态图片 3"
           loading="lazy"
-          className="w-full h-40 object-cover"
+          className="w-full h-48 object-cover"
           onError={(e) => {
             (e.currentTarget as HTMLImageElement).style.display = "none";
           }}
@@ -811,7 +814,7 @@ function ImageGrid({ images }: { images: string[] }) {
             src={getProxiedImageUrl(img)}
             alt={`动态图片 ${i + 1}`}
             loading="lazy"
-            className="w-full h-32 object-cover"
+            className="w-full h-40 object-cover"
             onError={(e) => {
               (e.currentTarget as HTMLImageElement).style.display = "none";
             }}
