@@ -1,8 +1,7 @@
 // 图片代理工具函数：使用 images.weserv.nl 全球 CDN，国内可访问
 function getProxiedImageUrl(originalUrl: string): string {
   if (!originalUrl) return '';
-  
-  // 判断是否是境外域名（需要代理）
+
   const foreignDomains = [
     'pbs.twimg.com',
     'instagram.com',
@@ -13,22 +12,19 @@ function getProxiedImageUrl(originalUrl: string): string {
     'x.com',
     'fbcdn.net',
   ];
-  
-  const isForeign = foreignDomains.some(domain => 
+
+  const isForeign = foreignDomains.some(domain =>
     originalUrl.toLowerCase().includes(domain)
   );
-  
+
   if (isForeign) {
-    // 使用 images.weserv.nl 全球 CDN 代理，国内无需 VPN 可访问
-    // 支持参数：?w=800&h=600&fit=cover&output=webp
     return `https://images.weserv.nl/?url=${encodeURIComponent(originalUrl)}&n=-1`;
   }
-  
+
   return originalUrl;
 }
-import { useState, useMemo, useEffect, useRef } from "react";
 
-// 图片代理工具函数：把境外图片 URL 转换成 Cloudflare Worker 代理 URL
+import { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus,
@@ -78,6 +74,33 @@ function getVideoEmbedUrl(url: string): { src: string; platform: "youtube" | "bi
   return null;
 }
 
+/** 将文本中的 URL 转换为可点击的超链接 */
+function linkifyText(text: string): React.ReactNode[] {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+  const matches = text.match(urlRegex) || [];
+
+  const result: React.ReactNode[] = [];
+  parts.forEach((part, i) => {
+    result.push(<span key={`text-${i}`}>{part}</span>);
+    if (matches[i]) {
+      result.push(
+        <a
+          key={`link-${i}`}
+          href={matches[i]}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sky-500 hover:text-sky-600 hover:underline break-all"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {matches[i]}
+        </a>
+      );
+    }
+  });
+  return result;
+}
+
 export default function SocialPage() {
   const { isAdmin } = useAuth();
 
@@ -85,14 +108,12 @@ export default function SocialPage() {
   const [selectedCategories, setSelectedCategories] = useState<Set<SocialCategory>>(new Set());
   const [selectedPlatforms, setSelectedPlatforms] = useState<Set<SocialPlatform>>(new Set());
 
-  // Modals
   const [formOpen, setFormOpen] = useState(false);
   const [editingPost, setEditingPost] = useState<SocialPost | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SocialPost | null>(null);
   const [selectedPost, setSelectedPost] = useState<SocialPost | null>(null);
   const [detailImageIdx, setDetailImageIdx] = useState(0);
 
-  // Prevent stale localStorage data from overwriting Supabase on initial load
   const initialLoadRef = useRef(true);
   const userModifiedRef = useRef(false);
 
@@ -143,17 +164,14 @@ export default function SocialPage() {
   const sortedAndFilteredData = useMemo(() => {
     let result = [...socialData];
 
-    // Filter by selected categories
     if (selectedCategories.size > 0) {
       result = result.filter((post) => post.category && selectedCategories.has(post.category));
     }
 
-    // Filter by selected platforms
     if (selectedPlatforms.size > 0) {
       result = result.filter((post) => selectedPlatforms.has(post.platform));
     }
 
-    // Sort: pinned first, then by date descending
     result.sort((a, b) => {
       if (a.pinned && !b.pinned) return -1;
       if (!a.pinned && b.pinned) return 1;
@@ -200,22 +218,19 @@ export default function SocialPage() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
       {/* Page toolbar */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
           <div className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-rose-400 to-sky-500 text-white text-sm font-bold">
             BTOB · 任炫植
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">社交平台动态</h1>
-            <p className="text-sm text-gray-500">多平台动态聚合 · 时间轴排序</p>
-          </div>
+          <h1 className="text-2xl font-bold text-gray-900">社交平台动态</h1>
         </div>
 
         {isAdmin && (
           <div className="flex gap-2">
-<button
+            <button
               onClick={handleAdd}
               className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-rose-400 to-sky-500 text-white text-sm font-medium hover:opacity-90 transition-opacity shadow-md shadow-sky-200 whitespace-nowrap"
             >
@@ -294,8 +309,8 @@ export default function SocialPage() {
         </div>
       </div>
 
-      {/* Masonry layout using CSS columns */}
-      <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-5 space-y-5">
+      {/* Timeline layout - single column */}
+      <div className="space-y-4">
         <AnimatePresence mode="popLayout">
           {sortedAndFilteredData.map((post) => {
             const platformStyle = platformVisualStyles[post.platform];
@@ -306,16 +321,15 @@ export default function SocialPage() {
                 layout
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9 }}
+                exit={{ opacity: 0, scale: 0.95 }}
                 transition={{ duration: 0.3 }}
-                className="break-inside-avoid mb-5 group relative bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
+                className="group relative bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
                 onClick={() => { setSelectedPost(post); setDetailImageIdx(0); }}
               >
                 {/* Card header */}
                 <div className="p-4 pb-2">
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <div className="flex items-center gap-2 min-w-0">
-                      {/* Platform icon */}
                       <div
                         className={`shrink-0 w-7 h-7 rounded-lg ${platformStyle.bg} ${platformStyle.text} flex items-center justify-center text-xs font-bold`}
                       >
@@ -330,48 +344,46 @@ export default function SocialPage() {
                         </p>
                       </div>
                     </div>
-                    
-                    {/* Category tag */}
-                    <div className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-medium border ${catStyle.inactive}`}>
-                      {post.category}
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <div className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${catStyle.inactive}`}>
+                        {post.category}
+                      </div>
+
+                      {post.pinned && (
+                        <div className="flex items-center gap-0.5 text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                          <Pin className="w-2.5 h-2.5" />
+                          置顶
+                        </div>
+                      )}
+
+                      {isAdmin && (
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleEdit(post); }}
+                            className="w-6 h-6 rounded-md bg-gray-50 flex items-center justify-center text-gray-500 hover:text-sky-500 hover:bg-sky-50 transition-colors"
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); togglePin(post); }}
+                            className="w-6 h-6 rounded-md bg-gray-50 flex items-center justify-center text-gray-500 hover:text-amber-500 hover:bg-amber-50 transition-colors"
+                            title={post.pinned ? "取消置顶" : "置顶"}
+                          >
+                            <Pin className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setDeleteTarget(post); }}
+                            className="w-6 h-6 rounded-md bg-gray-50 flex items-center justify-center text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
                     </div>
-
-                    {/* Pinned indicator */}
-                    {post.pinned && (
-                      <div className="flex items-center gap-0.5 text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
-                        <Pin className="w-2.5 h-2.5" />
-                        置顶
-                      </div>
-                    )}
-
-                    {/* Admin buttons */}
-                    {isAdmin && (
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleEdit(post); }}
-                          className="w-6 h-6 rounded-md bg-gray-50 flex items-center justify-center text-gray-500 hover:text-sky-500 hover:bg-sky-50 transition-colors"
-                        >
-                          <Pencil className="w-3 h-3" />
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); togglePin(post); }}
-                          className="w-6 h-6 rounded-md bg-gray-50 flex items-center justify-center text-gray-500 hover:text-amber-500 hover:bg-amber-50 transition-colors"
-                          title={post.pinned ? "取消置顶" : "置顶"}
-                        >
-                          <Pin className="w-3 h-3" />
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setDeleteTarget(post); }}
-                          className="w-6 h-6 rounded-md bg-gray-50 flex items-center justify-center text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                      </div>
-                    )}
                   </div>
 
-                  {/* Category tag */}
-                  <div className="flex items-center gap-1.5 mb-2">
+                  <div className="flex items-center gap-1.5">
                     <span
                       className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium ${catStyle.active}`}
                     >
@@ -387,11 +399,11 @@ export default function SocialPage() {
                   </div>
                 </div>
 
-                {/* Content text */}
+                {/* Content text with clickable links */}
                 {post.content && (
                   <div className="px-4 pb-2">
                     <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap line-clamp-6">
-                      {post.content}
+                      {linkifyText(post.content)}
                     </p>
                   </div>
                 )}
@@ -520,7 +532,6 @@ function DetailModal({
   const platformStyle = platformVisualStyles[post.platform];
   const catStyle = post.category ? categoryStyles[post.category] : categoryStyles["个人动态"];
 
-  // Keyboard: Escape to close, left/right to navigate images
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -549,7 +560,6 @@ function DetailModal({
         onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-2xl max-h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col"
       >
-        {/* Close button */}
         <button
           onClick={onClose}
           className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/40 transition-colors"
@@ -557,9 +567,7 @@ function DetailModal({
           <X className="w-4 h-4" />
         </button>
 
-        {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto">
-          {/* Image gallery */}
           {post.images.length > 0 && (
             <div className="relative bg-gray-100">
               <div className="relative" style={{ aspectRatio: post.images.length === 1 ? "auto" : "16/10" }}>
@@ -588,7 +596,6 @@ function DetailModal({
                     >
                       <ChevronRight className="w-4 h-4" />
                     </button>
-                    {/* Dots indicator */}
                     <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
                       {post.images.map((_, i) => (
                         <button
@@ -606,7 +613,6 @@ function DetailModal({
             </div>
           )}
 
-          {/* Videos (in detail view, no thumbnail cover) */}
           {post.videos && post.videos.length > 0 && post.images.length === 0 && (
             <div className="space-y-2 p-4 pb-0">
               {post.videos.map((videoUrl, vi) => {
@@ -631,9 +637,7 @@ function DetailModal({
             </div>
           )}
 
-          {/* Content area */}
           <div className="p-6 pt-5">
-            {/* Header */}
             <div className="flex items-center gap-3 mb-4">
               <div
                 className={`shrink-0 w-10 h-10 rounded-xl ${platformStyle.bg} ${platformStyle.text} flex items-center justify-center text-sm font-bold`}
@@ -654,7 +658,6 @@ function DetailModal({
               </div>
             </div>
 
-            {/* Tags */}
             <div className="flex items-center gap-1.5 mb-4">
               <span
                 className={`text-xs px-2 py-0.5 rounded-full border font-medium ${catStyle.active}`}
@@ -670,14 +673,12 @@ function DetailModal({
               )}
             </div>
 
-            {/* Full content */}
             {post.content && (
               <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap mb-4">
-                {post.content}
+                {linkifyText(post.content)}
               </p>
             )}
 
-            {/* Videos below content (when images also exist) */}
             {post.videos && post.videos.length > 0 && post.images.length > 0 && (
               <div className="space-y-2 mb-4">
                 {post.videos.map((videoUrl, vi) => {
@@ -702,7 +703,6 @@ function DetailModal({
               </div>
             )}
 
-            {/* Source link */}
             {post.postUrl && (
               <a
                 href={post.postUrl}
@@ -803,7 +803,6 @@ function ImageGrid({ images }: { images: string[] }) {
     );
   }
 
-  // 4+ images: show 4, with "+N" overlay
   return (
     <div className="grid grid-cols-2 gap-1 rounded-xl overflow-hidden">
       {images.slice(0, 4).map((img, i) => (
