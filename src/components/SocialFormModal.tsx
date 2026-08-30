@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Link2, ImageIcon, Plus, Trash2 } from "lucide-react";
-import { toast } from "sonner";
 import {
   socialCategories,
   categoryStyles,
@@ -19,12 +18,6 @@ interface SocialFormModalProps {
   editingPost: SocialPost | null;
 }
 
-const fieldBadge = (field: string) => (
-  <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-600 font-medium">
-    {field}
-  </span>
-);
-
 export default function SocialFormModal({
   open,
   onClose,
@@ -40,7 +33,6 @@ export default function SocialFormModal({
   const [images, setImages] = useState<string[]>([""]);
   const [videos, setVideos] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [fetchedFields, setFetchedFields] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (editingPost) {
@@ -63,7 +55,6 @@ export default function SocialFormModal({
       setVideos([]);
     }
     setErrors({});
-    setFetchedFields(new Set());
   }, [editingPost, open]);
 
   const validate = () => {
