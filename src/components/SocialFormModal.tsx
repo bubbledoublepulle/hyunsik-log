@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Link2, ImageIcon, Plus, Trash2, Sparkles } from "lucide-react";
+import { X, Link2, ImageIcon, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   socialCategories,
@@ -11,9 +11,6 @@ import {
   type SocialPlatform,
   type SocialCategory,
 } from "@/lib/socialData";
-import { memberColors } from "@/lib/showData";
-import { fetchSocialPost } from "@/lib/socialFetcher";
-import type { ShowMember } from "@/lib/showData";
 
 interface SocialFormModalProps {
   open: boolean;
@@ -42,14 +39,12 @@ export default function SocialFormModal({
   const [postDate, setPostDate] = useState("");
   const [images, setImages] = useState<string[]>([""]);
   const [videos, setVideos] = useState<string[]>([]);
-  const [isSelfComposed, setIsSelfComposed] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isFetching, setIsFetching] = useState(false);
   const [fetchedFields, setFetchedFields] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (editingPost) {
-      setCategory(editingPost.category);
+      setCategory(editingPost.category || "个人动态");
       setPlatform(editingPost.platform);
       setAuthor(editingPost.author);
       setContent(editingPost.content);
@@ -57,7 +52,6 @@ export default function SocialFormModal({
       setPostDate(editingPost.postDate);
       setImages(editingPost.images.length > 0 ? [...editingPost.images] : [""]);
       setVideos(editingPost.videos || []);
-      setIsSelfComposed(editingPost.isSelfComposed);
     } else {
       setCategory("个人动态");
       setPlatform("X");
@@ -67,58 +61,10 @@ export default function SocialFormModal({
       setPostDate(new Date().toISOString().slice(0, 16));
       setImages([""]);
       setVideos([]);
-      setIsSelfComposed(false);
     }
     setErrors({});
     setFetchedFields(new Set());
   }, [editingPost, open]);
-
-  useEffect(() => {
-    if (!postUrl.trim() || editingPost) return;
-    const timer = setTimeout(async () => {
-      setIsFetching(true);
-      try {
-        const data = await fetchSocialPost(postUrl);
-        if (data) {
-          const fields = new Set<string>();
-          if (data.content) {
-            setContent(data.content);
-            fields.add("content");
-          }
-          if (data.author) {
-            setAuthor(data.author);
-            fields.add("author");
-          }
-          if (data.images && data.images.length > 0) {
-            setImages(data.images);
-            fields.add("images");
-          }
-          if (data.videos && data.videos.length > 0) {
-            setVideos(data.videos);
-            fields.add("videos");
-          }
-          if (data.postDate) {
-            const d = new Date(data.postDate);
-            if (!isNaN(d.getTime())) {
-              setPostDate(d.toISOString().slice(0, 16));
-              fields.add("postDate");
-            }
-          }
-          setFetchedFields(fields);
-          if (fields.size > 0) {
-            toast.success("已自动抓取动态内容", {
-              description: `成功获取 ${fields.size} 个字段`,
-            });
-          }
-        }
-      } catch {
-        // ignore
-      } finally {
-        setIsFetching(false);
-      }
-    }, 800);
-    return () => clearTimeout(timer);
-  }, [postUrl, editingPost]);
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -145,7 +91,6 @@ export default function SocialFormModal({
       postDate,
       images: images.filter((i) => i.trim()),
       videos: videos.filter((v) => v.trim()),
-      isSelfComposed,
       pinned: editingPost?.pinned || false,
     };
 
@@ -238,7 +183,6 @@ export default function SocialFormModal({
           <div>
             <label className="text-sm font-medium text-gray-700 mb-1.5 flex items-center">
               发布者 <span className="text-red-400 ml-0.5">*</span>
-              {fieldBadge("author")}
             </label>
             <input
               type="text"
@@ -248,8 +192,6 @@ export default function SocialFormModal({
               className={`w-full px-3.5 py-2.5 rounded-xl border-2 transition-all outline-none ${
                 errors.author
                   ? "border-red-300 bg-red-50"
-                  : fetchedFields.has("author")
-                  ? "border-emerald-200 bg-emerald-50/30"
                   : "border-gray-100 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
               }`}
             />
@@ -262,7 +204,6 @@ export default function SocialFormModal({
           <div>
             <label className="text-sm font-medium text-gray-700 mb-1.5 flex items-center">
               文字内容
-              {fieldBadge("content")}
             </label>
             <textarea
               value={content}
@@ -272,8 +213,6 @@ export default function SocialFormModal({
               className={`w-full px-3.5 py-2.5 rounded-xl border-2 transition-all outline-none resize-none ${
                 errors.content
                   ? "border-red-300 bg-red-50"
-                  : fetchedFields.has("content")
-                  ? "border-emerald-200 bg-emerald-50/30"
                   : "border-gray-100 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
               }`}
             />
@@ -286,12 +225,6 @@ export default function SocialFormModal({
           <div>
             <label className="text-sm font-medium text-gray-700 mb-1.5 flex items-center">
               原帖链接
-              {fieldBadge("postUrl")}
-              {isFetching && (
-                <span className="ml-2 text-xs text-sky-500 animate-pulse">
-                  抓取中...
-                </span>
-              )}
             </label>
             <div className="relative">
               <Link2 className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -300,11 +233,7 @@ export default function SocialFormModal({
                 value={postUrl}
                 onChange={(e) => setPostUrl(e.target.value)}
                 placeholder="https://x.com/... 或 https://weibo.com/..."
-                className={`w-full pl-10 pr-4 py-2.5 rounded-xl border-2 transition-all outline-none ${
-                  fetchedFields.has("postUrl")
-                    ? "border-emerald-200 bg-emerald-50/30"
-                    : "border-gray-100 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-                }`}
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border-2 border-gray-100 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none transition-all"
               />
             </div>
           </div>
@@ -316,7 +245,6 @@ export default function SocialFormModal({
               <span className="text-xs text-gray-400 ml-1.5 font-normal">
                 (可选)
               </span>
-              {fieldBadge("images")}
             </label>
             <div className="space-y-2">
               <AnimatePresence>
@@ -335,11 +263,7 @@ export default function SocialFormModal({
                         value={img}
                         onChange={(e) => updateImage(idx, e.target.value)}
                         placeholder="图片 URL"
-                        className={`w-full pl-10 pr-4 py-2.5 rounded-xl border-2 transition-all outline-none ${
-                          fetchedFields.has("images")
-                            ? "border-emerald-200 bg-emerald-50/30"
-                            : "border-gray-100 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-                        }`}
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border-2 border-gray-100 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none transition-all"
                       />
                     </div>
                     {images.length > 1 && (
@@ -372,7 +296,6 @@ export default function SocialFormModal({
               <span className="text-xs text-gray-400 ml-1.5 font-normal">
                 (可选)
               </span>
-              {fieldBadge("videos")}
             </label>
             <div className="space-y-2">
               <AnimatePresence>
@@ -416,7 +339,6 @@ export default function SocialFormModal({
           <div>
             <label className="text-sm font-medium text-gray-700 mb-1.5 flex items-center">
               发布时间 <span className="text-red-400 ml-0.5">*</span>
-              {fieldBadge("postDate")}
             </label>
             <input
               type="datetime-local"
@@ -425,38 +347,12 @@ export default function SocialFormModal({
               className={`w-full px-3.5 py-2.5 rounded-xl border-2 transition-all outline-none ${
                 errors.postDate
                   ? "border-red-300 bg-red-50"
-                  : fetchedFields.has("postDate")
-                  ? "border-emerald-200 bg-emerald-50/30"
                   : "border-gray-100 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
               }`}
             />
             {errors.postDate && (
               <p className="text-xs text-red-500 mt-1">{errors.postDate}</p>
             )}
-          </div>
-
-          {/* Self-composed toggle */}
-          <div className="pt-2 border-t border-gray-50">
-            <label className="flex items-center justify-between cursor-pointer">
-              <span className="text-sm text-gray-600 flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-sky-400" />
-                标记为自作曲相关
-              </span>
-              <div className="relative">
-                <input
-                  type="checkbox"
-                  checked={isSelfComposed}
-                  onChange={(e) => setIsSelfComposed(e.target.checked)}
-                  className="peer sr-only"
-                />
-                <div className="w-9 h-5 bg-gray-200 rounded-full peer-checked:bg-sky-400 transition-colors" />
-                <div
-                  className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${
-                    isSelfComposed ? "translate-x-4" : ""
-                  }`}
-                />
-              </div>
-            </label>
           </div>
         </form>
 
