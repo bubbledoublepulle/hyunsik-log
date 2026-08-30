@@ -178,8 +178,8 @@ export default function HomePage() {
   const todayDate = today.getDate();
   const todayStr = `${todayMonth}月${todayDate}日`;
 
-  const onThisDayItems = useMemo(() => {
-    const items: { year: number; type: string; title: string; desc: string; color: string }[] = [];
+    const onThisDayItems = useMemo(() => {
+    const items: { year: number; type: string; title: string; desc: string; color: string; link: string }[] = [];
 
     musicData.forEach((m) => {
       const d = new Date(m.releaseDate);
@@ -190,6 +190,7 @@ export default function HomePage() {
           title: m.title,
           desc: `${m.album} · ${m.artist}`,
           color: "bg-sky-50 text-sky-600 border-sky-200",
+          link: "/music",
         });
       }
     });
@@ -203,6 +204,7 @@ export default function HomePage() {
           title: s.title,
           desc: `${s.platform} · ${s.members.slice(0, 3).join("、")}${s.members.length > 3 ? "等" : ""}`,
           color: "bg-violet-50 text-violet-600 border-violet-200",
+          link: "/shows",
         });
       }
     });
@@ -216,6 +218,7 @@ export default function HomePage() {
           title: p.author || "新动态",
           desc: p.content.length > 30 ? p.content.slice(0, 30) + "..." : p.content,
           color: "bg-rose-50 text-rose-600 border-rose-200",
+          link: "/social",
         });
       }
     });
@@ -370,13 +373,14 @@ export default function HomePage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {onThisDayItems.map((item, i) => (
+                            {onThisDayItems.map((item, i) => (
                 <motion.div
                   key={`${item.year}-${item.type}-${i}`}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.06 }}
-                  className="flex items-center gap-4 p-3 rounded-xl bg-gray-50/50 hover:bg-gray-50 transition-colors"
+                  onClick={() => navigate(item.link)}
+                  className="flex items-center gap-4 p-3 rounded-xl bg-gray-50/50 hover:bg-gray-50 transition-colors cursor-pointer group"
                 >
                   <div className="w-16 text-center shrink-0">
                     <span className="text-xl font-bold text-gray-900">{item.year}</span>
