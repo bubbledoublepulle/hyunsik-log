@@ -80,6 +80,22 @@ export default function ShowsPage() {
   const AUTO_REFRESH_INTERVAL = 24 * 60 * 60 * 1000;
   const autoRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+    const [flashId, setFlashId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const hash = window.location.hash.slice(1);
+    if (hash) {
+      const t1 = setTimeout(() => {
+        const el = document.getElementById(hash);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          setFlashId(hash);
+        }
+      }, 500);
+      const t2 = setTimeout(() => setFlashId(null), 1500);
+      return () => { clearTimeout(t1); clearTimeout(t2); };
+    }
+  }, []);
   const [formOpen, setFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ShowItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ShowItem | null>(null);
@@ -550,14 +566,15 @@ export default function ShowsPage() {
                 const isStale = isCacheStale(cachedMeta);
                 const isSelected = batchSelectedIds.has(item.id);
                 return (
-                  <motion.div
+                                    <motion.div
                     key={item.id}
+                    id={item.id}
                     layout
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.9 }}
                     transition={{ delay: index * 0.05, duration: 0.3 }}
-                    className={`group relative bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-xl transition-shadow ${batchEditMode ? "cursor-pointer" : ""} ${isSelected ? "ring-2 ring-sky-400 ring-offset-2" : ""}`}
+                    className={`group relative bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-xl transition-shadow ${batchEditMode ? "cursor-pointer" : ""} ${isSelected ? "ring-2 ring-sky-400 ring-offset-2" : ""} ${flashId === item.id ? "flash-highlight" : ""}`}
                     onClick={() => batchEditMode && toggleBatchSelect(item.id)}
                   >
                     <div
