@@ -1,6 +1,5 @@
 import { supabase, isSupabaseConfigured } from "./supabase";
 
-// 全局锁，防止 saveMusicData 并发执行导致数据竞态
 let saveMusicDataPromise: Promise<{ error: string | null }> | null = null;
 
 export type MusicRole = "演唱" | "作曲" | "作词" | "编曲";
@@ -18,6 +17,9 @@ export interface MusicItem {
   link: string;
   isSelfComposed: boolean;
 }
+
+export const allTypes: MusicType[] = ["录音室", "live", "OST", "合作", "仅制作"];
+export const allRoles: MusicRole[] = ["演唱", "作曲", "作词", "编曲"];
 
 export const initialMusicData: MusicItem[] = [
   {
@@ -168,8 +170,6 @@ export const initialMusicData: MusicItem[] = [
 
 const STORAGE_KEY = "hsik_music_data";
 
-// ─── 数据库 ↔ 前端 类型转换 ───
-
 function toDbRow(item: MusicItem) {
   return {
     id: item.id,
@@ -185,6 +185,30 @@ function toDbRow(item: MusicItem) {
   };
 }
 
+function normalizeRoles(roles: unknown): MusicRole[] {
+  if (Array.isArray(roles)) {
+    return roles
+      .map((r) => String(r).trim())
+      .filter((r): r is MusicRole => allRoles.includes(r as MusicRole));
+  }
+  if (typeof roles === "string") {
+    return roles
+      .split(/[,，、]/)
+      .map((r) => r.trim())
+      .filter((r): r is MusicRole => allRoles.includes(r as MusicRole));
+  }
+  return [];
+}
+
+function normalizeType(type: unknown): MusicType {
+  const str = String(type).trim();
+  if (allTypes.includes(str as MusicType)) return str as MusicType;
+  const lower = str.toLowerCase();
+  const matched = allTypes.find((t) => t.toLowerCase() === lower);
+  if (matched) return matched;
+  return "录音室";
+}
+
 export function fromDbRow(row: Record<string, unknown>): MusicItem {
   return {
     id: String(row.id),
@@ -192,25 +216,24 @@ export function fromDbRow(row: Record<string, unknown>): MusicItem {
     artist: String(row.artist ?? ""),
     album: String(row.album),
     releaseDate: String(row.release_date),
-    type: String(row.type) as MusicType,
-    roles: Array.isArray(row.roles) ? (row.roles as string[]).map(String) as MusicRole[] : [],
+    type: normalizeType(row.type),
+    roles: normalizeRoles(row.roles),
     plays: String(row.plays ?? ""),
     link: String(row.link ?? ""),
     isSelfComposed: Boolean(row.is_self_composed),
   };
 }
 
-// ─── localStorage（本地缓存） ───
-
 export function loadMusicData(): MusicItem[] {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const data = JSON.parse(stored);
-      // 兼容旧数据：补充 artist 字段
       return data.map((item: any) => ({
         ...item,
         artist: item.artist ?? "",
+        roles: normalizeRoles(item.roles),
+        type: normalizeType(item.type),
       }));
     }
   } catch {
@@ -226,8 +249,6 @@ function saveLocalMusicData(data: MusicItem[]): void {
     // ignore storage errors
   }
 }
-
-// ─── Supabase 读写 ───
 
 export async function syncMusicData(): Promise<MusicItem[]> {
   if (!isSupabaseConfigured()) {
@@ -266,7 +287,6 @@ export async function syncMusicData(): Promise<MusicItem[]> {
 }
 
 export async function saveMusicData(data: MusicItem[]): Promise<{ error: string | null }> {
-  // 如果已有保存正在进行，等待它完成后再执行新的，避免并发竞态
   if (saveMusicDataPromise) {
     await saveMusicDataPromise;
   }
@@ -275,38 +295,36 @@ export async function saveMusicData(data: MusicItem[]): Promise<{ error: string 
     saveLocalMusicData(data);
     if (!isSupabaseConfigured()) return { error: null };
 
-  const BATCH_SIZE = 20;
-  const rows = data.map(toDbRow);
+    const BATCH_SIZE = 20;
+    const rows = data.map(toDbRow);
 
-  // 分批 upsert，避免单请求过大导致超时或失败
-  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-    const batch = rows.slice(i, i + BATCH_SIZE);
-    const { error } = await supabase.from("music").upsert(batch, { onConflict: "id" });
-    if (error) {
-      console.warn(`[music] upsert batch ${i + 1}-${Math.min(i + BATCH_SIZE, rows.length)} failed:`, error.message);
-      return { error: `保存批次 ${Math.floor(i / BATCH_SIZE) + 1} 失败: ${error.message}` };
+    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+      const batch = rows.slice(i, i + BATCH_SIZE);
+      const { error } = await supabase.from("music").upsert(batch, { onConflict: "id" });
+      if (error) {
+        console.warn(`[music] upsert batch ${i + 1}-${Math.min(i + BATCH_SIZE, rows.length)} failed:`, error.message);
+        return { error: `保存批次 ${Math.floor(i / BATCH_SIZE) + 1} 失败: ${error.message}` };
+      }
     }
-  }
 
-  // 分批 delete：先获取所有远程 ID，找出不在 currentIds 中的，分批删除
-  const currentIds = new Set(data.map((d) => d.id));
-  const { data: remoteRows, error: fetchErr } = await supabase.from("music").select("id").limit(9995);
-  if (fetchErr) {
-    console.warn("[music] fetch ids for delete failed:", fetchErr.message);
-    return { error: null };
-  }
-
-  const idsToDelete = (remoteRows || [])
-    .filter((r: any) => !currentIds.has(r.id))
-    .map((r: any) => r.id);
-
-  for (let i = 0; i < idsToDelete.length; i += BATCH_SIZE) {
-    const batch = idsToDelete.slice(i, i + BATCH_SIZE);
-    const { error: delError } = await supabase.from("music").delete().in("id", batch);
-    if (delError) {
-      console.warn("[music] delete batch failed:", delError.message);
+    const currentIds = new Set(data.map((d) => d.id));
+    const { data: remoteRows, error: fetchErr } = await supabase.from("music").select("id").limit(9995);
+    if (fetchErr) {
+      console.warn("[music] fetch ids for delete failed:", fetchErr.message);
+      return { error: null };
     }
-  }
+
+    const idsToDelete = (remoteRows || [])
+      .filter((r: any) => !currentIds.has(r.id))
+      .map((r: any) => r.id);
+
+    for (let i = 0; i < idsToDelete.length; i += BATCH_SIZE) {
+      const batch = idsToDelete.slice(i, i + BATCH_SIZE);
+      const { error: delError } = await supabase.from("music").delete().in("id", batch);
+      if (delError) {
+        console.warn("[music] delete batch failed:", delError.message);
+      }
+    }
 
     return { error: null };
   })();
@@ -345,7 +363,6 @@ export async function resetMusicData(): Promise<MusicItem[]> {
   return data;
 }
 
-/** 将当前 localStorage 中的数据批量导入 Supabase */
 export async function migrateMusicToSupabase(): Promise<{ success: number; error: string | null }> {
   if (!isSupabaseConfigured()) {
     return { success: 0, error: "Supabase 未配置" };
