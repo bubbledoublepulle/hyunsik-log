@@ -69,3 +69,18 @@
   animation: flash-outline 0.7s ease-out forwards;
   border-radius: 8px;
 }
+
+/* 移动端触控优化 */
+@media (max-width: 768px) {
+  /* 强制按钮和链接最小 44px 触控区 */
+  button, a[href], [role="button"], select, input[type="checkbox"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* 手机上把"鼠标放上去才显示"的东西强制显示 */
+  .group-hover\:opacity-100,
+  .group-hover\:opacity-100 * {
+    opacity: 1 !important;
+  }
+}
