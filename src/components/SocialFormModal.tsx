@@ -14,7 +14,6 @@ import {
   socialCategories,
   platformVisualStyles,
 } from "@/lib/socialData";
-import type { ShowMember } from "@/lib/showData";
 import {
   detectSocialPlatform,
   fetchLinkPreview,
@@ -28,16 +27,7 @@ interface SocialFormModalProps {
   editingPost: SocialPost | null;
 }
 
-const allMembers: (ShowMember | "")[] = [
-  "",
-  "任炫植",
-  "徐恩光",
-  "李旼赫",
-  "李昌燮",
-  "Peniel",
-  "陆星材",
-  "全体",
-];
+
 
 export default function SocialFormModal({
   open,
@@ -48,7 +38,6 @@ export default function SocialFormModal({
   const [categories, setCategories] = useState<Set<SocialCategory>>(new Set(["个人动态"]));
   const [platform, setPlatform] = useState<SocialPlatform>("Weverse");
   const [author, setAuthor] = useState("");
-  const [member, setMember] = useState<ShowMember | "">("");
   const [content, setContent] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [videos, setVideos] = useState<string[]>([]);
