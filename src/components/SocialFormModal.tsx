@@ -425,43 +425,9 @@ export default function SocialFormModal({
               </div>
               </div>
 
-              {/* Member */}
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-1.5 block">
-                  关联成员 <span className="text-xs text-gray-400 font-normal ml-1">（可选）</span>
-                </label>
-                <select
-                  value={member}
-                  onChange={(e) => setMember(e.target.value as ShowMember | "")}
-                  className="w-full px-3.5 py-2.5 rounded-xl border-2 border-gray-100 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none transition-all bg-white"
-                >
-                  {allMembers.map((m) => (
-                    <option key={m} value={m}>{m || "不关联"}</option>
-                  ))}
-                </select>
-              </div>
+            
 
-              {/* Content */}
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-1.5 flex items-center">
-                  文字内容 <span className="text-red-400 ml-0.5">*</span>
-                  {fieldBadge("content")}
-                </label>
-                <textarea
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  placeholder="输入动态内容..."
-                  rows={4}
-                  className={`w-full px-3.5 py-2.5 rounded-xl border-2 transition-all outline-none resize-none ${
-                    errors.content
-                      ? "border-red-300 bg-red-50"
-                      : fetchedFields.has("content")
-                      ? "border-emerald-200 bg-emerald-50/30"
-                      : "border-gray-100 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-                  }`}
-                />
-                {errors.content && <p className="text-xs text-red-500 mt-1">{errors.content}</p>}
-              </div>
+             
 
               {/* Images */}
               <div>
