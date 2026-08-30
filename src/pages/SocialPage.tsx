@@ -64,6 +64,7 @@ import type { ShowMember } from "@/lib/showData";
 import { useAuth } from "@/context/AuthContext";
 import SocialFormModal from "@/components/SocialFormModal";
 import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
+import ScrollToTop from "@/components/ScrollToTop";
 
 /** 将视频 URL 转为嵌入链接（YouTube / Bilibili），非视频 URL 返回 null */
 function getVideoEmbedUrl(url: string): { src: string; platform: "youtube" | "bilibili" } | null {
@@ -790,6 +791,7 @@ export default function SocialPage() {
       <SocialFormModal open={formOpen} onClose={() => { setFormOpen(false); setEditingPost(null); }} onSave={handleSave} editingPost={editingPost} />
       <BatchEditSocialModal open={batchEditOpen} onClose={() => setBatchEditOpen(false)} items={socialData.filter((item) => batchSelectedIds.has(item.id))} onSave={handleBatchEditSave} />
       <DeleteConfirmDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => deleteTarget && handleDelete(deleteTarget)} title="删除动态" message={`确定要删除这条动态吗？此操作不可撤销。`} />
+      <ScrollToTop />
     </div>
   );
 }
