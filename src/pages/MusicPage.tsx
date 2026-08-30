@@ -35,6 +35,7 @@ import FilterSidebar from "@/components/FilterSidebar";
 import MusicFormModal from "@/components/MusicFormModal";
 import BatchImportModal from "@/components/BatchImportModal";
 import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
+import ScrollToTop from "@/components/ScrollToTop";
 import { StatCard } from "@/components/StatCard";
 import { useRealtimeData } from "@/hooks/useRealtimeData";
 
@@ -487,6 +488,7 @@ export default function MusicPage() {
       <MusicFormModal open={formOpen} onClose={() => { setFormOpen(false); setEditingItem(null); }} onSave={handleSave} editingItem={editingItem} />
       <BatchImportModal open={batchImportOpen} onClose={() => setBatchImportOpen(false)} onSave={handleBatchSave} />
       <DeleteConfirmDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => deleteTarget && handleDelete(deleteTarget)} title="删除歌曲" message={`确定要删除「${deleteTarget?.title}」吗？此操作不可撤销。`} />
+      <ScrollToTop />
     </div>
   );
 }
