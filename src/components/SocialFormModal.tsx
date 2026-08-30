@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Link2, ImageIcon, Plus, Trash2 } from "lucide-react";
+import { X, Link2, ImageIcon, Plus, Trash2, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import {
   socialCategories,
   categoryStyles,
@@ -10,6 +11,7 @@ import {
   type SocialPlatform,
   type SocialCategory,
 } from "@/lib/socialData";
+import { fetchLinkPreview, type LinkPreview } from "@/lib/linkPreviewFetcher";
 
 interface SocialFormModalProps {
   open: boolean;
@@ -33,6 +35,8 @@ export default function SocialFormModal({
   const [images, setImages] = useState<string[]>([""]);
   const [videos, setVideos] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isFetching, setIsFetching] = useState(false);
+  const [fetchedFields, setFetchedFields] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (editingPost) {
@@ -55,7 +59,57 @@ export default function SocialFormModal({
       setVideos([]);
     }
     setErrors({});
+    setFetchedFields(new Set());
+    setIsFetching(false);
   }, [editingPost, open]);
+
+  // 粘贴链接后自动抓取
+  useEffect(() => {
+    if (!postUrl.trim() || editingPost) return;
+    const timer = setTimeout(async () => {
+      setIsFetching(true);
+      try {
+        const data: LinkPreview = await fetchLinkPreview(postUrl);
+        const fields = new Set<string>();
+        if (data.description) {
+          setContent(data.description);
+          fields.add("content");
+        }
+        if (data.author) {
+          setAuthor(data.author);
+          fields.add("author");
+        }
+        if (data.images && data.images.length > 0) {
+          setImages(data.images);
+          fields.add("images");
+        }
+        if (data.date) {
+          const d = new Date(data.date);
+          if (!isNaN(d.getTime())) {
+            setPostDate(d.toISOString().slice(0, 16));
+            fields.add("postDate");
+          }
+        }
+        if (data.platform && data.platform !== "unknown") {
+          const matched = allPlatforms.find((p) =>
+            platformVisualStyles[p].label.toLowerCase() === data.platform.toLowerCase()
+          );
+          if (matched) setPlatform(matched);
+        }
+        setFetchedFields(fields);
+        if (fields.size > 0) {
+          toast.success("已自动抓取动态内容", {
+            description: `成功获取 ${fields.size} 个字段`,
+          });
+        }
+      } catch {
+        // 抓取失败静默处理
+      } finally {
+        setIsFetching(false);
+      }
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [postUrl, editingPost]);
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -103,6 +157,13 @@ export default function SocialFormModal({
     next[idx] = val;
     setVideos(next);
   };
+
+  const fieldBadge = (field: string) =>
+    fetchedFields.has(field) ? (
+      <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-600 font-medium">
+        已抓取
+      </span>
+    ) : null;
 
   if (!open) return null;
 
@@ -174,6 +235,7 @@ export default function SocialFormModal({
           <div>
             <label className="text-sm font-medium text-gray-700 mb-1.5 flex items-center">
               发布者 <span className="text-red-400 ml-0.5">*</span>
+              {fieldBadge("author")}
             </label>
             <input
               type="text"
@@ -183,6 +245,8 @@ export default function SocialFormModal({
               className={`w-full px-3.5 py-2.5 rounded-xl border-2 transition-all outline-none ${
                 errors.author
                   ? "border-red-300 bg-red-50"
+                  : fetchedFields.has("author")
+                  ? "border-emerald-200 bg-emerald-50/30"
                   : "border-gray-100 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
               }`}
             />
@@ -195,6 +259,7 @@ export default function SocialFormModal({
           <div>
             <label className="text-sm font-medium text-gray-700 mb-1.5 flex items-center">
               文字内容
+              {fieldBadge("content")}
             </label>
             <textarea
               value={content}
@@ -204,6 +269,8 @@ export default function SocialFormModal({
               className={`w-full px-3.5 py-2.5 rounded-xl border-2 transition-all outline-none resize-none ${
                 errors.content
                   ? "border-red-300 bg-red-50"
+                  : fetchedFields.has("content")
+                  ? "border-emerald-200 bg-emerald-50/30"
                   : "border-gray-100 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
               }`}
             />
@@ -216,6 +283,13 @@ export default function SocialFormModal({
           <div>
             <label className="text-sm font-medium text-gray-700 mb-1.5 flex items-center">
               原帖链接
+              {fieldBadge("postUrl")}
+              {isFetching && (
+                <span className="ml-2 text-xs text-sky-500 animate-pulse flex items-center gap-1">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  抓取中...
+                </span>
+              )}
             </label>
             <div className="relative">
               <Link2 className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -224,7 +298,11 @@ export default function SocialFormModal({
                 value={postUrl}
                 onChange={(e) => setPostUrl(e.target.value)}
                 placeholder="https://x.com/... 或 https://weibo.com/..."
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border-2 border-gray-100 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none transition-all"
+                className={`w-full pl-10 pr-4 py-2.5 rounded-xl border-2 transition-all outline-none ${
+                  fetchedFields.has("postUrl")
+                    ? "border-emerald-200 bg-emerald-50/30"
+                    : "border-gray-100 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                }`}
               />
             </div>
           </div>
@@ -236,6 +314,7 @@ export default function SocialFormModal({
               <span className="text-xs text-gray-400 ml-1.5 font-normal">
                 (可选)
               </span>
+              {fieldBadge("images")}
             </label>
             <div className="space-y-2">
               <AnimatePresence>
@@ -254,7 +333,11 @@ export default function SocialFormModal({
                         value={img}
                         onChange={(e) => updateImage(idx, e.target.value)}
                         placeholder="图片 URL"
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border-2 border-gray-100 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none transition-all"
+                        className={`w-full pl-10 pr-4 py-2.5 rounded-xl border-2 transition-all outline-none ${
+                          fetchedFields.has("images")
+                            ? "border-emerald-200 bg-emerald-50/30"
+                            : "border-gray-100 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                        }`}
                       />
                     </div>
                     {images.length > 1 && (
@@ -330,6 +413,7 @@ export default function SocialFormModal({
           <div>
             <label className="text-sm font-medium text-gray-700 mb-1.5 flex items-center">
               发布时间 <span className="text-red-400 ml-0.5">*</span>
+              {fieldBadge("postDate")}
             </label>
             <input
               type="datetime-local"
@@ -338,6 +422,8 @@ export default function SocialFormModal({
               className={`w-full px-3.5 py-2.5 rounded-xl border-2 transition-all outline-none ${
                 errors.postDate
                   ? "border-red-300 bg-red-50"
+                  : fetchedFields.has("postDate")
+                  ? "border-emerald-200 bg-emerald-50/30"
                   : "border-gray-100 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
               }`}
             />
