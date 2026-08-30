@@ -178,7 +178,7 @@ export default function HomePage() {
   const todayDate = today.getDate();
   const todayStr = `${todayMonth}月${todayDate}日`;
 
-    const onThisDayItems = useMemo(() => {
+  const onThisDayItems = useMemo(() => {
     const items: { year: number; type: string; title: string; desc: string; color: string; link: string }[] = [];
 
     musicData.forEach((m) => {
@@ -190,7 +190,7 @@ export default function HomePage() {
           title: m.title,
           desc: `${m.album} · ${m.artist}`,
           color: "bg-sky-50 text-sky-600 border-sky-200",
-          link: "/music",
+          link: `/music#${m.id}`,
         });
       }
     });
@@ -204,7 +204,7 @@ export default function HomePage() {
           title: s.title,
           desc: `${s.platform} · ${s.members.slice(0, 3).join("、")}${s.members.length > 3 ? "等" : ""}`,
           color: "bg-violet-50 text-violet-600 border-violet-200",
-          link: "/shows",
+          link: `/shows#${s.id}`,
         });
       }
     });
@@ -218,7 +218,7 @@ export default function HomePage() {
           title: p.author || "新动态",
           desc: p.content.length > 30 ? p.content.slice(0, 30) + "..." : p.content,
           color: "bg-rose-50 text-rose-600 border-rose-200",
-          link: "/social",
+          link: `/social#${p.id}`,
         });
       }
     });
