@@ -83,7 +83,6 @@ export default function ShowsPage() {
   const [editingItem, setEditingItem] = useState<ShowItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ShowItem | null>(null);
 
-  // 批量编辑
   const [batchEditOpen, setBatchEditOpen] = useState(false);
   const [batchSelectedIds, setBatchSelectedIds] = useState<Set<string>>(new Set());
   const [batchEditMode, setBatchEditMode] = useState(false);
@@ -301,7 +300,6 @@ export default function ShowsPage() {
     toast.success("已删除", { description: item.title });
   };
 
-  // 批量编辑
   const toggleBatchSelect = (id: string) => {
     const next = new Set(batchSelectedIds);
     if (next.has(id)) next.delete(id);
@@ -472,7 +470,7 @@ export default function ShowsPage() {
               </select>
 
               {isAdmin && (
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <button
                     onClick={handleAdd}
                     className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-sky-400 text-white text-sm font-medium hover:bg-sky-500 transition-colors shadow-md shadow-sky-200 whitespace-nowrap"
@@ -496,24 +494,8 @@ export default function ShowsPage() {
                     className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors shadow-md whitespace-nowrap ${batchEditMode ? "bg-amber-400 text-white hover:bg-amber-500 shadow-amber-200" : "bg-violet-400 text-white hover:bg-violet-500 shadow-violet-200"}`}
                   >
                     {batchEditMode ? `批量编辑 (${batchSelectedIds.size})` : "批量编辑"}
-                                    <button
-                    onClick={() => {
-                      if (batchEditMode) {
-                        if (batchSelectedIds.size > 0) {
-                          setBatchEditOpen(true);
-                        } else {
-                          setBatchEditMode(false);
-                        }
-                      } else {
-                        setBatchEditMode(true);
-                        toast.info("批量编辑模式", { description: "点击卡片选择要编辑的视频" });
-                      }
-                    }}
-                    className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors shadow-md whitespace-nowrap ${batchEditMode ? "bg-amber-400 text-white hover:bg-amber-500 shadow-amber-200" : "bg-violet-400 text-white hover:bg-violet-500 shadow-violet-200"}`}
-                  >
-                    {batchEditMode ? `批量编辑 (${batchSelectedIds.size})` : "批量编辑"}
                   </button>
-                                    {batchEditMode && (
+                  {batchEditMode && (
                     <>
                       <button
                         onClick={() => setBatchSelectedIds(new Set(filteredData.map((item) => item.id)))}
@@ -529,6 +511,8 @@ export default function ShowsPage() {
                       </button>
                     </>
                   )}
+                </div>
+              )}
             </div>
 
             <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-50">
