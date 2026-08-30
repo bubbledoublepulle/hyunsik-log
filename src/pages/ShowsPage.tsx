@@ -496,17 +496,39 @@ export default function ShowsPage() {
                     className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors shadow-md whitespace-nowrap ${batchEditMode ? "bg-amber-400 text-white hover:bg-amber-500 shadow-amber-200" : "bg-violet-400 text-white hover:bg-violet-500 shadow-violet-200"}`}
                   >
                     {batchEditMode ? `批量编辑 (${batchSelectedIds.size})` : "批量编辑"}
+                                    <button
+                    onClick={() => {
+                      if (batchEditMode) {
+                        if (batchSelectedIds.size > 0) {
+                          setBatchEditOpen(true);
+                        } else {
+                          setBatchEditMode(false);
+                        }
+                      } else {
+                        setBatchEditMode(true);
+                        toast.info("批量编辑模式", { description: "点击卡片选择要编辑的视频" });
+                      }
+                    }}
+                    className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors shadow-md whitespace-nowrap ${batchEditMode ? "bg-amber-400 text-white hover:bg-amber-500 shadow-amber-200" : "bg-violet-400 text-white hover:bg-violet-500 shadow-violet-200"}`}
+                  >
+                    {batchEditMode ? `批量编辑 (${batchSelectedIds.size})` : "批量编辑"}
                   </button>
                   {batchEditMode && (
-                    <button
-                      onClick={() => { setBatchEditMode(false); setBatchSelectedIds(new Set()); }}
-                      className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-gray-200 text-gray-500 text-sm font-medium hover:bg-gray-50 transition-colors whitespace-nowrap"
-                    >
-                      取消
-                    </button>
+                    <>
+                      <button
+                        onClick={() => setBatchSelectedIds(new Set(filteredData.map((item) => item.id)))}
+                        className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-sky-200 text-sky-600 text-sm font-medium hover:bg-sky-50 transition-colors whitespace-nowrap"
+                      >
+                        全选当前结果
+                      </button>
+                      <button
+                        onClick={() => { setBatchEditMode(false); setBatchSelectedIds(new Set()); }}
+                        className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-gray-200 text-gray-500 text-sm font-medium hover:bg-gray-50 transition-colors whitespace-nowrap"
+                      >
+                        取消
+                      </button>
+                    </>
                   )}
-                </div>
-              )}
             </div>
 
             <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-50">
