@@ -349,9 +349,11 @@ export default function MusicPage() {
                               </div>
                             </div>
                           </td>
-                          <td className="px-4 py-3.5 hidden md:table-cell">
-                            <span className="text-sm text-gray-600">{item.artist || "—"}</span>
-                          </td>
+                          <td className="px-4 py-3.5 hidden md:table-cell max-w-[100px]">
+  <span className="text-sm text-gray-600 block truncate whitespace-nowrap" title={item.artist || "—"}>
+    {item.artist || "—"}
+  </span>
+</td>
                           <td className="px-4 py-3.5 hidden md:table-cell">
                             <span className="text-sm text-gray-600">{item.album}</span>
                           </td>
