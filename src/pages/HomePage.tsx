@@ -268,7 +268,7 @@ export default function HomePage() {
 
                               <div className="flex items-center gap-4 mb-3">
             <img src="/logo.svg" alt="Logo" className="w-12 h-12 md:w-14 md:h-14 object-contain drop-shadow-lg shrink-0" />
-            <h1 className="text-5xl md:text-6xl font-light tracking-[0.15em] text-white drop-shadow-lg">
+            <h1 className="text-5xl md:text-6xl font-light text-white drop-shadow-lg">
   sik.log
 </h1>
           </div>
