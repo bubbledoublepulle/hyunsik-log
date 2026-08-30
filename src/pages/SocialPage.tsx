@@ -251,6 +251,22 @@ export default function SocialPage() {
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
 
+    const [flashId, setFlashId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const hash = window.location.hash.slice(1);
+    if (hash) {
+      const t1 = setTimeout(() => {
+        const el = document.getElementById(hash);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          setFlashId(hash);
+        }
+      }, 500);
+      const t2 = setTimeout(() => setFlashId(null), 1500);
+      return () => { clearTimeout(t1); clearTimeout(t2); };
+    }
+  }, []);
   const [formOpen, setFormOpen] = useState(false);
   const [editingPost, setEditingPost] = useState<SocialPost | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SocialPost | null>(null);
@@ -659,14 +675,15 @@ export default function SocialPage() {
                 const catStyle = post.category ? categoryStyles[post.category] : categoryStyles["个人动态"];
                 const isSelected = batchSelectedIds.has(post.id);
                 return (
-                  <motion.div
+                                    <motion.div
                     key={post.id}
+                    id={post.id}
                     layout
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.3 }}
-                    className={`group relative bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow cursor-pointer ${isSelected ? "ring-2 ring-sky-400 ring-offset-2" : ""}`}
+                    className={`group relative bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow cursor-pointer ${isSelected ? "ring-2 ring-sky-400 ring-offset-2" : ""} ${flashId === post.id ? "flash-highlight" : ""}`}
                     onClick={() => {
                       if (batchEditMode) {
                         toggleBatchSelect(post.id);
