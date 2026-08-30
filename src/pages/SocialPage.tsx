@@ -39,6 +39,8 @@ import {
   ChevronRight,
   Clock,
   Check,
+  Replace,
+  AlignLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -61,7 +63,6 @@ import { memberColors } from "@/lib/showData";
 import type { ShowMember } from "@/lib/showData";
 import { useAuth } from "@/context/AuthContext";
 import SocialFormModal from "@/components/SocialFormModal";
-import BatchEditSocialModal from "@/components/BatchEditSocialModal";
 import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
 
 /** 将视频 URL 转为嵌入链接（YouTube / Bilibili），非视频 URL 返回 null */
@@ -116,6 +117,130 @@ interface TimelineNode {
   months: { month: number; count: number }[];
 }
 
+// ===== 内嵌批量编辑弹窗组件 =====
+function BatchEditSocialModal({ open, onClose, items, onSave }: {
+  open: boolean;
+  onClose: () => void;
+  items: SocialPost[];
+  onSave: (items: SocialPost[]) => void;
+}) {
+  const [findText, setFindText] = useState("");
+  const [replaceText, setReplaceText] = useState("");
+  const [prefixText, setPrefixText] = useState("");
+  const [suffixText, setSuffixText] = useState("");
+  const [preview, setPreview] = useState<SocialPost[] | null>(null);
+
+  const generatePreview = () => {
+    const updated = items.map((item) => {
+      let newContent = item.content;
+      if (findText) {
+        newContent = newContent.split(findText).join(replaceText);
+      }
+      if (prefixText) {
+        newContent = prefixText + newContent;
+      }
+      if (suffixText) {
+        newContent = newContent + suffixText;
+      }
+      return { ...item, content: newContent };
+    });
+    setPreview(updated);
+  };
+
+  const handleSave = () => {
+    if (!preview) return;
+    onSave(preview);
+    reset();
+  };
+
+  const reset = () => {
+    setFindText("");
+    setReplaceText("");
+    setPrefixText("");
+    setSuffixText("");
+    setPreview(null);
+  };
+
+  const handleClose = () => {
+    reset();
+    onClose();
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h2 className="text-lg font-bold text-gray-900">批量编辑文案 ({items.length}条)</h2>
+          <button onClick={handleClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-auto px-6 py-4 space-y-4">
+          <div className="space-y-3">
+            <div className="p-3 rounded-xl bg-sky-50 border border-sky-100">
+              <div className="flex items-center gap-2 mb-2">
+                <Replace className="w-4 h-4 text-sky-500" />
+                <span className="text-sm font-medium text-gray-700">查找替换</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <input type="text" value={findText} onChange={(e) => setFindText(e.target.value)} placeholder="查找内容" className="px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:border-sky-400" />
+                <input type="text" value={replaceText} onChange={(e) => setReplaceText(e.target.value)} placeholder="替换为" className="px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:border-sky-400" />
+              </div>
+            </div>
+            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100">
+              <div className="flex items-center gap-2 mb-2">
+                <AlignLeft className="w-4 h-4 text-emerald-500" />
+                <span className="text-sm font-medium text-gray-700">添加前后缀</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <input type="text" value={prefixText} onChange={(e) => setPrefixText(e.target.value)} placeholder="前缀" className="px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:border-emerald-400" />
+                <input type="text" value={suffixText} onChange={(e) => setSuffixText(e.target.value)} placeholder="后缀" className="px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:border-emerald-400" />
+              </div>
+            </div>
+          </div>
+
+          <button onClick={generatePreview} className="w-full py-2 rounded-xl bg-sky-400 text-white text-sm font-medium hover:bg-sky-500 transition-colors">生成预览</button>
+
+          {preview && (
+            <div className="space-y-2">
+              <p className="text-sm font-bold text-gray-900">预览变更：</p>
+              <div className="border border-gray-100 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 sticky top-0">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium text-gray-600">原文案</th>
+                      <th className="px-3 py-2 text-left font-medium text-gray-600">新文案</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {preview.map((item, idx) => (
+                      <tr key={item.id}>
+                        <td className="px-3 py-1.5 text-gray-500 line-through max-w-[200px] truncate">{items[idx].content}</td>
+                        <td className="px-3 py-1.5 font-medium text-gray-900 max-w-[200px] truncate">{item.content}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
+          <button onClick={handleClose} className="px-4 py-2 rounded-xl text-sm font-medium text-gray-500 hover:bg-gray-100 transition-colors">取消</button>
+          <button onClick={handleSave} disabled={!preview} className="px-5 py-2 rounded-xl bg-sky-400 text-white text-sm font-medium hover:bg-sky-500 transition-colors disabled:opacity-50">
+            确认保存 {preview ? `(${items.length}条)` : ""}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+// ===== 批量编辑弹窗结束 =====
+
 export default function SocialPage() {
   const { isAdmin } = useAuth();
 
@@ -131,7 +256,6 @@ export default function SocialPage() {
   const [selectedPost, setSelectedPost] = useState<SocialPost | null>(null);
   const [detailImageIdx, setDetailImageIdx] = useState(0);
 
-  // 批量编辑
   const [batchEditOpen, setBatchEditOpen] = useState(false);
   const [batchSelectedIds, setBatchSelectedIds] = useState<Set<string>>(new Set());
   const [batchEditMode, setBatchEditMode] = useState(false);
@@ -541,7 +665,7 @@ export default function SocialPage() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.3 }}
-                    className={`group relative bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow ${batchEditMode ? "cursor-pointer" : "cursor-pointer"} ${isSelected ? "ring-2 ring-sky-400 ring-offset-2" : ""}`}
+                    className={`group relative bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow cursor-pointer ${isSelected ? "ring-2 ring-sky-400 ring-offset-2" : ""}`}
                     onClick={() => {
                       if (batchEditMode) {
                         toggleBatchSelect(post.id);
@@ -551,7 +675,6 @@ export default function SocialPage() {
                       }
                     }}
                   >
-                    {/* Batch select checkbox */}
                     {batchEditMode && (
                       <div className="absolute top-3 left-3 z-20">
                         <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${isSelected ? "bg-sky-400 border-sky-400" : "bg-white/80 border-gray-300"}`}>
@@ -560,52 +683,33 @@ export default function SocialPage() {
                       </div>
                     )}
 
-                    {/* Card header */}
                     <div className="p-4 pb-2">
                       <div className="flex items-center justify-between gap-2 mb-2">
                         <div className="flex items-center gap-2 min-w-0" style={batchEditMode ? { marginLeft: "2rem" } : undefined}>
-                          <div
-                            className={`shrink-0 w-7 h-7 rounded-lg ${platformStyle.bg} ${platformStyle.text} flex items-center justify-center text-xs font-bold`}
-                          >
+                          <div className={`shrink-0 w-7 h-7 rounded-lg ${platformStyle.bg} ${platformStyle.text} flex items-center justify-center text-xs font-bold`}>
                             {platformStyle.label.charAt(0)}
                           </div>
                           <div className="min-w-0">
-                            <p className="text-sm font-semibold text-gray-900 truncate">
-                              {post.author}
-                            </p>
-                            <p className="text-[10px] text-gray-400">
-                              {platformStyle.label} · {formatRelativeTime(post.postDate)}
-                            </p>
+                            <p className="text-sm font-semibold text-gray-900 truncate">{post.author}</p>
+                            <p className="text-[10px] text-gray-400">{platformStyle.label} · {formatRelativeTime(post.postDate)}</p>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-1.5 shrink-0">
                           {post.pinned && (
                             <div className="flex items-center gap-0.5 text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
-                              <Pin className="w-2.5 h-2.5" />
-                              置顶
+                              <Pin className="w-2.5 h-2.5" />置顶
                             </div>
                           )}
-
                           {isAdmin && !batchEditMode && (
                             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleEdit(post); }}
-                                className="w-6 h-6 rounded-md bg-gray-50 flex items-center justify-center text-gray-500 hover:text-sky-500 hover:bg-sky-50 transition-colors"
-                              >
+                              <button onClick={(e) => { e.stopPropagation(); handleEdit(post); }} className="w-6 h-6 rounded-md bg-gray-50 flex items-center justify-center text-gray-500 hover:text-sky-500 hover:bg-sky-50 transition-colors">
                                 <Pencil className="w-3 h-3" />
                               </button>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); togglePin(post); }}
-                                className="w-6 h-6 rounded-md bg-gray-50 flex items-center justify-center text-gray-500 hover:text-amber-500 hover:bg-amber-50 transition-colors"
-                                title={post.pinned ? "取消置顶" : "置顶"}
-                              >
+                              <button onClick={(e) => { e.stopPropagation(); togglePin(post); }} className="w-6 h-6 rounded-md bg-gray-50 flex items-center justify-center text-gray-500 hover:text-amber-500 hover:bg-amber-50 transition-colors" title={post.pinned ? "取消置顶" : "置顶"}>
                                 <Pin className="w-3 h-3" />
                               </button>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); setDeleteTarget(post); }}
-                                className="w-6 h-6 rounded-md bg-gray-50 flex items-center justify-center text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors"
-                              >
+                              <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(post); }} className="w-6 h-6 rounded-md bg-gray-50 flex items-center justify-center text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors">
                                 <Trash2 className="w-3 h-3" />
                               </button>
                             </div>
@@ -614,81 +718,44 @@ export default function SocialPage() {
                       </div>
 
                       <div className="flex items-center gap-1.5" style={batchEditMode ? { marginLeft: "2rem" } : undefined}>
-                        <span
-                          className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium ${catStyle.active}`}
-                        >
-                          {post.category}
-                        </span>
-                        {post.member && (
-                          <span
-                            className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${memberColors[post.member as ShowMember]}`}
-                          >
-                            {post.member}
-                          </span>
-                        )}
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium ${catStyle.active}`}>{post.category}</span>
+                        {post.member && <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${memberColors[post.member as ShowMember]}`}>{post.member}</span>}
                       </div>
                     </div>
 
-                    {/* Content */}
                     {post.content && (
                       <div className="px-4 pb-2" style={batchEditMode ? { marginLeft: "2rem" } : undefined}>
-                        <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap line-clamp-6">
-                          {linkifyText(post.content)}
-                        </p>
+                        <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap line-clamp-6">{linkifyText(post.content)}</p>
                       </div>
                     )}
 
-                    {/* Images */}
                     {post.images.length > 0 && (
                       <div className="px-4 pb-3" style={batchEditMode ? { marginLeft: "2rem" } : undefined}>
                         <ImageGrid images={post.images} />
                       </div>
                     )}
 
-                    {/* Videos */}
                     {post.videos && post.videos.length > 0 && (
                       <div className="px-4 pb-3 space-y-2" style={batchEditMode ? { marginLeft: "2rem" } : undefined}>
                         {post.videos.map((videoUrl, vi) => {
                           const embed = getVideoEmbedUrl(videoUrl);
                           if (!embed) return null;
                           return (
-                            <div
-                              key={vi}
-                              className="relative w-full rounded-xl overflow-hidden bg-black"
-                              style={{ aspectRatio: "16/9" }}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <iframe
-                                src={embed.src}
-                                className="absolute inset-0 w-full h-full"
-                                allowFullScreen
-                                title={`视频 ${vi + 1}`}
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                              />
+                            <div key={vi} className="relative w-full rounded-xl overflow-hidden bg-black" style={{ aspectRatio: "16/9" }} onClick={(e) => e.stopPropagation()}>
+                              <iframe src={embed.src} className="absolute inset-0 w-full h-full" allowFullScreen title={`视频 ${vi + 1}`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" />
                             </div>
                           );
                         })}
                       </div>
                     )}
 
-                    {/* Footer */}
                     <div className="px-4 py-3 border-t border-gray-50 flex items-center justify-between gap-2" style={batchEditMode ? { marginLeft: "2rem" } : undefined}>
                       <div className="flex items-center gap-2 text-[10px] text-gray-400">
-                        <span className="flex items-center gap-1">
-                          <Calendar className="w-2.5 h-2.5" />
-                          {formatAbsoluteTime(post.postDate)}
-                        </span>
+                        <span className="flex items-center gap-1"><Calendar className="w-2.5 h-2.5" />{formatAbsoluteTime(post.postDate)}</span>
                       </div>
                       {post.postUrl && (
-                        <a
-                          href={post.postUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="flex items-center gap-1 text-[10px] text-sky-500 hover:text-sky-600 font-medium transition-colors"
-                        >
-                          <ExternalLink className="w-2.5 h-2.5" />
-                          查看原帖
+                        <a href={post.postUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="flex items-center gap-1 text-[10px] text-sky-500 hover:text-sky-600 font-medium transition-colors">
+                          <ExternalLink className="w-2.5 h-2.5" />查看原帖
                         </a>
                       )}
                     </div>
@@ -714,47 +781,20 @@ export default function SocialPage() {
         </div>
       </div>
 
-      {/* Detail Modal */}
       <AnimatePresence>
         {selectedPost && (
-          <DetailModal
-            post={selectedPost}
-            imageIdx={detailImageIdx}
-            onImageIdxChange={setDetailImageIdx}
-            onClose={() => { setSelectedPost(null); setDetailImageIdx(0); }}
-          />
+          <DetailModal post={selectedPost} imageIdx={detailImageIdx} onImageIdxChange={setDetailImageIdx} onClose={() => { setSelectedPost(null); setDetailImageIdx(0); }} />
         )}
       </AnimatePresence>
 
-      <SocialFormModal
-        open={formOpen}
-        onClose={() => { setFormOpen(false); setEditingPost(null); }}
-        onSave={handleSave}
-        editingPost={editingPost}
-      />
-      <BatchEditSocialModal
-        open={batchEditOpen}
-        onClose={() => setBatchEditOpen(false)}
-        items={socialData.filter((item) => batchSelectedIds.has(item.id))}
-        onSave={handleBatchEditSave}
-      />
-      <DeleteConfirmDialog
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteTarget && handleDelete(deleteTarget)}
-        title="删除动态"
-        message={`确定要删除这条动态吗？此操作不可撤销。`}
-      />
+      <SocialFormModal open={formOpen} onClose={() => { setFormOpen(false); setEditingPost(null); }} onSave={handleSave} editingPost={editingPost} />
+      <BatchEditSocialModal open={batchEditOpen} onClose={() => setBatchEditOpen(false)} items={socialData.filter((item) => batchSelectedIds.has(item.id))} onSave={handleBatchEditSave} />
+      <DeleteConfirmDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => deleteTarget && handleDelete(deleteTarget)} title="删除动态" message={`确定要删除这条动态吗？此操作不可撤销。`} />
     </div>
   );
 }
 
-function DetailModal({
-  post,
-  imageIdx,
-  onImageIdxChange,
-  onClose,
-}: {
+function DetailModal({ post, imageIdx, onImageIdxChange, onClose }: {
   post: SocialPost;
   imageIdx: number;
   onImageIdxChange: (idx: number) => void;
@@ -775,26 +815,9 @@ function DetailModal({
   }, [onClose, imageIdx, post.images.length, onImageIdxChange]);
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        transition={{ duration: 0.25 }}
-        onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-2xl max-h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col"
-      >
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/40 transition-colors"
-        >
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} transition={{ duration: 0.25 }} onClick={(e) => e.stopPropagation()} className="relative w-full max-w-2xl max-h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+        <button onClick={onClose} className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/40 transition-colors">
           <X className="w-4 h-4" />
         </button>
 
@@ -802,11 +825,7 @@ function DetailModal({
           {post.images.length > 0 && (
             <div className="relative bg-gray-100">
               <div className="relative" style={{ aspectRatio: post.images.length === 1 ? "auto" : "16/10" }}>
-                <img
-                  src={getProxiedImageUrl(post.images[imageIdx])}
-                  alt={`图片 ${imageIdx + 1}`}
-                  className="w-full h-full object-contain max-h-[50vh]"
-                />
+                <img src={getProxiedImageUrl(post.images[imageIdx])} alt={`图片 ${imageIdx + 1}`} className="w-full h-full object-contain max-h-[50vh]" />
                 {post.images.length > 1 && (
                   <>
                     <button onClick={(e) => { e.stopPropagation(); onImageIdxChange((imageIdx - 1 + post.images.length) % post.images.length); }} className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/50 transition-colors">
@@ -831,26 +850,17 @@ function DetailModal({
               {post.videos.map((videoUrl, vi) => {
                 const embed = getVideoEmbedUrl(videoUrl);
                 if (!embed) return null;
-                return (
-                  <div key={vi} className="relative w-full rounded-xl overflow-hidden bg-black" style={{ aspectRatio: "16/9" }}>
-                    <iframe src={embed.src} className="absolute inset-0 w-full h-full" allowFullScreen title={`视频 ${vi + 1}`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" />
-                  </div>
-                );
+                return <div key={vi} className="relative w-full rounded-xl overflow-hidden bg-black" style={{ aspectRatio: "16/9" }}><iframe src={embed.src} className="absolute inset-0 w-full h-full" allowFullScreen title={`视频 ${vi + 1}`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" /></div>;
               })}
             </div>
           )}
 
           <div className="p-6 pt-5">
             <div className="flex items-center gap-3 mb-4">
-              <div className={`shrink-0 w-10 h-10 rounded-xl ${platformStyle.bg} ${platformStyle.text} flex items-center justify-center text-sm font-bold`}>
-                {platformStyle.label.charAt(0)}
-              </div>
+              <div className={`shrink-0 w-10 h-10 rounded-xl ${platformStyle.bg} ${platformStyle.text} flex items-center justify-center text-sm font-bold`}>{platformStyle.label.charAt(0)}</div>
               <div className="min-w-0">
                 <p className="text-base font-bold text-gray-900">{post.author}</p>
-                <p className="text-xs text-gray-400">
-                  {platformStyle.label} · {formatAbsoluteTime(post.postDate)}
-                  {post.pinned && <span className="ml-2 inline-flex items-center gap-0.5 text-amber-600"><Pin className="w-2.5 h-2.5" />置顶</span>}
-                </p>
+                <p className="text-xs text-gray-400">{platformStyle.label} · {formatAbsoluteTime(post.postDate)}{post.pinned && <span className="ml-2 inline-flex items-center gap-0.5 text-amber-600"><Pin className="w-2.5 h-2.5" />置顶</span>}</p>
               </div>
             </div>
 
@@ -897,9 +907,7 @@ function ImageGrid({ images }: { images: string[] }) {
   if (images.length === 2) {
     return (
       <div className="grid grid-cols-2 gap-1 rounded-xl overflow-hidden">
-        {images.map((img, i) => (
-          <img key={i} src={getProxiedImageUrl(img)} alt={`动态图片 ${i + 1}`} loading="lazy" className="w-full h-48 object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
-        ))}
+        {images.map((img, i) => <img key={i} src={getProxiedImageUrl(img)} alt={`动态图片 ${i + 1}`} loading="lazy" className="w-full h-48 object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />)}
       </div>
     );
   }
