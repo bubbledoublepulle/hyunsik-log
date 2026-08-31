@@ -41,8 +41,11 @@ import {
   Check,
   Replace,
   AlignLeft,
+  Loader2,
+  Link2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { fetchLinkPreview, type LinkPreview } from "@/lib/linkPreviewFetcher";
 import {
   loadSocialData,
   saveSocialData,
@@ -708,6 +711,13 @@ export default function SocialPage() {
               <Link2 className="w-4 h-4" />
               批量导入
             </button>
+                        <button
+              onClick={() => setBatchImportOpen(true)}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-400 text-white text-sm font-medium hover:bg-emerald-500 transition-colors shadow-md shadow-emerald-200 whitespace-nowrap"
+            >
+              <Link2 className="w-4 h-4" />
+              批量导入
+            </button>
             <button
               onClick={() => {
                 if (batchEditMode) {
@@ -1048,6 +1058,11 @@ export default function SocialPage() {
 
       <SocialFormModal open={formOpen} onClose={() => { setFormOpen(false); setEditingPost(null); }} onSave={handleSave} editingPost={editingPost} />
       <BatchEditSocialModal open={batchEditOpen} onClose={() => setBatchEditOpen(false)} items={socialData.filter((item) => batchSelectedIds.has(item.id))} onSave={handleBatchEditSave} />
+            <BatchImportSocialModal
+        open={batchImportOpen}
+        onClose={() => setBatchImportOpen(false)}
+        onImport={handleBatchImport}
+      />
       <DeleteConfirmDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => deleteTarget && handleDelete(deleteTarget)} title="删除动态" message={`确定要删除这条动态吗？此操作不可撤销。`} />
       <ScrollToTop />
     </div>
