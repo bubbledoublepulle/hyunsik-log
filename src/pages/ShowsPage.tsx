@@ -474,7 +474,8 @@ export default function ShowsPage() {
     setFormOpen(true);
   };
 
-  const handleSave = (item: ShowItem) => {
+    const handleSave = (item: ShowItem) => {
+    userModifiedRef.current = true;
     if (editingItem) {
       setShowData((prev) => prev.map((s) => (s.id === item.id ? item : s)));
       toast.success("修改已保存", { description: item.title });
