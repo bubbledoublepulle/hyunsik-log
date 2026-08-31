@@ -394,12 +394,17 @@ export async function syncSocialData(): Promise<SocialPost[]> {
 }
 
 export async function saveSocialData(data: SocialPost[]): Promise<{ error: string | null }> {
-  saveLocalSocialData(data);
+  // 按 ID 去重，保留最后一个
+  const uniqueData = Array.from(
+    new Map(data.map((item) => [item.id, item])).values()
+  );
+
+  saveLocalSocialData(uniqueData);
   if (!isSupabaseConfigured()) return { error: null };
 
   // Upsert all current rows
-  if (data.length > 0) {
-    const { error } = await supabase.from("social_posts").upsert(data.map(toDbRow), { onConflict: "id" });
+  if (uniqueData.length > 0) {
+    const { error } = await supabase.from("social_posts").upsert(uniqueData.map(toDbRow), { onConflict: "id" });
     if (error) {
       console.warn("[social] save to supabase failed:", error.message);
       return { error: error.message };
