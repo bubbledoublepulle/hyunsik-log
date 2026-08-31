@@ -43,6 +43,8 @@ import {
   AlignLeft,
   Loader2,
   Link2,
+  Languages,
+  KeyRound,
 } from "lucide-react";
 import { toast } from "sonner";
 import { fetchLinkPreview, type LinkPreview } from "@/lib/linkPreviewFetcher";
