@@ -44,6 +44,32 @@ function getProxiedThumbnail(url: string | null | undefined): string | null {
   if (!url) return null;
   return `https://images.weserv.nl/?url=${encodeURIComponent(url)}&n=-1`;
 }
+
+function LazyCard({ children, id }: { children: React.ReactNode; id: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+        }
+      },
+      { rootMargin: "200px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  if (!isVisible) {
+    return <div ref={ref} id={id} className="min-h-[300px] bg-gray-50 rounded-2xl border border-gray-100" />;
+  }
+
+  return <div ref={ref} id={id}>{children}</div>;
+}
 import ShowFormModal from "@/components/ShowFormModal";
 import BatchEditShowsModal from "@/components/BatchEditShowsModal";
 import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
@@ -567,22 +593,18 @@ export default function ShowsPage() {
                 const isStale = isCacheStale(cachedMeta);
                 const isSelected = batchSelectedIds.has(item.id);
                 return (
-                                    <motion.div
-                    key={item.id}
-                    id={item.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: Math.min(index * 0.03, 0.3), duration: 0.3 }}
-                    className={`group relative bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-xl transition-shadow ${batchEditMode ? "cursor-pointer" : ""} ${isSelected ? "ring-2 ring-sky-400 ring-offset-2" : ""} ${flashId === item.id ? "flash-highlight" : ""}`}
-                                        onClick={() => {
-                      if (batchEditMode) {
-                        toggleBatchSelect(item.id);
-                      } else {
-                        setActiveCardId(item.id);
-                      }
-                    }}
-                    data-show-card
-                  >
+                                                     <LazyCard key={item.id} id={item.id}>
+                    <div
+                      className={`group relative bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-xl transition-shadow ${batchEditMode ? "cursor-pointer" : ""} ${isSelected ? "ring-2 ring-sky-400 ring-offset-2" : ""} ${flashId === item.id ? "flash-highlight" : ""}`}
+                      onClick={() => {
+                        if (batchEditMode) {
+                          toggleBatchSelect(item.id);
+                        } else {
+                          setActiveCardId(item.id);
+                        }
+                      }}
+                      data-show-card
+                    >
                     <div
                       className="relative aspect-[16/10] overflow-hidden"
                       style={thumbUrl ? undefined : { background: `linear-gradient(135deg, ${item.thumbnailFrom}, ${item.thumbnailTo})` }}
@@ -682,7 +704,8 @@ export default function ShowsPage() {
                         <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{displayViews}</span>
                       </div>
                     </div>
-                  </motion.div>
+                                     </div>
+                  </LazyCard>
                 );
               })}
           </div>
