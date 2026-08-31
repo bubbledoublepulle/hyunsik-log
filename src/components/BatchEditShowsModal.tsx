@@ -306,8 +306,10 @@ export default function BatchEditShowsModal({ open, onClose, items, onSave }: Ba
                   <span className="text-sm font-medium text-gray-700">DeepSeek API 设置</span>
                 </div>
                 <div className="space-y-2">
-                  <input
+                                    <input
                     type="password"
+                    name="deepseek-api-key"
+                    autoComplete="off"
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
                     placeholder="输入 DeepSeek API Key（sk-...）"
