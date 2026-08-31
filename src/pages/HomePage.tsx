@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Music,
   ArrowRight,
@@ -13,8 +13,9 @@ import {
   Shuffle,
   Clock,
   Eye,
-   ExternalLink,
+  ExternalLink,
   Image as ImageIcon,
+  X,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { loadMusicData, syncMusicData, type MusicItem } from "@/lib/musicData";
@@ -56,6 +57,21 @@ function getProxiedThumbnail(url: string | null | undefined): string | null {
   return `https://images.weserv.nl/?url=${encodeURIComponent(url)}&n=-1`;
 }
 
+function getProxiedImageUrl(originalUrl: string): string {
+  if (!originalUrl) return '';
+  const foreignDomains = [
+    'pbs.twimg.com', 'instagram.com', 'instagram.fs', 'fbcdn.net',
+    'twimg.com', 'twitter.com', 'x.com', 'fbcdn.net',
+  ];
+  const isForeign = foreignDomains.some(domain =>
+    originalUrl.toLowerCase().includes(domain)
+  );
+  if (isForeign) {
+    return `https://images.weserv.nl/?url=${encodeURIComponent(originalUrl)}&n=-1`;
+  }
+  return originalUrl;
+}
+
 function getPlatformStyleLocal(platform: string) {
   const styles: Record<string, { bg: string; text: string }> = {
     YouTube: { bg: "bg-red-500", text: "text-white" },
@@ -67,6 +83,7 @@ function getPlatformStyleLocal(platform: string) {
   };
   return styles[platform] || styles["其他"];
 }
+
 function MusicOnThisDayCard({ item, year }: { item: MusicItem; year: number }) {
   return (
     <>
@@ -153,6 +170,258 @@ function SocialOnThisDayCard({ item, year }: { item: SocialPost; year: number })
     </>
   );
 }
+
+function MusicDetailModal({ item, onClose }: { item: MusicItem; onClose: () => void }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        transition={{ duration: 0.25 }}
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full max-w-lg max-h-[85vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/40 transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
+
+        <div className="h-2 bg-gradient-to-r from-sky-400 to-sky-600" />
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-xs px-2 py-0.5 rounded-md bg-sky-50 text-sky-600 font-medium border border-sky-100">音乐</span>
+            <span className="text-xs text-gray-400">{item.releaseDate}</span>
+          </div>
+
+          <h2 className="text-xl font-bold text-gray-900 mb-2">{item.title}</h2>
+          <p className="text-sm text-gray-500 mb-4">{item.album} · {item.artist}</p>
+
+          <div className="flex flex-wrap gap-1.5 mb-4">
+            <span className="text-xs px-2 py-1 rounded-md bg-gray-50 text-gray-500 font-medium">{item.type}</span>
+            {item.roles.map((role) => (
+              <span key={role} className="text-xs px-2 py-1 rounded border border-sky-100 bg-sky-50 text-sky-600 font-medium">{role}</span>
+            ))}
+          </div>
+
+          {item.isSelfComposed && (
+            <div className="flex items-center gap-1.5 text-sm text-sky-500 mb-4">
+              <Sparkles className="w-4 h-4" />
+              <span>自作曲</span>
+            </div>
+          )}
+
+          {item.link && (
+            <a
+              href={item.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-400 text-white text-sm font-medium hover:bg-sky-500 transition-colors"
+            >
+              <ExternalLink className="w-4 h-4" />
+              前往收听
+            </a>
+          )}
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function VideoDetailModal({ item, onClose }: { item: ShowItem; onClose: () => void }) {
+  const [showLinks, setShowLinks] = useState(false);
+  const thumbUrl = getPreferredThumbnail(item);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        transition={{ duration: 0.25 }}
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full max-w-lg max-h-[85vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/40 transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
+
+        <div className="relative aspect-[16/10] overflow-hidden bg-gray-100">
+          {thumbUrl ? (
+            <img
+              src={getProxiedThumbnail(thumbUrl) || thumbUrl}
+              alt={item.title}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div
+              className="w-full h-full"
+              style={{ background: `linear-gradient(135deg, ${item.thumbnailFrom}, ${item.thumbnailTo})` }}
+            />
+          )}
+
+          {/* 链接层：电脑 hover 显示，手机点击封面切换 */}
+          <div
+            className={`absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity flex flex-col items-center justify-center gap-2 p-4 ${showLinks ? "opacity-100" : "opacity-0 md:opacity-0 md:group-hover:opacity-100"}`}
+            onClick={() => setShowLinks(!showLinks)}
+          >
+            <span className="text-white/80 text-xs font-medium mb-1">选择平台观看</span>
+            {item.links.map((link, linkIdx) => {
+              const style = getPlatformStyleLocal(link.platform);
+              return (
+                <a
+                  key={linkIdx}
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl ${style.bg} ${style.text} text-sm font-medium hover:scale-105 transition-transform shadow-lg`}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  前往 {link.platform}
+                </a>
+              );
+            })}
+          </div>
+
+          <div className="absolute bottom-3 left-3 px-2 py-0.5 rounded-md bg-black/30 backdrop-blur-sm text-white text-xs font-medium">
+            {item.platform}
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6">
+          <h2 className="text-xl font-bold text-gray-900 mb-3">{item.title}</h2>
+          <div className="flex flex-wrap gap-1.5 mb-4">
+            {item.members.map((member) => (
+              <span key={member} className={`text-xs px-1.5 py-0.5 rounded border font-medium ${memberColors[member]}`}>
+                {member}
+              </span>
+            ))}
+          </div>
+          <div className="flex items-center gap-4 text-sm text-gray-400">
+            <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{getDisplayDate(item)}</span>
+            <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{getDisplayDuration(item)}</span>
+            <span className="flex items-center gap-1"><Eye className="w-3.5 h-3.5" />{getDisplayViews(item)}</span>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function SocialImageGrid({ images }: { images: string[] }) {
+  if (images.length === 0) return null;
+  if (images.length === 1) {
+    return (
+      <div className="rounded-xl overflow-hidden bg-gray-50">
+        <img src={getProxiedImageUrl(images[0])} alt="图片" loading="lazy" className="w-full h-auto max-h-[400px] object-contain" />
+      </div>
+    );
+  }
+  if (images.length === 2) {
+    return (
+      <div className="grid grid-cols-2 gap-1 rounded-xl overflow-hidden">
+        {images.map((img, i) => <img key={i} src={getProxiedImageUrl(img)} alt={`图片 ${i + 1}`} loading="lazy" className="w-full h-40 object-cover" />)}
+      </div>
+    );
+  }
+  if (images.length === 3) {
+    return (
+      <div className="grid grid-cols-2 gap-1 rounded-xl overflow-hidden">
+        <img src={getProxiedImageUrl(images[0])} alt="图片 1" loading="lazy" className="w-full h-40 object-cover" />
+        <img src={getProxiedImageUrl(images[1])} alt="图片 2" loading="lazy" className="w-full h-40 object-cover" />
+        <img src={getProxiedImageUrl(images[2])} alt="图片 3" loading="lazy" className="w-full h-40 object-cover col-span-2" />
+      </div>
+    );
+  }
+  return (
+    <div className="grid grid-cols-2 gap-1 rounded-xl overflow-hidden">
+      {images.slice(0, 4).map((img, i) => (
+        <div key={i} className="relative">
+          <img src={getProxiedImageUrl(img)} alt={`图片 ${i + 1}`} loading="lazy" className="w-full h-36 object-cover" />
+          {i === 3 && images.length > 4 && <div className="absolute inset-0 bg-black/50 flex items-center justify-center"><span className="text-white text-lg font-bold">+{images.length - 4}</span></div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SocialDetailModal({ item, onClose }: { item: SocialPost; onClose: () => void }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        transition={{ duration: 0.25 }}
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full max-w-lg max-h-[85vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/40 transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
+
+        <div className="h-2 bg-gradient-to-r from-rose-400 to-sky-500" />
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-xs px-2 py-0.5 rounded-md bg-rose-50 text-rose-600 font-medium border border-rose-100">社交</span>
+            <span className="text-xs text-gray-400">{item.postDate.split("T")[0]}</span>
+          </div>
+
+          <h2 className="text-lg font-bold text-gray-900 mb-1">{item.author || "新动态"}</h2>
+          <p className="text-sm text-gray-500 mb-1">{item.platform} · {item.category}</p>
+
+          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap mb-4">{item.content}</p>
+
+          {item.images.length > 0 && (
+            <div className="mb-4">
+              <SocialImageGrid images={item.images} />
+            </div>
+          )}
+
+          {item.postUrl && (
+            <a
+              href={item.postUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gray-50 text-sm text-sky-600 hover:bg-sky-50 font-medium transition-colors"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              查看原帖
+            </a>
+          )}
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 export default function HomePage() {
   const { isAdmin, setAuthModalOpen } = useAuth();
   const isAdminDomain = typeof window !== "undefined" && window.location.hostname === "siklog.work" || window.location.hostname === "www.siklog.work";
@@ -170,6 +439,10 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState<TabKey>("music");
 
   const [randomShow, setRandomShow] = useState<ShowItem | null>(null);
+
+  const [selectedMusic, setSelectedMusic] = useState<MusicItem | null>(null);
+  const [selectedVideo, setSelectedVideo] = useState<ShowItem | null>(null);
+  const [selectedSocial, setSelectedSocial] = useState<SocialPost | null>(null);
 
   const buildUpdates = useCallback((
     music: MusicItem[],
@@ -266,29 +539,29 @@ export default function HomePage() {
 
   const onThisDayItems = useMemo(() => {
     const items: (
-      | { type: "音乐"; year: number; link: string; data: MusicItem }
-      | { type: "视频"; year: number; link: string; data: ShowItem }
-      | { type: "社交"; year: number; link: string; data: SocialPost }
+      | { type: "音乐"; year: number; data: MusicItem }
+      | { type: "视频"; year: number; data: ShowItem }
+      | { type: "社交"; year: number; data: SocialPost }
     )[] = [];
 
     musicData.forEach((m) => {
       const d = new Date(m.releaseDate);
       if (d.getMonth() + 1 === todayMonth && d.getDate() === todayDate) {
-        items.push({ type: "音乐", year: d.getFullYear(), link: `/music#${m.id}`, data: m });
+        items.push({ type: "音乐", year: d.getFullYear(), data: m });
       }
     });
 
     showData.forEach((s) => {
       const d = new Date(s.date);
       if (d.getMonth() + 1 === todayMonth && d.getDate() === todayDate) {
-        items.push({ type: "视频", year: d.getFullYear(), link: `/shows#${s.id}`, data: s });
+        items.push({ type: "视频", year: d.getFullYear(), data: s });
       }
     });
 
     socialData.forEach((p) => {
       const d = new Date(p.postDate);
       if (d.getMonth() + 1 === todayMonth && d.getDate() === todayDate) {
-        items.push({ type: "社交", year: d.getFullYear(), link: `/social#${p.id}`, data: p });
+        items.push({ type: "社交", year: d.getFullYear(), data: p });
       }
     });
 
@@ -335,11 +608,11 @@ export default function HomePage() {
             BTOB · 任炫植 个人数据站
           </motion.div>
 
-                              <div className="flex items-center gap-4 mb-3">
+          <div className="flex items-center gap-4 mb-3">
             <img src="/logo.svg" alt="Logo" className="w-12 h-12 md:w-14 md:h-14 object-contain drop-shadow-lg shrink-0" />
             <h1 className="text-5xl md:text-6xl font-light text-white drop-shadow-lg">
-  sik.log
-</h1>
+              sik.log
+            </h1>
           </div>
 
           <p className="text-white/80 max-w-2xl leading-relaxed mb-8 drop-shadow-sm">
@@ -448,7 +721,11 @@ export default function HomePage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: Math.min(i * 0.05, 0.3) }}
-                  onClick={() => navigate(item.link)}
+                  onClick={() => {
+                    if (item.type === "音乐") setSelectedMusic(item.data);
+                    if (item.type === "视频") setSelectedVideo(item.data);
+                    if (item.type === "社交") setSelectedSocial(item.data);
+                  }}
                   className="group relative bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
                 >
                   {item.type === "音乐" && <MusicOnThisDayCard item={item.data} year={item.year} />}
@@ -487,7 +764,7 @@ export default function HomePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             <div
               className="group relative bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-xl transition-shadow cursor-pointer"
-              onClick={() => navigate("/shows")}
+              onClick={() => setSelectedVideo(randomShow)}
             >
               <div className="relative aspect-[16/10] overflow-hidden">
                 {(() => {
@@ -516,28 +793,6 @@ export default function HomePage() {
                   );
                 })()}
 
-                {/* hover 平台链接 */}
-                <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-4">
-                  <span className="text-white/80 text-xs font-medium mb-1">选择平台观看</span>
-                  {randomShow.links.map((link, linkIdx) => {
-                    const style = getPlatformStyleLocal(link.platform);
-                    return (
-                      <a
-                        key={linkIdx}
-                        href={link.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-xl ${style.bg} ${style.text} text-sm font-medium hover:scale-105 transition-transform shadow-lg`}
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                        前往 {link.platform}
-                      </a>
-                    );
-                  })}
-                </div>
-
-                {/* 平台标签 */}
                 <div className="absolute bottom-3 left-3 px-2 py-0.5 rounded-md bg-black/30 backdrop-blur-sm text-white text-xs font-medium">
                   {randomShow.platform}
                 </div>
@@ -687,6 +942,19 @@ export default function HomePage() {
           <DataManager />
         </motion.section>
       )}
+
+      {/* Detail Modals */}
+      <AnimatePresence>
+        {selectedMusic && (
+          <MusicDetailModal item={selectedMusic} onClose={() => setSelectedMusic(null)} />
+        )}
+        {selectedVideo && (
+          <VideoDetailModal item={selectedVideo} onClose={() => setSelectedVideo(null)} />
+        )}
+        {selectedSocial && (
+          <SocialDetailModal item={selectedSocial} onClose={() => setSelectedSocial(null)} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
