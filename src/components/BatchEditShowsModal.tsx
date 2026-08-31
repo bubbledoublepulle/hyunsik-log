@@ -105,7 +105,7 @@ export default function BatchEditShowsModal({ open, onClose, items, onSave }: Ba
                 content: item.title,
               },
             ],
-            temperature: 0.3,
+            temperature: 0.1,
           }),
         });
         const data = await resp.json();
