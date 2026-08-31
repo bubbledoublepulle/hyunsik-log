@@ -20,7 +20,7 @@ function HomeRedirect() {
     }
   }, [navigate]);
   return (
-    <div className="min-h-screen bg-[#F8F9FA] pt-25">
+    <div className="min-h-screen bg-[#F8F9FA] pt-32">
       <Navbar />
       <HomePage />
     </div>
@@ -37,7 +37,7 @@ function App() {
           <Route
             path="/music"
             element={
-              <div className="min-h-screen bg-[#F8F9FA] pt-25">
+              <div className="min-h-screen bg-[#F8F9FA] pt-32">
                 <Navbar />
                 <MusicPage />
               </div>
@@ -46,7 +46,7 @@ function App() {
           <Route
             path="/shows"
             element={
-              <div className="min-h-screen bg-[#F8F9FA] pt-25">
+              <div className="min-h-screen bg-[#F8F9FA] pt-32">
                 <Navbar />
                 <ShowsPage />
               </div>
@@ -55,7 +55,7 @@ function App() {
           <Route
             path="/social"
             element={
-              <div className="min-h-screen bg-[#F8F9FA] pt-25">
+              <div className="min-h-screen bg-[#F8F9FA] pt-32">
                 <Navbar />
                 <SocialPage />
               </div>
