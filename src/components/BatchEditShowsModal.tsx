@@ -72,10 +72,10 @@ export default function BatchEditShowsModal({ open, onClose, items, onSave }: Ba
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       setTranslationProgress({ current: i + 1, total: items.length });
-                 let translated = "";
+      
+      let translated = "";
       let attempts = 0;
       const maxRetries = 2;
-      let lastRaw = ""; // 记录最后一次 API 返回了什么
 
       while (attempts <= maxRetries && !translated) {
         try {
@@ -94,14 +94,13 @@ export default function BatchEditShowsModal({ open, onClose, items, onSave }: Ba
                 },
                 {
                   role: "user",
-                  content: item.title, // 社交动态改成 item.content
+                  content: item.title,
                 },
               ],
               temperature: 0.1,
             }),
           });
           
-          // 检查 HTTP 状态
           if (!resp.ok) {
             console.error(`API 错误: ${resp.status} ${resp.statusText}`);
             attempts++;
@@ -109,14 +108,10 @@ export default function BatchEditShowsModal({ open, onClose, items, onSave }: Ba
           }
           
           const data = await resp.json();
-          console.log(`[${item.id}] API 返回:`, data); // 打印到浏览器控制台
+          console.log(`[${item.id}] API 返回:`, data);
           
           if (data.choices?.[0]?.message?.content) {
             const raw = data.choices[0].message.content.trim();
-            lastRaw = raw;
-            
-            // 只要 API 返回了内容，不管是不是和原文一样，先保存
-            // 让用户自己判断
             if (raw) {
               translated = raw;
             }
@@ -133,31 +128,7 @@ export default function BatchEditShowsModal({ open, onClose, items, onSave }: Ba
         }
       }
 
-      // 如果 API 一直返回空，才用原文兜底
-      results[item.id] = translated || item.title || "[翻译失败]";
-                },
-              ],
-              temperature: 0.1,
-            }),
-          });
-          const data = await resp.json();
-          if (data.choices?.[0]?.message?.content) {
-            const raw = data.choices[0].message.content.trim();
-            // 如果返回了内容，且和原文不一样，才算成功
-            if (raw && raw !== item.title) {
-              translated = raw;
-            }
-          }
-        } catch {
-          // 网络错误，继续重试
-        }
-        attempts++;
-        if (!translated && attempts <= maxRetries) {
-          await new Promise((r) => setTimeout(r, 1000));
-        }
-      }
-
-            results[item.id] = translated || item.title;
+      results[item.id] = translated || item.title;
       if (i < items.length - 1) await new Promise((r) => setTimeout(r, 500));
     }
 
