@@ -168,19 +168,24 @@ function BatchEditSocialModal({ open, onClose, items, onSave }: {
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       setTranslationProgress({ current: i + 1, total: items.length });
-      try {
-        const resp = await fetch("https://api.deepseek.com/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            model: "deepseek-chat",
-            messages: [
-              {
-                role: "system",
-                content: `你是一位专业的韩翻中翻译助手，擅长翻译韩国偶像团体的社交媒体公告、社交平台动态、youtube视频标题
+            let translated = "";
+      let attempts = 0;
+      const maxRetries = 2;
+
+      while (attempts <= maxRetries && !translated) {
+        try {
+          const resp = await fetch("https://api.deepseek.com/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model: "deepseek-chat",
+              messages: [
+                {
+                  role: "system",
+                  content: `你是一位专业的韩翻中翻译助手，擅长翻译韩国偶像团体的社交媒体公告、社交平台动态、youtube视频标题
 
 【翻译规则】
 1. 所有韩文内容必须完整翻译成中文，不允许遗漏任何文字
@@ -195,26 +200,34 @@ function BatchEditSocialModal({ open, onClose, items, onSave }: {
 - 只返回翻译后的纯文本
 - 不要解释、不要添加"翻译如下"等前缀
 - 不要遗漏任何一行内容`,
-              },
-              {
-                role: "user",
-                content: item.content,
-              },
-            ],
-            temperature: 0.1,
-          }),
-        });
-        const data = await resp.json();
-        if (data.choices && data.choices[0] && data.choices[0].message) {
-          results[item.id] = data.choices[0].message.content.trim();
-        } else {
-          results[item.id] = item.content;
+                },
+                {
+                  role: "user",
+                  content: item.title,
+                },
+              ],
+              temperature: 0.1,
+            }),
+          });
+          const data = await resp.json();
+          if (data.choices?.[0]?.message?.content) {
+            const raw = data.choices[0].message.content.trim();
+            // 如果返回了内容，且和原文不一样，才算成功
+            if (raw && raw !== item.title) {
+              translated = raw;
+            }
+          }
+        } catch {
+          // 网络错误，继续重试
         }
-      } catch {
-        results[item.id] = item.content;
+        attempts++;
+        if (!translated && attempts <= maxRetries) {
+          await new Promise((r) => setTimeout(r, 1000));
+        }
       }
+
+      results[item.id] = translated || item.title;
       if (i < items.length - 1) await new Promise((r) => setTimeout(r, 500));
-    }
 
     setTranslations(results);
     setIsTranslating(false);
