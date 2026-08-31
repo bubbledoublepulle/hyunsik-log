@@ -151,9 +151,30 @@ function VideoOnThisDayCard({ item, year }: { item: ShowItem; year: number }) {
 }
 
 function SocialOnThisDayCard({ item, year }: { item: SocialPost; year: number }) {
+  const hasImages = item.images.length > 0;
   return (
     <>
-      <div className="h-2 bg-gradient-to-r from-rose-400 to-sky-500" />
+      {hasImages ? (
+        <div className="relative aspect-[16/10] overflow-hidden">
+          <img
+            src={getProxiedImageUrl(item.images[0])}
+            alt={item.author || "社交动态"}
+            loading="lazy"
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-black/30 backdrop-blur-sm text-white text-[10px] font-medium">
+            {item.platform}
+          </div>
+          {item.images.length > 1 && (
+            <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-black/40 backdrop-blur-sm text-white text-[10px] font-medium flex items-center gap-1">
+              <ImageIcon className="w-2.5 h-2.5" />
+              {item.images.length} 张
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="h-2 bg-gradient-to-r from-rose-400 to-sky-500" />
+      )}
       <div className="p-4">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs px-2 py-0.5 rounded-md bg-rose-50 text-rose-600 font-medium border border-rose-100">社交</span>
@@ -161,7 +182,7 @@ function SocialOnThisDayCard({ item, year }: { item: SocialPost; year: number })
         </div>
         <h3 className="font-bold text-gray-900 text-sm mb-1">{item.author || "新动态"}</h3>
         <p className="text-xs text-gray-500 line-clamp-3">{item.content.length > 60 ? item.content.slice(0, 60) + "..." : item.content}</p>
-        {item.images.length > 0 && (
+        {!hasImages && item.images.length > 0 && (
           <p className="text-[10px] text-gray-400 mt-2 flex items-center gap-1">
             <ImageIcon className="w-3 h-3" />{item.images.length} 张图片
           </p>
@@ -277,7 +298,6 @@ function VideoDetailModal({ item, onClose }: { item: ShowItem; onClose: () => vo
             />
           )}
 
-          {/* 链接层：电脑 hover 显示，手机点击封面切换 */}
           <div
             className={`absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity flex flex-col items-center justify-center gap-2 p-4 ${showLinks ? "opacity-100" : "opacity-0 md:opacity-0 md:group-hover:opacity-100"}`}
             onClick={() => setShowLinks(!showLinks)}
@@ -859,7 +879,6 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Tab bar */}
         <div className="flex gap-2 mb-4">
           {TAB_CONFIG.map((tab) => {
             const active = activeTab === tab.key;
@@ -882,7 +901,6 @@ export default function HomePage() {
           })}
         </div>
 
-        {/* Tab content */}
         <div className="space-y-3">
           {groupedUpdates[activeTab].length === 0 ? (
             <p className="text-sm text-gray-400 py-6 text-center">
@@ -931,7 +949,6 @@ export default function HomePage() {
         </div>
       </motion.section>
 
-      {/* Data Manager (admin only) */}
       {isAdmin && (
         <motion.section
           initial={{ opacity: 0, y: 20 }}
@@ -943,7 +960,6 @@ export default function HomePage() {
         </motion.section>
       )}
 
-      {/* Detail Modals */}
       <AnimatePresence>
         {selectedMusic && (
           <MusicDetailModal item={selectedMusic} onClose={() => setSelectedMusic(null)} />
