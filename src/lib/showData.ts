@@ -10,7 +10,8 @@ export type ShowMember =
   | "李昌燮"
   | "Peniel"
   | "陆星材"
-  | "全体";
+  | "BTOB"
+  | "BCOM组";
 
 export type ArchiveStatus = "已补档" | "待补档";
 
@@ -116,7 +117,7 @@ export const initialShowData: ShowItem[] = [
     date: "2023-08-15",
     duration: "55:00",
     views: "340万",
-    members: ["全体"],
+    members: ["BTOB"],
     status: "已补档",
     thumbnailFrom: "#4FAC50",
     thumbnailTo: "#00BBF9",
@@ -148,7 +149,7 @@ export const initialShowData: ShowItem[] = [
     date: "2024-03-21",
     duration: "2:00:00",
     views: "410万",
-    members: ["全体"],
+    members: ["BTOB"],
     status: "已补档",
     thumbnailFrom: "#30CFD0",
     thumbnailTo: "#330867",
@@ -450,7 +451,8 @@ export const memberColors: Record<ShowMember, string> = {
   李昌燮: "bg-green-100 text-green-700 border-green-200",
   Peniel: "bg-blue-100 text-blue-700 border-blue-200",
   陆星材: "bg-indigo-100 text-indigo-700 border-indigo-200",
-  全体: "bg-slate-100 text-slate-700 border-slate-200",
+  BTOB: "bg-[#d3effe] text-[#43b4e6] border-[#43b4e6]",
+  BCOM组: "bg-white text-gray-900 border-gray-900",
 };
 
 // ==================== YouTube / Bilibili 辅助函数 ====================
