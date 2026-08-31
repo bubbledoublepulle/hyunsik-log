@@ -19,7 +19,7 @@ interface ShowFormModalProps {
 }
 
 const allMembers: ShowMember[] = [
-  "任炫植", "徐恩光", "李旼赫", "李昌燮", "Peniel", "陆星材", "BTOB",
+  "任炫植", "徐恩光", "李旼赫", "李昌燮", "Peniel", "陆星材", "BTOB", "BCOM组",
 ];
 
 const platforms = ["Mnet", "JTBC", "MBC", "NAVER NOW", "V LIVE", "Weverse", "YouTube", "其他"];
