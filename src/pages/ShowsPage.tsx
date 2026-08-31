@@ -583,7 +583,7 @@ export default function ShowsPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-              {filteredData.map((item, index) => {
+              {filteredData.map((item) => {
                 const thumbUrl = getPreferredThumbnail(item);
                 const dataSource = getPreferredSource(item);
                 const displayDuration = getDisplayDuration(item);
