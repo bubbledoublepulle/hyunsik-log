@@ -19,7 +19,7 @@ interface ShowFormModalProps {
 }
 
 const allMembers: ShowMember[] = [
-  "任炫植", "徐恩光", "李旼赫", "李昌燮", "Peniel", "陆星材", "全体",
+  "任炫植", "徐恩光", "李旼赫", "李昌燮", "Peniel", "陆星材", "BTOB",
 ];
 
 const platforms = ["Mnet", "JTBC", "MBC", "NAVER NOW", "V LIVE", "Weverse", "YouTube", "其他"];
@@ -309,7 +309,7 @@ export default function ShowFormModal({
           date: info.publishedAt || "",  // ← 关键修改：抓不到就留空，不再填今天！
           duration: info.durationFormatted || info.duration || "",
           views: info.viewCountFormatted || "",  // ← 关键修改：抓不到就留空
-          members: ["全体"],
+          members: ["BTOB"],
           status: "待补档",
           thumbnailFrom: grad.from,
           thumbnailTo: grad.to,
