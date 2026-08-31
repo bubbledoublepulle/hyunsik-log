@@ -96,6 +96,18 @@ export default function ShowsPage() {
       return () => { clearTimeout(t1); clearTimeout(t2); };
     }
   }, []);
+    const [activeCardId, setActiveCardId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleDocClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest("[data-show-card]")) {
+        setActiveCardId(null);
+      }
+    };
+    document.addEventListener("click", handleDocClick);
+    return () => document.removeEventListener("click", handleDocClick);
+  }, []);
   const [formOpen, setFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ShowItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ShowItem | null>(null);
@@ -575,7 +587,14 @@ export default function ShowsPage() {
                     exit={{ opacity: 0, scale: 0.9 }}
                     transition={{ delay: index * 0.05, duration: 0.3 }}
                     className={`group relative bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-xl transition-shadow ${batchEditMode ? "cursor-pointer" : ""} ${isSelected ? "ring-2 ring-sky-400 ring-offset-2" : ""} ${flashId === item.id ? "flash-highlight" : ""}`}
-                    onClick={() => batchEditMode && toggleBatchSelect(item.id)}
+                                        onClick={() => {
+                      if (batchEditMode) {
+                        toggleBatchSelect(item.id);
+                      } else {
+                        setActiveCardId(item.id);
+                      }
+                    }}
+                    data-show-card
                   >
                     <div
                       className="relative aspect-[16/10] overflow-hidden"
@@ -605,8 +624,8 @@ export default function ShowsPage() {
                         </div>
                       )}
 
-                      {item.links.length > 0 && !batchEditMode && (
-                        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-4">
+                                           {item.links.length > 0 && !batchEditMode && (
+                        <div className={`absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity flex flex-col items-center justify-center gap-2 p-4 ${activeCardId === item.id ? "opacity-100" : "opacity-0"}`}>
                           <span className="text-white/80 text-xs font-medium mb-1">选择平台观看</span>
                           {item.links.map((link, linkIdx) => {
                             const style = getPlatformStyleLocal(link.platform);
