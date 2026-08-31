@@ -208,11 +208,11 @@ export default function ShowsPage() {
     refreshAbortRef.current = true;
     setMetaRefreshing(true);
     toast.info("正在抓取视频元数据...", { description: "封面、时长、播放量更新中" });
-    try {
+        try {
       for (const item of showData) {
         await fetchShowMetadata(item, true);
-        setMetaVersion((v) => v + 1);
       }
+      setMetaVersion((v) => v + 1);
       const updated = applyCachedMetadataToItems(showData);
       initialLoadRef.current = true;
       setShowData(updated);
@@ -557,7 +557,6 @@ export default function ShowsPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            <AnimatePresence mode="popLayout">
               {filteredData.map((item, index) => {
                 const thumbUrl = getPreferredThumbnail(item);
                 const dataSource = getPreferredSource(item);
@@ -571,11 +570,9 @@ export default function ShowsPage() {
                                     <motion.div
                     key={item.id}
                     id={item.id}
-                    layout
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    transition={{ delay: index * 0.05, duration: 0.3 }}
+                    transition={{ delay: Math.min(index * 0.03, 0.3), duration: 0.3 }}
                     className={`group relative bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-xl transition-shadow ${batchEditMode ? "cursor-pointer" : ""} ${isSelected ? "ring-2 ring-sky-400 ring-offset-2" : ""} ${flashId === item.id ? "flash-highlight" : ""}`}
                                         onClick={() => {
                       if (batchEditMode) {
@@ -688,7 +685,6 @@ export default function ShowsPage() {
                   </motion.div>
                 );
               })}
-            </AnimatePresence>
           </div>
 
           {filteredData.length === 0 && (
