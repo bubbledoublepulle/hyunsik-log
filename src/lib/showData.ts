@@ -509,6 +509,11 @@ export function isBilibiliLink(url: string): boolean {
  * 优先 YouTube，其次已缓存的 Bilibili 封面，都没有则返回 null（使用渐变）。
  */
 export function getPreferredThumbnail(item: ShowItem): string | null {
+  // 如果 thumbnailFrom 是真实封面 URL，优先使用
+  if (item.thumbnailFrom && /^https?:\/\//.test(item.thumbnailFrom)) {
+    return item.thumbnailFrom;
+  }
+  
   // 优先从缓存元数据获取（Worker 抓取的真实缩略图，包含直播封面）
   const cachedMeta = getCachedMetadata(item.id);
   if (cachedMeta?.thumbnail) {
