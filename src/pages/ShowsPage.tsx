@@ -80,7 +80,8 @@ export default function ShowsPage() {
   const AUTO_REFRESH_INTERVAL = 24 * 60 * 60 * 1000;
   const autoRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-    const [flashId, setFlashId] = useState<string | null>(null);
+  const [flashId, setFlashId] = useState<string | null>(null);
+  const [activeCardId, setActiveCardId] = useState<string | null>(null);
 
   useEffect(() => {
     const hash = window.location.hash.slice(1);
@@ -96,19 +97,6 @@ export default function ShowsPage() {
       return () => { clearTimeout(t1); clearTimeout(t2); };
     }
   }, []);
-    const [activeCardId, setActiveCardId] = useState<string | null>(null);
-
-  useEffect(() => {
-    const handleDocClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest("[data-show-card]")) {
-        setActiveCardId(null);
-      }
-    };
-    document.addEventListener("click", handleDocClick);
-    return () => document.removeEventListener("click", handleDocClick);
-  }, []);
-    const [activeCardId, setActiveCardId] = useState<string | null>(null);
 
   useEffect(() => {
     const handleDocClick = (e: MouseEvent) => {
