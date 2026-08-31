@@ -138,6 +138,52 @@ export default function ShowsPage() {
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    setDisplayCount(BATCH_SIZE);
+  }, [debouncedSearchQuery, selectedMembers, sortBy]);
+
+  const filteredData = useMemo(() => {
+    let result = [...showData];
+    if (debouncedSearchQuery.trim()) {
+      const q = debouncedSearchQuery.toLowerCase();
+      result = result.filter(
+        (item) =>
+          item.title.toLowerCase().includes(q) ||
+          item.platform.toLowerCase().includes(q) ||
+          item.description.toLowerCase().includes(q)
+      );
+    }
+    if (selectedMembers.size > 0) {
+      result = result.filter((item) =>
+        item.members.some((m) => selectedMembers.has(m))
+      );
+    }
+    switch (sortBy) {
+      case "date-desc":
+        result.sort((a, b) => new Date(getDisplayDate(b)).getTime() - new Date(getDisplayDate(a)).getTime());
+        break;
+      case "date-asc":
+        result.sort((a, b) => new Date(getDisplayDate(a)).getTime() - new Date(getDisplayDate(b)).getTime());
+        break;
+      case "views-desc":
+        result.sort((a, b) => parseViews(getDisplayViews(b)) - parseViews(getDisplayViews(a)));
+        break;
+      case "title-asc":
+        result.sort((a, b) => a.title.localeCompare(b.title));
+        break;
+    }
+    return result;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showData, debouncedSearchQuery, selectedMembers, sortBy, metaVersion]);
+
+  const visibleData = useMemo(() => {
+    return filteredData.slice(0, displayCount);
+  }, [filteredData, displayCount]);
+
+  const hasMore = displayCount < filteredData.length;
+
+  // ===== 修复1：无限滚动 observer 在 hasMore 变化时重新设置 =====
+  useEffect(() => {
+    if (!hasMore) return;
     const el = loadMoreRef.current;
     if (!el) return;
     const observer = new IntersectionObserver(
@@ -150,12 +196,41 @@ export default function ShowsPage() {
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [hasMore]);
 
-  // 筛选条件变化时重置显示数量
+  // ===== 修复2：时间轴点击未加载卡片的滚动 =====
+  const scrollTargetRef = useRef<string | null>(null);
+
   useEffect(() => {
-    setDisplayCount(BATCH_SIZE);
-  }, [debouncedSearchQuery, selectedMembers, sortBy]);
+    if (!scrollTargetRef.current) return;
+    const itemId = scrollTargetRef.current;
+    scrollTargetRef.current = null;
+
+    // 等待 React 渲染完成后再查找元素
+    const tryScroll = () => {
+      const el = document.getElementById(itemId);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        setFlashId(itemId);
+        setTimeout(() => setFlashId(null), 1500);
+        return true;
+      }
+      return false;
+    };
+
+    // 先立即试一次
+    if (tryScroll()) return;
+
+    // 如果没找到，等一帧再试
+    requestAnimationFrame(() => {
+      if (!tryScroll()) {
+        // 再试一次
+        requestAnimationFrame(() => {
+          tryScroll();
+        });
+      }
+    });
+  }, [displayCount, filteredData]);
 
   useEffect(() => {
     const hash = window.location.hash.slice(1);
@@ -358,54 +433,26 @@ export default function ShowsPage() {
     }
   };
 
-  const handleScrollToDate = (itemId: string) => {
+  // ===== 修复2：时间轴点击日期时，如果卡片未加载则先扩展 displayCount =====
+  const handleScrollToDate = useCallback((itemId: string) => {
+    const index = filteredData.findIndex((item) => item.id === itemId);
+    if (index === -1) return;
+
+    if (index >= displayCount) {
+      // 卡片还没加载，先扩展数量，等渲染后再滚动
+      scrollTargetRef.current = itemId;
+      setDisplayCount(index + 1);
+      return;
+    }
+
+    // 卡片已加载，直接滚动
     const el = document.getElementById(itemId);
     if (el) {
       el.scrollIntoView({ behavior: "smooth", block: "center" });
       setFlashId(itemId);
       setTimeout(() => setFlashId(null), 1500);
     }
-  };
-
-  const filteredData = useMemo(() => {
-    let result = [...showData];
-    if (debouncedSearchQuery.trim()) {
-      const q = debouncedSearchQuery.toLowerCase();
-      result = result.filter(
-        (item) =>
-          item.title.toLowerCase().includes(q) ||
-          item.platform.toLowerCase().includes(q) ||
-          item.description.toLowerCase().includes(q)
-      );
-    }
-    if (selectedMembers.size > 0) {
-      result = result.filter((item) =>
-        item.members.some((m) => selectedMembers.has(m))
-      );
-    }
-    switch (sortBy) {
-      case "date-desc":
-        result.sort((a, b) => new Date(getDisplayDate(b)).getTime() - new Date(getDisplayDate(a)).getTime());
-        break;
-      case "date-asc":
-        result.sort((a, b) => new Date(getDisplayDate(a)).getTime() - new Date(getDisplayDate(b)).getTime());
-        break;
-      case "views-desc":
-        result.sort((a, b) => parseViews(getDisplayViews(b)) - parseViews(getDisplayViews(a)));
-        break;
-      case "title-asc":
-        result.sort((a, b) => a.title.localeCompare(b.title));
-        break;
-    }
-    return result;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showData, debouncedSearchQuery, selectedMembers, sortBy, metaVersion]);
-
-  const visibleData = useMemo(() => {
-    return filteredData.slice(0, displayCount);
   }, [filteredData, displayCount]);
-
-  const hasMore = displayCount < filteredData.length;
 
   const toggleMember = (member: ShowMember) => {
     const next = new Set(selectedMembers);
@@ -920,7 +967,6 @@ export default function ShowsPage() {
                 })}
               </div>
 
-              {/* 加载更多触发器 + 状态提示 */}
               {filteredData.length > 0 && (
                 <div className="mt-6 text-center">
                   {hasMore ? (
