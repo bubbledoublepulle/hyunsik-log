@@ -84,6 +84,7 @@ const allMembers: ShowMember[] = [
   "Peniel",
   "陆星材",
   "BTOB",
+  "BCOM组",
 ];
 
 type SortBy = "date-desc" | "date-asc" | "views-desc" | "title-asc";
