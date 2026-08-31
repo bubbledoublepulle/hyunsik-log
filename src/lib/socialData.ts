@@ -226,7 +226,7 @@ export const initialSocialData: SocialPost[] = [
     category: "个人动态",
     platform: "Instagram",
     author: "@btodofficial",
-    member: "全体",
+    member: "BTOB",
     content:
       "BTOB 12周年记念 🎂\n12年間、ありがとうございます！\nこれからもずっと一緒に。\n#BTOB #12thAnniversary",
     images: [
