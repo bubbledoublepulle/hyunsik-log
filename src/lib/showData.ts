@@ -334,13 +334,12 @@ export async function syncShowData(): Promise<ShowItem[]> {
   }
 
   saveShowDataPromise = (async (): Promise<{ error: string | null }> => {
-    console.log("[saveShowData] 开始保存", data.length, "条数据");
-    saveLocalShowData(data);
+    console.log("[saveShowData] 开始保存", uniqueData.length, "条数据");  // ✅ 改成 uniqueData.length
+    saveLocalShowData(uniqueData);  // ✅ 改成 uniqueData
     if (!isSupabaseConfigured()) {
       console.warn("[saveShowData] Supabase 未配置，仅保存到 localStorage");
       return { error: null };
     }
-
     const BATCH_SIZE = 20;
     const rows = data.map(toDbRow);
     console.log("[saveShowData] 准备 upsert", rows.length, "条, 分", Math.ceil(rows.length / BATCH_SIZE), "批");
