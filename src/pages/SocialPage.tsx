@@ -201,7 +201,7 @@ function BatchEditSocialModal({ open, onClose, items, onSave }: {
                 content: item.content,
               },
             ],
-            temperature: 0.3,
+            temperature: 0.1,
           }),
         });
         const data = await resp.json();
