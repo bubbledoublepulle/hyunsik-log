@@ -11,16 +11,8 @@ import ShowsPage from "@/pages/ShowsPage";
 import SocialPage from "@/pages/SocialPage";
 
 function HomeRedirect() {
-  const navigate = useNavigate();
-  useEffect(() => {
-    const loaded = sessionStorage.getItem("hsik_loaded");
-    if (!loaded) {
-      sessionStorage.setItem("hsik_loaded", "true");
-      navigate("/loading", { replace: true });
-    }
-  }, [navigate]);
   return (
-    <div className="min-h-screen bg-[#F8F9FA] pt-32">
+    <div className="min-h-screen bg-[#F8F9FA] pt-25">
       <Navbar />
       <HomePage />
     </div>
