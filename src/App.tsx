@@ -1,10 +1,8 @@
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
-import { useEffect } from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/context/AuthContext";
 import AuthModal from "@/components/AuthModal";
 import Navbar from "@/components/Navbar";
-import LoadingPage from "@/pages/LoadingPage";
 import HomePage from "@/pages/HomePage";
 import MusicPage from "@/pages/MusicPage";
 import ShowsPage from "@/pages/ShowsPage";
