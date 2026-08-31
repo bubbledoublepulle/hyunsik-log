@@ -18,6 +18,8 @@ import {
   ImageOff,
   Loader2,
   Check,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -90,6 +92,14 @@ const allMembers: ShowMember[] = [
 type SortBy = "date-desc" | "date-asc" | "views-desc" | "title-asc";
 type ViewMode = "archive" | "stats";
 
+interface TimelineNode {
+  year: number;
+  months: {
+    month: number;
+    days: { day: number; count: number; firstItemId: string }[];
+  }[];
+}
+
 export default function ShowsPage() {
   const { isAdmin } = useAuth();
   const { data: rtShowData } = useRealtimeData("shows");
@@ -109,6 +119,10 @@ export default function ShowsPage() {
 
   const [flashId, setFlashId] = useState<string | null>(null);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
+
+  // ===== 时间轴状态 =====
+  const [expandedYear, setExpandedYear] = useState<number | null>(null);
+  const [expandedMonth, setExpandedMonth] = useState<{ year: number; month: number } | null>(null);
 
   useEffect(() => {
     const hash = window.location.hash.slice(1);
@@ -135,6 +149,7 @@ export default function ShowsPage() {
     document.addEventListener("click", handleDocClick);
     return () => document.removeEventListener("click", handleDocClick);
   }, []);
+
   const [formOpen, setFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ShowItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ShowItem | null>(null);
@@ -148,6 +163,7 @@ export default function ShowsPage() {
 
   const prevRtShowCountRef = useRef(0);
   const rtShowNotifiedRef = useRef(false);
+
   useEffect(() => {
     if (!rtShowData || rtShowData.length === 0) return;
     if (!userModifiedRef.current) {
@@ -228,14 +244,12 @@ export default function ShowsPage() {
     }
   }, [showData]);
 
-  
-
   const refreshMetadata = useCallback(async () => {
     if (refreshAbortRef.current) return;
     refreshAbortRef.current = true;
     setMetaRefreshing(true);
     toast.info("正在抓取视频元数据...", { description: "封面、时长、播放量更新中" });
-        try {
+    try {
       for (const item of showData) {
         await fetchShowMetadata(item, true);
       }
@@ -261,6 +275,76 @@ export default function ShowsPage() {
       localStorage.setItem("hsik_meta_last_sync", now);
     }
   }, [showData]);
+
+  // ===== 时间轴数据计算（三层：年→月→日） =====
+  const timelineData = useMemo((): TimelineNode[] => {
+    const map = new Map<number, Map<number, Map<number, { count: number; firstItemId: string }>>>();
+
+    showData.forEach((item) => {
+      const displayDate = getDisplayDate(item);
+      const d = new Date(displayDate);
+      if (isNaN(d.getTime())) return;
+      const year = d.getFullYear();
+      const month = d.getMonth() + 1;
+      const day = d.getDate();
+
+      if (!map.has(year)) map.set(year, new Map());
+      const yearMap = map.get(year)!;
+      if (!yearMap.has(month)) yearMap.set(month, new Map());
+      const monthMap = yearMap.get(month)!;
+      const existing = monthMap.get(day);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        monthMap.set(day, { count: 1, firstItemId: item.id });
+      }
+    });
+
+    return Array.from(map.entries())
+      .sort((a, b) => b[0] - a[0])
+      .map(([year, monthsMap]) => ({
+        year,
+        months: Array.from(monthsMap.entries())
+          .sort((a, b) => b[0] - a[0])
+          .map(([month, daysMap]) => ({
+            month,
+            days: Array.from(daysMap.entries())
+              .sort((a, b) => b[0] - a[0])
+              .map(([day, info]) => ({
+                day,
+                count: info.count,
+                firstItemId: info.firstItemId,
+              })),
+          })),
+      }));
+  }, [showData, metaVersion]);
+
+  const handleToggleYear = (year: number) => {
+    if (expandedYear === year) {
+      setExpandedYear(null);
+      setExpandedMonth(null);
+    } else {
+      setExpandedYear(year);
+      setExpandedMonth(null);
+    }
+  };
+
+  const handleToggleMonth = (year: number, month: number) => {
+    if (expandedMonth?.year === year && expandedMonth?.month === month) {
+      setExpandedMonth(null);
+    } else {
+      setExpandedMonth({ year, month });
+    }
+  };
+
+  const handleScrollToDate = (itemId: string) => {
+    const el = document.getElementById(itemId);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      setFlashId(itemId);
+      setTimeout(() => setFlashId(null), 1500);
+    }
+  };
 
   const filteredData = useMemo(() => {
     let result = [...showData];
@@ -491,6 +575,7 @@ export default function ShowsPage() {
         </motion.div>
       ) : (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+          {/* 搜索 + 筛选栏 */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
             <div className="flex flex-col lg:flex-row gap-4">
               <div className="relative flex-1">
@@ -583,145 +668,232 @@ export default function ShowsPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-              {filteredData.map((item) => {
-                const thumbUrl = getPreferredThumbnail(item);
-                const dataSource = getPreferredSource(item);
-                const displayDuration = getDisplayDuration(item);
-                const displayViews = getDisplayViews(item);
-                const displayDate = getDisplayDate(item);
-                const cachedMeta = getCachedMetadata(item.id);
-                const isStale = isCacheStale(cachedMeta);
-                const isSelected = batchSelectedIds.has(item.id);
-                return (
-                                                     <LazyCard key={item.id} id={item.id}>
-                    <div
-                      className={`group relative bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-xl transition-shadow ${batchEditMode ? "cursor-pointer" : ""} ${isSelected ? "ring-2 ring-sky-400 ring-offset-2" : ""} ${flashId === item.id ? "flash-highlight" : ""}`}
-                      onClick={() => {
-                        if (batchEditMode) {
-                          toggleBatchSelect(item.id);
-                        } else {
-                          setActiveCardId(item.id);
-                        }
-                      }}
-                      data-show-card
-                    >
-                    <div
-                      className="relative aspect-[16/10] overflow-hidden"
-                      style={thumbUrl ? undefined : { background: `linear-gradient(135deg, ${item.thumbnailFrom}, ${item.thumbnailTo})` }}
-                    >
-                      {thumbUrl ? (
-                        <img
-                          src={getProxiedThumbnail(thumbUrl) || thumbUrl}
-                          alt={item.title}
-                          loading="lazy"
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            const target = e.currentTarget;
-                            target.style.display = "none";
-                            if (target.parentElement) {
-                              target.parentElement.style.background = `linear-gradient(135deg, ${item.thumbnailFrom}, ${item.thumbnailTo})`;
-                            }
-                          }}
-                        />
-                      ) : null}
+          {/* ===== 左右两栏布局 ===== */}
+          <div className="flex flex-col lg:flex-row gap-6">
+            {/* 左侧时间轴 */}
+            <motion.aside
+              initial={{ opacity: 0, x: -15 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="w-full lg:w-60 shrink-0"
+            >
+              <div className="lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <Calendar className="w-4 h-4 text-sky-500" />
+                  <h3 className="font-bold text-gray-900 text-sm">时间轴</h3>
+                </div>
 
-                      {batchEditMode && (
-                        <div className="absolute top-3 left-3 z-20">
-                          <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${isSelected ? "bg-sky-400 border-sky-400" : "bg-white/80 border-gray-300"}`}>
-                            {isSelected && <Check className="w-4 h-4 text-white" />}
+                <div className="space-y-1">
+                  {timelineData.map((node) => (
+                    <div key={node.year}>
+                      {/* 年份 */}
+                      <button
+                        onClick={() => handleToggleYear(node.year)}
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-all text-gray-700 hover:bg-gray-50"
+                      >
+                        {expandedYear === node.year ? (
+                          <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                        ) : (
+                          <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                        )}
+                        <span className={`w-2 h-2 rounded-full ${expandedYear === node.year ? "bg-sky-400" : "bg-gray-300"}`} />
+                        {node.year}年
+                        <span className="ml-auto text-xs text-gray-400 font-normal">
+                          {node.months.reduce((sum, m) => sum + m.days.reduce((s, d) => s + d.count, 0), 0)}
+                        </span>
+                      </button>
+
+                      {/* 月份列表 */}
+                      {expandedYear === node.year && (
+                        <div className="ml-4 mt-1 space-y-0.5 border-l-2 border-gray-100 pl-3">
+                          {node.months.map((m) => (
+                            <div key={m.month}>
+                              <button
+                                onClick={() => handleToggleMonth(node.year, m.month)}
+                                className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-all text-gray-500 hover:bg-gray-50"
+                              >
+                                {expandedMonth?.year === node.year && expandedMonth?.month === m.month ? (
+                                  <ChevronDown className="w-3 h-3 text-gray-400" />
+                                ) : (
+                                  <ChevronRight className="w-3 h-3 text-gray-400" />
+                                )}
+                                <span className={`w-1.5 h-1.5 rounded-full ${expandedMonth?.year === node.year && expandedMonth?.month === m.month ? "bg-sky-400" : "bg-gray-200"}`} />
+                                {m.month}月
+                                <span className="ml-auto text-[10px] text-gray-400">
+                                  {m.days.reduce((s, d) => s + d.count, 0)}
+                                </span>
+                              </button>
+
+                              {/* 日期列表 */}
+                              {expandedMonth?.year === node.year && expandedMonth?.month === m.month && (
+                                <div className="ml-4 mt-0.5 space-y-0.5 border-l-2 border-gray-50 pl-3">
+                                  {m.days.map((d) => (
+                                    <button
+                                      key={d.day}
+                                      onClick={() => handleScrollToDate(d.firstItemId)}
+                                      className="w-full flex items-center gap-2 px-3 py-1 rounded-lg text-[11px] transition-all text-gray-400 hover:bg-sky-50 hover:text-sky-600"
+                                    >
+                                      <span className="w-1 h-1 rounded-full bg-gray-200" />
+                                      {d.day}日
+                                      <span className="ml-auto text-[10px] text-gray-400">
+                                        ({d.count}条)
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.aside>
+
+            {/* 右侧卡片网格 */}
+            <div className="flex-1 min-w-0">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                {filteredData.map((item) => {
+                  const thumbUrl = getPreferredThumbnail(item);
+                  const dataSource = getPreferredSource(item);
+                  const displayDuration = getDisplayDuration(item);
+                  const displayViews = getDisplayViews(item);
+                  const displayDate = getDisplayDate(item);
+                  const cachedMeta = getCachedMetadata(item.id);
+                  const isStale = isCacheStale(cachedMeta);
+                  const isSelected = batchSelectedIds.has(item.id);
+                  return (
+                    <LazyCard key={item.id} id={item.id}>
+                      <div
+                        className={`group relative bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-xl transition-shadow ${batchEditMode ? "cursor-pointer" : ""} ${isSelected ? "ring-2 ring-sky-400 ring-offset-2" : ""} ${flashId === item.id ? "flash-highlight" : ""}`}
+                        onClick={() => {
+                          if (batchEditMode) {
+                            toggleBatchSelect(item.id);
+                          } else {
+                            setActiveCardId(item.id);
+                          }
+                        }}
+                        data-show-card
+                      >
+                        <div
+                          className="relative aspect-[16/10] overflow-hidden"
+                          style={thumbUrl ? undefined : { background: `linear-gradient(135deg, ${item.thumbnailFrom}, ${item.thumbnailTo})` }}
+                        >
+                          {thumbUrl ? (
+                            <img
+                              src={getProxiedThumbnail(thumbUrl) || thumbUrl}
+                              alt={item.title}
+                              loading="lazy"
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                const target = e.currentTarget;
+                                target.style.display = "none";
+                                if (target.parentElement) {
+                                  target.parentElement.style.background = `linear-gradient(135deg, ${item.thumbnailFrom}, ${item.thumbnailTo})`;
+                                }
+                              }}
+                            />
+                          ) : null}
+
+                          {batchEditMode && (
+                            <div className="absolute top-3 left-3 z-20">
+                              <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${isSelected ? "bg-sky-400 border-sky-400" : "bg-white/80 border-gray-300"}`}>
+                                {isSelected && <Check className="w-4 h-4 text-white" />}
+                              </div>
+                            </div>
+                          )}
+
+                          {item.links.length > 0 && !batchEditMode && (
+                            <div className={`absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity flex flex-col items-center justify-center gap-2 p-4 ${activeCardId === item.id ? "opacity-100" : "opacity-0"}`}>
+                              <span className="text-white/80 text-xs font-medium mb-1">选择平台观看</span>
+                              {item.links.map((link, linkIdx) => {
+                                const style = getPlatformStyleLocal(link.platform);
+                                return (
+                                  <a
+                                    key={linkIdx}
+                                    href={link.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={`flex items-center gap-2 px-4 py-2 rounded-xl ${style.bg} ${style.text} text-sm font-medium hover:scale-105 transition-transform shadow-lg`}
+                                  >
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                    前往 {link.platform}
+                                  </a>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {dataSource && (
+                            <div className="absolute top-3 left-3 px-2 py-0.5 rounded-md bg-black/40 backdrop-blur-sm text-white text-[10px] font-medium flex items-center gap-1" style={batchEditMode ? { left: "2.5rem" } : undefined}>
+                              <ImageOff className="w-2.5 h-2.5" />
+                              来源: {dataSource}
+                              {isStale && cachedMeta && <span className="text-amber-300 ml-1">·待更新</span>}
+                            </div>
+                          )}
+
+                          {isAdmin && !batchEditMode && (
+                            <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                              <button onClick={(e) => { e.stopPropagation(); handleEdit(item); }} className="w-7 h-7 rounded-lg bg-white/90 backdrop-blur-sm flex items-center justify-center text-gray-600 hover:bg-white hover:text-sky-500 transition-colors">
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(item); }} className="w-7 h-7 rounded-lg bg-white/90 backdrop-blur-sm flex items-center justify-center text-gray-600 hover:bg-white hover:text-red-500 transition-colors">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
+
+                          <div className="absolute bottom-3 left-3 px-2 py-0.5 rounded-md bg-black/30 backdrop-blur-sm text-white text-xs font-medium">
+                            {item.platform}
+                          </div>
+
+                          {item.links.length > 1 && (
+                            <div className="absolute bottom-3 right-3 px-2 py-0.5 rounded-md bg-black/40 backdrop-blur-sm text-white text-[10px] font-medium flex items-center gap-1">
+                              <ExternalLink className="w-2.5 h-2.5" />
+                              {item.links.length} 个平台
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="p-4">
+                          <h3 className="font-bold text-gray-900 text-sm leading-snug line-clamp-2 mb-2 min-h-[2.5rem]">
+                            {item.title}
+                          </h3>
+
+                          <div className="flex flex-wrap gap-1 mb-3">
+                            {item.members.map((member) => (
+                              <span key={member} className={`text-xs px-1.5 py-0.5 rounded border font-medium ${memberColors[member]}`}>
+                                {member}
+                              </span>
+                            ))}
+                          </div>
+
+                          <div className="flex items-center gap-3 text-xs text-gray-400">
+                            <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{displayDate}</span>
+                            <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{displayDuration}</span>
+                            <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{displayViews}</span>
                           </div>
                         </div>
-                      )}
-
-                                           {item.links.length > 0 && !batchEditMode && (
-                        <div className={`absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity flex flex-col items-center justify-center gap-2 p-4 ${activeCardId === item.id ? "opacity-100" : "opacity-0"}`}>
-                          <span className="text-white/80 text-xs font-medium mb-1">选择平台观看</span>
-                          {item.links.map((link, linkIdx) => {
-                            const style = getPlatformStyleLocal(link.platform);
-                            return (
-                              <a
-                                key={linkIdx}
-                                href={link.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className={`flex items-center gap-2 px-4 py-2 rounded-xl ${style.bg} ${style.text} text-sm font-medium hover:scale-105 transition-transform shadow-lg`}
-                              >
-                                <ExternalLink className="w-3.5 h-3.5" />
-                                前往 {link.platform}
-                              </a>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {dataSource && (
-                        <div className="absolute top-3 left-3 px-2 py-0.5 rounded-md bg-black/40 backdrop-blur-sm text-white text-[10px] font-medium flex items-center gap-1" style={batchEditMode ? { left: "2.5rem" } : undefined}>
-                          <ImageOff className="w-2.5 h-2.5" />
-                          来源: {dataSource}
-                          {isStale && cachedMeta && <span className="text-amber-300 ml-1">·待更新</span>}
-                        </div>
-                      )}
-
-                      {isAdmin && !batchEditMode && (
-                        <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                          <button onClick={(e) => { e.stopPropagation(); handleEdit(item); }} className="w-7 h-7 rounded-lg bg-white/90 backdrop-blur-sm flex items-center justify-center text-gray-600 hover:bg-white hover:text-sky-500 transition-colors">
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(item); }} className="w-7 h-7 rounded-lg bg-white/90 backdrop-blur-sm flex items-center justify-center text-gray-600 hover:bg-white hover:text-red-500 transition-colors">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      )}
-
-                      <div className="absolute bottom-3 left-3 px-2 py-0.5 rounded-md bg-black/30 backdrop-blur-sm text-white text-xs font-medium">
-                        {item.platform}
                       </div>
-
-                      {item.links.length > 1 && (
-                        <div className="absolute bottom-3 right-3 px-2 py-0.5 rounded-md bg-black/40 backdrop-blur-sm text-white text-[10px] font-medium flex items-center gap-1">
-                          <ExternalLink className="w-2.5 h-2.5" />
-                          {item.links.length} 个平台
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="p-4">
-                      <h3 className="font-bold text-gray-900 text-sm leading-snug line-clamp-2 mb-2 min-h-[2.5rem]">
-                        {item.title}
-                      </h3>
-
-                      <div className="flex flex-wrap gap-1 mb-3">
-                        {item.members.map((member) => (
-                          <span key={member} className={`text-xs px-1.5 py-0.5 rounded border font-medium ${memberColors[member]}`}>
-                            {member}
-                          </span>
-                        ))}
-                      </div>
-
-                      <div className="flex items-center gap-3 text-xs text-gray-400">
-                        <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{displayDate}</span>
-                        <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{displayDuration}</span>
-                        <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{displayViews}</span>
-                      </div>
-                    </div>
-                                     </div>
-                  </LazyCard>
-                );
-              })}
-          </div>
-
-          {filteredData.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mb-3">
-                <Tv className="w-8 h-8 text-gray-300" />
+                    </LazyCard>
+                  );
+                })}
               </div>
-              <p className="text-sm text-gray-500 mb-1">没有找到匹配的综艺档案</p>
-              <p className="text-xs text-gray-400">尝试调整筛选条件或清除筛选</p>
-            </div>
-          )}
 
-          <p className="text-xs text-gray-400 mt-4">共 {filteredData.length} 条档案{filteredData.length !== showData.length && ` (总计 ${showData.length} 条)`}</p>
+              {filteredData.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mb-3">
+                    <Tv className="w-8 h-8 text-gray-300" />
+                  </div>
+                  <p className="text-sm text-gray-500 mb-1">没有找到匹配的综艺档案</p>
+                  <p className="text-xs text-gray-400">尝试调整筛选条件或清除筛选</p>
+                </div>
+              )}
+
+              <p className="text-xs text-gray-400 mt-4">共 {filteredData.length} 条档案{filteredData.length !== showData.length && ` (总计 ${showData.length} 条)`}</p>
+            </div>
+          </div>
         </motion.div>
       )}
 
