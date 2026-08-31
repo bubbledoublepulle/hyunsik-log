@@ -232,16 +232,12 @@ async function fetchViaFxTwitter(url: string): Promise<LinkPreview | null> {
     const tweet = data.tweet;
     if (!tweet) return null;
     
-    // 收集所有图片
+        // 收集所有图片（不要 mosaic 拼图）
     const images: string[] = [];
     if (tweet.media?.photos) {
       tweet.media.photos.forEach((p: any) => {
         if (p.url && !images.includes(p.url)) images.push(p.url);
       });
-    }
-    if (tweet.media?.mosaic?.formats?.webp) {
-      // 如果有拼图，也加上
-      images.push(tweet.media.mosaic.formats.webp);
     }
     
     // 作者
