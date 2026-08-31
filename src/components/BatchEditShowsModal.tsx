@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { X, Users, Type, Replace, UserPlus, UserMinus } from "lucide-react";
+import { useState, useEffect } from "react";
+import { X, Users, Type, Replace, UserPlus, UserMinus, Loader2, Languages, KeyRound } from "lucide-react";
 import type { ShowItem, ShowMember } from "@/lib/showData";
 
 const allMembers: ShowMember[] = [
@@ -12,6 +12,13 @@ const allMembers: ShowMember[] = [
   "全体",
 ];
 
+const LANGUAGES = [
+  { key: "中文", label: "中文" },
+  { key: "英文", label: "英文" },
+  { key: "日文", label: "日文" },
+  { key: "韩文", label: "韩文" },
+];
+
 interface BatchEditShowsModalProps {
   open: boolean;
   onClose: () => void;
@@ -20,7 +27,7 @@ interface BatchEditShowsModalProps {
 }
 
 export default function BatchEditShowsModal({ open, onClose, items, onSave }: BatchEditShowsModalProps) {
-  const [activeTab, setActiveTab] = useState<"title" | "members">("title");
+  const [activeTab, setActiveTab] = useState<"title" | "members" | "translate">("title");
 
   // 标题编辑
   const [findText, setFindText] = useState("");
@@ -32,7 +39,75 @@ export default function BatchEditShowsModal({ open, onClose, items, onSave }: Ba
   const [membersToAdd, setMembersToAdd] = useState<Set<ShowMember>>(new Set());
   const [membersToRemove, setMembersToRemove] = useState<Set<ShowMember>>(new Set());
 
+  // AI 翻译
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem("hsik_deepseek_key") || "");
+  const [targetLang, setTargetLang] = useState("中文");
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translationProgress, setTranslationProgress] = useState({ current: 0, total: 0 });
+  const [translations, setTranslations] = useState<Record<string, string>>({});
+
   const [preview, setPreview] = useState<ShowItem[] | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setTranslations({});
+      setPreview(null);
+    }
+  }, [open]);
+
+  const handleTranslate = async () => {
+    if (!apiKey.trim()) {
+      alert("请输入 DeepSeek API Key");
+      return;
+    }
+    localStorage.setItem("hsik_deepseek_key", apiKey);
+
+    setIsTranslating(true);
+    setTranslations({});
+    setTranslationProgress({ current: 0, total: items.length });
+
+    const results: Record<string, string> = {};
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      setTranslationProgress({ current: i + 1, total: items.length });
+      try {
+        const resp = await fetch("https://api.deepseek.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: "deepseek-chat",
+            messages: [
+              {
+                role: "system",
+                content: `你是一个翻译助手。请将用户提供的文本翻译成${targetLang}。只返回翻译结果，不要解释，不要添加额外内容。`,
+              },
+              {
+                role: "user",
+                content: item.title,
+              },
+            ],
+            temperature: 0.3,
+          }),
+        });
+        const data = await resp.json();
+        if (data.choices && data.choices[0] && data.choices[0].message) {
+          results[item.id] = data.choices[0].message.content.trim();
+        } else {
+          results[item.id] = item.title;
+        }
+      } catch {
+        results[item.id] = item.title;
+      }
+      if (i < items.length - 1) await new Promise((r) => setTimeout(r, 500));
+    }
+
+    setTranslations(results);
+    setIsTranslating(false);
+  };
 
   const generatePreview = () => {
     const updated = items.map((item) => {
@@ -61,6 +136,12 @@ export default function BatchEditShowsModal({ open, onClose, items, onSave }: Ba
         newItem.members = newMembers as ShowMember[];
       }
 
+      if (activeTab === "translate") {
+        if (translations[item.id]) {
+          newItem.title = translations[item.id];
+        }
+      }
+
       return newItem;
     });
     setPreview(updated);
@@ -79,6 +160,7 @@ export default function BatchEditShowsModal({ open, onClose, items, onSave }: Ba
     setSuffixText("");
     setMembersToAdd(new Set());
     setMembersToRemove(new Set());
+    setTranslations({});
     setPreview(null);
     setActiveTab("title");
   };
@@ -102,6 +184,10 @@ export default function BatchEditShowsModal({ open, onClose, items, onSave }: Ba
     setMembersToRemove(next);
   };
 
+  const updateTranslation = (id: string, value: string) => {
+    setTranslations((prev) => ({ ...prev, [id]: value }));
+  };
+
   if (!open) return null;
 
   return (
@@ -120,6 +206,9 @@ export default function BatchEditShowsModal({ open, onClose, items, onSave }: Ba
           </button>
           <button onClick={() => { setActiveTab("members"); setPreview(null); }} className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === "members" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}>
             <Users className="w-4 h-4" />成员
+          </button>
+          <button onClick={() => { setActiveTab("translate"); setPreview(null); }} className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === "translate" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}>
+            <Languages className="w-4 h-4" />AI翻译
           </button>
         </div>
 
@@ -177,6 +266,86 @@ export default function BatchEditShowsModal({ open, onClose, items, onSave }: Ba
                   ))}
                 </div>
               </div>
+            </div>
+          )}
+
+          {activeTab === "translate" && (
+            <div className="space-y-3">
+              <div className="p-3 rounded-xl bg-violet-50 border border-violet-100">
+                <div className="flex items-center gap-2 mb-3">
+                  <KeyRound className="w-4 h-4 text-violet-500" />
+                  <span className="text-sm font-medium text-gray-700">DeepSeek API 设置</span>
+                </div>
+                <div className="space-y-2">
+                  <input
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="输入 DeepSeek API Key（sk-...）"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:border-violet-400"
+                  />
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500">目标语言：</span>
+                    <select
+                      value={targetLang}
+                      onChange={(e) => setTargetLang(e.target.value)}
+                      className="px-2 py-1 rounded-lg border border-gray-200 text-sm outline-none focus:border-violet-400 bg-white"
+                    >
+                      {LANGUAGES.map((lang) => (
+                        <option key={lang.key} value={lang.key}>{lang.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    onClick={handleTranslate}
+                    disabled={isTranslating || items.length === 0}
+                    className="w-full py-2 rounded-lg bg-violet-400 text-white text-sm font-medium hover:bg-violet-500 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {isTranslating ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        翻译中 {translationProgress.current}/{translationProgress.total}
+                      </>
+                    ) : (
+                      <>
+                        <Languages className="w-4 h-4" />
+                        开始翻译
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {Object.keys(translations).length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-bold text-gray-900">翻译结果（可手动修改）：</p>
+                  <div className="border border-gray-100 rounded-xl overflow-hidden max-h-64 overflow-y-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 sticky top-0">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-medium text-gray-600">原文</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-600">译文</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {items.map((item) => (
+                          <tr key={item.id}>
+                            <td className="px-3 py-2 text-gray-500 align-top">{item.title}</td>
+                            <td className="px-3 py-2 align-top">
+                              <input
+                                type="text"
+                                value={translations[item.id] || item.title}
+                                onChange={(e) => updateTranslation(item.id, e.target.value)}
+                                className="w-full px-2 py-1 rounded border border-gray-200 text-sm outline-none focus:border-violet-400"
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
