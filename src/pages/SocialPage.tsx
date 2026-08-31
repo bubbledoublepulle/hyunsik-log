@@ -274,8 +274,8 @@ function BatchImportSocialModal({ open, onClose, onImport }: {
       toast.error("请输入至少一个有效的链接");
       return;
     }
-    if (urls.length > 20) {
-      toast.error("一次最多导入 20 条链接");
+    if (urls.length > 300) {
+      toast.error("一次最多导入 300 条链接");
       return;
     }
 
@@ -704,13 +704,7 @@ export default function SocialPage() {
               <Plus className="w-4 h-4" />
               添加动态
             </button>
-                        <button
-              onClick={() => setBatchImportOpen(true)}
-              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-400 text-white text-sm font-medium hover:bg-emerald-500 transition-colors shadow-md shadow-emerald-200 whitespace-nowrap"
-            >
-              <Link2 className="w-4 h-4" />
-              批量导入
-            </button>
+                       
                         <button
               onClick={() => setBatchImportOpen(true)}
               className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-400 text-white text-sm font-medium hover:bg-emerald-500 transition-colors shadow-md shadow-emerald-200 whitespace-nowrap"
