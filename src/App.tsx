@@ -24,7 +24,6 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/loading" element={<LoadingPage />} />
           <Route path="/" element={<HomeRedirect />} />
           <Route
             path="/music"
