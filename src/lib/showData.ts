@@ -324,6 +324,13 @@ export async function syncShowData(): Promise<ShowItem[]> {
 
 export async function saveShowData(data: ShowItem[]): Promise<{ error: string | null }> {
   // 如果已有保存正在进行，等待它完成后再执行新的，避免并发竞态
+  export async function saveShowData(data: ShowItem[]): Promise<{ error: string | null }> {
+  // 按 ID 去重，保留最后一个
+  const uniqueData = Array.from(
+    new Map(data.map((item) => [item.id, item])).values()
+  );
+
+  // 如果已有保存正在进行，等待它完成后再执行新的，避免并发竞态
   if (saveShowDataPromise) {
     await saveShowDataPromise;
   }
@@ -420,7 +427,7 @@ export async function deleteShowItem(id: string): Promise<void> {
   const updated = current.filter((s) => s.id !== id);
   saveLocalShowData(updated);
   if (!isSupabaseConfigured()) return;
-  const { error } = await supabase.from("shows").delete().eq("id", id);
+  const { error } = await supabase.from("shows")upsert(uniqueData, { onConflict: "id" });
   if (error) {
     console.warn("[shows] delete from supabase failed:", error.message);
   }
