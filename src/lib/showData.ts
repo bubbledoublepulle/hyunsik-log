@@ -322,9 +322,6 @@ export async function syncShowData(): Promise<ShowItem[]> {
   return items;
 }
 
-export async function saveShowData(data: ShowItem[]): Promise<{ error: string | null }> {
-  // 如果已有保存正在进行，等待它完成后再执行新的，避免并发竞态
-}
   export async function saveShowData(data: ShowItem[]): Promise<{ error: string | null }> {
   // 按 ID 去重，保留最后一个
   const uniqueData = Array.from(
