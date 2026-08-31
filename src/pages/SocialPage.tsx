@@ -366,16 +366,18 @@ function BatchEditSocialModal({ open, onClose, items, onSave }: {
                           <th className="px-3 py-2 text-left font-medium text-gray-600">译文</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-50">
+                                            <tbody className="divide-y divide-gray-50">
                         {items.map((item) => (
                           <tr key={item.id}>
-                            <td className="px-3 py-2 text-gray-500 align-top line-clamp-3 max-w-[200px]">{item.content}</td>
+                            <td className="px-3 py-2 text-gray-500 align-top">
+                              <div className="max-w-[280px] whitespace-pre-wrap break-words text-sm">{item.content}</div>
+                            </td>
                             <td className="px-3 py-2 align-top">
                               <textarea
                                 value={translations[item.id] || item.content}
                                 onChange={(e) => updateTranslation(item.id, e.target.value)}
-                                rows={3}
-                                className="w-full px-2 py-1 rounded border border-gray-200 text-sm outline-none focus:border-violet-400 resize-none"
+                                rows={Math.min(Math.max(Math.ceil(item.content.length / 30), 3), 8)}
+                                className="w-full px-2 py-1.5 rounded border border-gray-200 text-sm outline-none focus:border-violet-400 resize-y min-h-[60px]"
                               />
                             </td>
                           </tr>
