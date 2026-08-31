@@ -427,12 +427,11 @@ export async function deleteShowItem(id: string): Promise<void> {
   const updated = current.filter((s) => s.id !== id);
   saveLocalShowData(updated);
   if (!isSupabaseConfigured()) return;
-  const { error } = await supabase.from("shows")upsert(uniqueData, { onConflict: "id" });
+  const { error } = await supabase.from("shows").delete().eq("id", id);
   if (error) {
     console.warn("[shows] delete from supabase failed:", error.message);
   }
 }
-
 export async function resetShowData(): Promise<ShowItem[]> {
   const data = JSON.parse(JSON.stringify(initialShowData));
   await saveShowData(data);
