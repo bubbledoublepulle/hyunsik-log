@@ -748,7 +748,7 @@ export default function HomePage() {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Film className="w-5 h-5 text-violet-500" />
-            <h2 className="text-lg font-bold text-gray-900">随机推荐</h2>
+            <h2 className="text-lg font-bold text-gray-900">随机品熊</h2>
           </div>
           <button
             onClick={pickRandomShow}
@@ -841,7 +841,7 @@ export default function HomePage() {
             <div className="w-14 h-14 rounded-full bg-gray-50 flex items-center justify-center mb-3 mx-auto">
               <Film className="w-7 h-7 text-gray-300" />
             </div>
-            <p className="text-sm text-gray-400">暂无推荐视频</p>
+            <p className="text-sm text-gray-400">暂无品熊视频</p>
           </div>
         )}
       </motion.section>
