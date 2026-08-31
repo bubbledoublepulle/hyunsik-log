@@ -241,6 +241,233 @@ function BatchEditSocialModal({ open, onClose, items, onSave }: {
   );
 }
 // ===== 批量编辑弹窗结束 =====
+// ===== 批量导入弹窗 =====
+function BatchImportSocialModal({ open, onClose, onImport }: {
+  open: boolean;
+  onClose: () => void;
+  onImport: (posts: SocialPost[]) => void;
+}) {
+  const [category, setCategory] = useState<SocialCategory>("个人动态");
+  const [linksText, setLinksText] = useState("");
+  const [isFetching, setIsFetching] = useState(false);
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
+  const [results, setResults] = useState<{ success: boolean; url: string; preview?: LinkPreview; error?: string }[]>([]);
+
+  useEffect(() => {
+    if (open) {
+      setLinksText("");
+      setResults([]);
+      setProgress({ current: 0, total: 0 });
+      setIsFetching(false);
+    }
+  }, [open]);
+
+  const handleFetch = async () => {
+    const urls = linksText
+      .split("\n")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0 && s.startsWith("http"));
+    if (urls.length === 0) {
+      toast.error("请输入至少一个有效的链接");
+      return;
+    }
+    if (urls.length > 20) {
+      toast.error("一次最多导入 20 条链接");
+      return;
+    }
+
+    setIsFetching(true);
+    setProgress({ current: 0, total: urls.length });
+    setResults([]);
+
+    const newResults: typeof results = [];
+
+    for (let i = 0; i < urls.length; i++) {
+      const url = urls[i];
+      setProgress({ current: i + 1, total: urls.length });
+      try {
+        const preview = await fetchLinkPreview(url);
+        newResults.push({ success: true, url, preview });
+      } catch (err: any) {
+        newResults.push({ success: false, url, error: err.message || "抓取失败" });
+      }
+      // 间隔 300ms，避免被封
+      if (i < urls.length - 1) await new Promise((r) => setTimeout(r, 300));
+    }
+
+    setResults(newResults);
+    setIsFetching(false);
+
+    const successCount = newResults.filter((r) => r.success).length;
+    if (successCount > 0) {
+      toast.success(`成功抓取 ${successCount} 条动态`);
+    }
+    if (successCount < urls.length) {
+      toast.error(`${urls.length - successCount} 条链接抓取失败`);
+    }
+  };
+
+  const handleImport = () => {
+    const successResults = results.filter((r) => r.success && r.preview);
+    if (successResults.length === 0) {
+      toast.error("没有可导入的动态");
+      return;
+    }
+
+    const posts: SocialPost[] = successResults.map((r, i) => {
+      const p = r.preview!;
+      return {
+        id: `s_${Date.now()}_${i}`,
+        category,
+        platform: p.platform as SocialPlatform,
+        author: p.author || "未知作者",
+        content: p.description || "",
+        postUrl: p.url,
+        postDate: p.date || new Date().toISOString().slice(0, 16),
+        images: p.images || [],
+        videos: [],
+        pinned: false,
+      };
+    });
+
+    onImport(posts);
+    onClose();
+  };
+
+  const removeResult = (idx: number) => {
+    setResults((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h2 className="text-lg font-bold text-gray-900">批量导入社交动态</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-auto px-6 py-4 space-y-4">
+          {/* 分类选择 */}
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-2 block">默认分类</label>
+            <div className="flex gap-2">
+              {socialCategories.map((cat) => {
+                const style = categoryStyles[cat.key];
+                const isActive = category === cat.key;
+                return (
+                  <button
+                    key={cat.key}
+                    type="button"
+                    onClick={() => setCategory(cat.key)}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${
+                      isActive ? style.active : style.inactive
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 链接输入 */}
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-1.5 block">
+              链接列表 <span className="text-xs text-gray-400 font-normal">(每行一个，最多20条)</span>
+            </label>
+            <textarea
+              value={linksText}
+              onChange={(e) => setLinksText(e.target.value)}
+              placeholder={`https://x.com/xxx/status/123\nhttps://x.com/xxx/status/456\nhttps://www.instagram.com/p/xxx/`}
+              rows={6}
+              disabled={isFetching}
+              className="w-full px-3.5 py-2.5 rounded-xl border-2 border-gray-100 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none transition-all resize-none text-sm"
+            />
+          </div>
+
+          {/* 开始抓取按钮 */}
+          <button
+            onClick={handleFetch}
+            disabled={isFetching || !linksText.trim()}
+            className="w-full py-2.5 rounded-xl bg-sky-400 text-white text-sm font-medium hover:bg-sky-500 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {isFetching ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                正在抓取 {progress.current}/{progress.total}
+              </>
+            ) : (
+              <>
+                <Link2 className="w-4 h-4" />
+                开始抓取
+              </>
+            )}
+          </button>
+
+          {/* 结果预览 */}
+          {results.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-bold text-gray-900">
+                抓取结果 ({results.filter((r) => r.success).length}/{results.length} 成功)
+              </p>
+              <div className="border border-gray-100 rounded-xl overflow-hidden max-h-64 overflow-y-auto">
+                {results.map((r, i) => (
+                  <div key={i} className={`flex items-start gap-3 p-3 ${i > 0 ? "border-t border-gray-50" : ""} ${r.success ? "bg-white" : "bg-red-50/50"}`}>
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+                      {r.success ? (
+                        <Check className="w-4 h-4 text-emerald-500" />
+                      ) : (
+                        <X className="w-4 h-4 text-red-400" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      {r.success && r.preview ? (
+                        <>
+                          <p className="text-sm font-medium text-gray-900 line-clamp-1">{r.preview.author || "未知作者"} · {r.preview.platform}</p>
+                          <p className="text-xs text-gray-500 line-clamp-2 mt-0.5">{r.preview.description || "无内容"}</p>
+                          {r.preview.images.length > 0 && (
+                            <p className="text-[10px] text-gray-400 mt-1">{r.preview.images.length} 张图片</p>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-xs text-red-500">{r.error}</p>
+                      )}
+                      <p className="text-[10px] text-gray-400 mt-1 truncate">{r.url}</p>
+                    </div>
+                    <button
+                      onClick={() => removeResult(i)}
+                      className="p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium text-gray-500 hover:bg-gray-100 transition-colors">
+            取消
+          </button>
+          <button
+            onClick={handleImport}
+            disabled={results.filter((r) => r.success).length === 0}
+            className="px-5 py-2 rounded-xl bg-sky-400 text-white text-sm font-medium hover:bg-sky-500 transition-colors disabled:opacity-50"
+          >
+            确认导入 ({results.filter((r) => r.success).length} 条)
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+// ===== 批量导入弹窗结束 =====
 
 export default function SocialPage() {
   const { isAdmin } = useAuth();
@@ -274,6 +501,7 @@ export default function SocialPage() {
   const [detailImageIdx, setDetailImageIdx] = useState(0);
 
   const [batchEditOpen, setBatchEditOpen] = useState(false);
+    const [batchImportOpen, setBatchImportOpen] = useState(false);
   const [batchSelectedIds, setBatchSelectedIds] = useState<Set<string>>(new Set());
   const [batchEditMode, setBatchEditMode] = useState(false);
 
@@ -398,7 +626,7 @@ export default function SocialPage() {
     setBatchSelectedIds(next);
   };
 
-  const handleBatchEditSave = (updatedItems: SocialPost[]) => {
+    const handleBatchEditSave = (updatedItems: SocialPost[]) => {
     setSocialData((prev) => prev.map((item) => {
       const updated = updatedItems.find((u) => u.id === item.id);
       return updated || item;
@@ -407,6 +635,12 @@ export default function SocialPage() {
     setBatchEditOpen(false);
     setBatchSelectedIds(new Set());
     setBatchEditMode(false);
+  };
+
+  const handleBatchImport = (posts: SocialPost[]) => {
+    setSocialData((prev) => [...posts, ...prev]);
+    toast.success(`成功导入 ${posts.length} 条动态`);
+    setBatchImportOpen(false);
   };
 
   const handleAdd = () => {
@@ -466,6 +700,13 @@ export default function SocialPage() {
             >
               <Plus className="w-4 h-4" />
               添加动态
+            </button>
+                        <button
+              onClick={() => setBatchImportOpen(true)}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-400 text-white text-sm font-medium hover:bg-emerald-500 transition-colors shadow-md shadow-emerald-200 whitespace-nowrap"
+            >
+              <Link2 className="w-4 h-4" />
+              批量导入
             </button>
             <button
               onClick={() => {
