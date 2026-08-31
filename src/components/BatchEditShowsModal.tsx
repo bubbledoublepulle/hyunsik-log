@@ -72,9 +72,10 @@ export default function BatchEditShowsModal({ open, onClose, items, onSave }: Ba
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       setTranslationProgress({ current: i + 1, total: items.length });
-            let translated = "";
+                 let translated = "";
       let attempts = 0;
       const maxRetries = 2;
+      let lastRaw = ""; // 记录最后一次 API 返回了什么
 
       while (attempts <= maxRetries && !translated) {
         try {
@@ -89,25 +90,51 @@ export default function BatchEditShowsModal({ open, onClose, items, onSave }: Ba
               messages: [
                 {
                   role: "system",
-                  content: `你是一位专业的韩翻中翻译助手，擅长翻译韩国偶像团体的社交媒体公告、社交平台动态、youtube视频标题
-
-【翻译规则】
-1. 所有韩文内容必须完整翻译成中文，不允许遗漏任何文字
-2. 保留所有话题标签（#xxx），标签内的韩文可翻译为中文后保留原标签
-3. 保留所有@提及和表情符号
-4. 保留英文部分（如艺人英文名、节目英文名），主要翻译的艺人为韩国男团BTOB，翻译的成员名字以BTOB成员汉字名为准
-5. 节目名称、电台名称等专有名词保留原名，可在括号内加注中文
-6. 时间、日期、数字照原文保留
-7. 保持原文的换行和分段格式
-
-【输出要求】
-- 只返回翻译后的纯文本
-- 不要解释、不要添加"翻译如下"等前缀
-- 不要遗漏任何一行内容`,
+                  content: `你是专业韩翻中翻译员。把用户提供的韩文文本逐句翻译成中文。必须翻译所有韩文，不能遗漏。保留#话题标签、表情符号、英文人名。只返回纯译文，不要解释。`,
                 },
                 {
                   role: "user",
-                  content: item.title,
+                  content: item.title, // 社交动态改成 item.content
+                },
+              ],
+              temperature: 0.1,
+            }),
+          });
+          
+          // 检查 HTTP 状态
+          if (!resp.ok) {
+            console.error(`API 错误: ${resp.status} ${resp.statusText}`);
+            attempts++;
+            continue;
+          }
+          
+          const data = await resp.json();
+          console.log(`[${item.id}] API 返回:`, data); // 打印到浏览器控制台
+          
+          if (data.choices?.[0]?.message?.content) {
+            const raw = data.choices[0].message.content.trim();
+            lastRaw = raw;
+            
+            // 只要 API 返回了内容，不管是不是和原文一样，先保存
+            // 让用户自己判断
+            if (raw) {
+              translated = raw;
+            }
+          } else if (data.error) {
+            console.error(`[${item.id}] API 报错:`, data.error);
+          }
+        } catch (err) {
+          console.error(`[${item.id}] 网络错误:`, err);
+        }
+        
+        attempts++;
+        if (!translated && attempts <= maxRetries) {
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+      }
+
+      // 如果 API 一直返回空，才用原文兜底
+      results[item.id] = translated || item.title || "[翻译失败]";
                 },
               ],
               temperature: 0.1,
