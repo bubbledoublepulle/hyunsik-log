@@ -215,6 +215,58 @@ const CORS_PROXIES = [
     `https://corsproxy.io/?${encodeURIComponent(u)}`,
 ];
 
+/** fxtwitter API — 专门抓取 X/Twitter 完整推文（包括所有图片） */
+async function fetchViaFxTwitter(url: string): Promise<LinkPreview | null> {
+  try {
+    // 把 x.com/twitter.com 链接转成 fxtwitter API 格式
+    const apiUrl = url
+      .replace(/^https?:\/\/(www\.)?x\.com\//, "https://api.fxtwitter.com/")
+      .replace(/^https?:\/\/(www\.)?twitter\.com\//, "https://api.fxtwitter.com/");
+    
+    const resp = await fetch(apiUrl, { signal: AbortSignal.timeout(15000) });
+    if (!resp.ok) return null;
+    
+    const data = await resp.json();
+    if (!data.code || data.code !== 200) return null;
+    
+    const tweet = data.tweet;
+    if (!tweet) return null;
+    
+    // 收集所有图片
+    const images: string[] = [];
+    if (tweet.media?.photos) {
+      tweet.media.photos.forEach((p: any) => {
+        if (p.url && !images.includes(p.url)) images.push(p.url);
+      });
+    }
+    if (tweet.media?.mosaic?.formats?.webp) {
+      // 如果有拼图，也加上
+      images.push(tweet.media.mosaic.formats.webp);
+    }
+    
+    // 作者
+    const author = tweet.author?.screen_name 
+      ? `@${tweet.author.screen_name}` 
+      : extractUsernameFromUrl(url, "X");
+    
+    // 日期
+    const date = tweet.created_timestamp 
+      ? new Date(tweet.created_timestamp * 1000).toISOString() 
+      : "";
+    
+    return {
+      url,
+      platform: "X",
+      title: tweet.text?.slice(0, 50) || "",
+      description: tweet.text || "",
+      images,
+      date,
+      author,
+    };
+  } catch {
+    return null;
+  }
+}
 /** Microlink API — 专门处理社交媒体（X/Twitter、Instagram 等） */
 async function fetchViaMicrolink(url: string): Promise<LinkPreview | null> {
   try {
@@ -303,6 +355,16 @@ export async function fetchLinkPreview(url: string): Promise<LinkPreview> {
       "暂不支持该平台自动抓取，请手动填写",
       "unsupported"
     );
+  }
+
+   // X/Twitter 优先用 fxtwitter API（能拿到所有图片）
+  if (platform === "X") {
+    const fxResult = await fetchViaFxTwitter(cleanUrl);
+    if (fxResult) {
+      cache[cacheKey] = { preview: fxResult, fetchedAt: Date.now() };
+      saveCache(cache);
+      return fxResult;
+    }
   }
 
   // 先尝试 CORS 代理抓取
