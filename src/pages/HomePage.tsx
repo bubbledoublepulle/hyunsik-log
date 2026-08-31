@@ -13,7 +13,8 @@ import {
   Shuffle,
   Clock,
   Eye,
-  ExternalLink,
+   ExternalLink,
+  Image as ImageIcon,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { loadMusicData, syncMusicData, type MusicItem } from "@/lib/musicData";
@@ -66,7 +67,92 @@ function getPlatformStyleLocal(platform: string) {
   };
   return styles[platform] || styles["其他"];
 }
+function MusicOnThisDayCard({ item, year }: { item: MusicItem; year: number }) {
+  return (
+    <>
+      <div className="h-2 bg-gradient-to-r from-sky-400 to-sky-600" />
+      <div className="p-4">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs px-2 py-0.5 rounded-md bg-sky-50 text-sky-600 font-medium border border-sky-100">音乐</span>
+          <span className="text-xs text-gray-400 font-medium">{year}年</span>
+        </div>
+        <h3 className="font-bold text-gray-900 text-sm mb-1 line-clamp-1">{item.title}</h3>
+        <p className="text-xs text-gray-500 mb-2">{item.album} · {item.artist}</p>
+        <div className="flex flex-wrap gap-1">
+          {item.roles.map((role) => (
+            <span key={role} className="text-[10px] px-1.5 py-0.5 rounded border border-sky-100 bg-sky-50 text-sky-600 font-medium">{role}</span>
+          ))}
+        </div>
+        {item.isSelfComposed && (
+          <div className="mt-2 flex items-center gap-1 text-[10px] text-sky-500">
+            <Sparkles className="w-3 h-3" />自作曲
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
 
+function VideoOnThisDayCard({ item, year }: { item: ShowItem; year: number }) {
+  const thumbUrl = getPreferredThumbnail(item);
+  return (
+    <>
+      <div className="relative aspect-[16/10] overflow-hidden">
+        {thumbUrl ? (
+          <img
+            src={getProxiedThumbnail(thumbUrl) || thumbUrl}
+            alt={item.title}
+            loading="lazy"
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div
+            className="w-full h-full"
+            style={{ background: `linear-gradient(135deg, ${item.thumbnailFrom}, ${item.thumbnailTo})` }}
+          />
+        )}
+        <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-black/30 backdrop-blur-sm text-white text-[10px] font-medium">
+          {item.platform}
+        </div>
+      </div>
+      <div className="p-4">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs px-2 py-0.5 rounded-md bg-violet-50 text-violet-600 font-medium border border-violet-100">视频</span>
+          <span className="text-xs text-gray-400 font-medium">{year}年</span>
+        </div>
+        <h3 className="font-bold text-gray-900 text-sm mb-1 line-clamp-2 min-h-[2.5rem]">{item.title}</h3>
+        <div className="flex flex-wrap gap-1 mt-2">
+          {item.members.map((member) => (
+            <span key={member} className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${memberColors[member]}`}>
+              {member}
+            </span>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function SocialOnThisDayCard({ item, year }: { item: SocialPost; year: number }) {
+  return (
+    <>
+      <div className="h-2 bg-gradient-to-r from-rose-400 to-sky-500" />
+      <div className="p-4">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs px-2 py-0.5 rounded-md bg-rose-50 text-rose-600 font-medium border border-rose-100">社交</span>
+          <span className="text-xs text-gray-400 font-medium">{year}年</span>
+        </div>
+        <h3 className="font-bold text-gray-900 text-sm mb-1">{item.author || "新动态"}</h3>
+        <p className="text-xs text-gray-500 line-clamp-3">{item.content.length > 60 ? item.content.slice(0, 60) + "..." : item.content}</p>
+        {item.images.length > 0 && (
+          <p className="text-[10px] text-gray-400 mt-2 flex items-center gap-1">
+            <ImageIcon className="w-3 h-3" />{item.images.length} 张图片
+          </p>
+        )}
+      </div>
+    </>
+  );
+}
 export default function HomePage() {
   const { isAdmin, setAuthModalOpen } = useAuth();
   const isAdminDomain = typeof window !== "undefined" && window.location.hostname === "siklog.work" || window.location.hostname === "www.siklog.work";
@@ -179,47 +265,30 @@ export default function HomePage() {
   const todayStr = `${todayMonth}月${todayDate}日`;
 
   const onThisDayItems = useMemo(() => {
-    const items: { year: number; type: string; title: string; desc: string; color: string; link: string }[] = [];
+    const items: (
+      | { type: "音乐"; year: number; link: string; data: MusicItem }
+      | { type: "视频"; year: number; link: string; data: ShowItem }
+      | { type: "社交"; year: number; link: string; data: SocialPost }
+    )[] = [];
 
     musicData.forEach((m) => {
       const d = new Date(m.releaseDate);
       if (d.getMonth() + 1 === todayMonth && d.getDate() === todayDate) {
-        items.push({
-          year: d.getFullYear(),
-          type: "音乐",
-          title: m.title,
-          desc: `${m.album} · ${m.artist}`,
-          color: "bg-sky-50 text-sky-600 border-sky-200",
-          link: `/music#${m.id}`,
-        });
+        items.push({ type: "音乐", year: d.getFullYear(), link: `/music#${m.id}`, data: m });
       }
     });
 
     showData.forEach((s) => {
       const d = new Date(s.date);
       if (d.getMonth() + 1 === todayMonth && d.getDate() === todayDate) {
-        items.push({
-          year: d.getFullYear(),
-          type: "视频",
-          title: s.title,
-          desc: `${s.platform} · ${s.members.slice(0, 3).join("、")}${s.members.length > 3 ? "等" : ""}`,
-          color: "bg-violet-50 text-violet-600 border-violet-200",
-          link: `/shows#${s.id}`,
-        });
+        items.push({ type: "视频", year: d.getFullYear(), link: `/shows#${s.id}`, data: s });
       }
     });
 
     socialData.forEach((p) => {
       const d = new Date(p.postDate);
       if (d.getMonth() + 1 === todayMonth && d.getDate() === todayDate) {
-        items.push({
-          year: d.getFullYear(),
-          type: "社交",
-          title: p.author || "新动态",
-          desc: p.content.length > 30 ? p.content.slice(0, 30) + "..." : p.content,
-          color: "bg-rose-50 text-rose-600 border-rose-200",
-          link: `/social#${p.id}`,
-        });
+        items.push({ type: "社交", year: d.getFullYear(), link: `/social#${p.id}`, data: p });
       }
     });
 
@@ -372,28 +441,19 @@ export default function HomePage() {
               <p className="text-sm text-gray-400">今天没有历史动态</p>
             </div>
           ) : (
-            <div className="space-y-2">
-                            {onThisDayItems.map((item, i) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {onThisDayItems.map((item, i) => (
                 <motion.div
                   key={`${item.year}-${item.type}-${i}`}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.06 }}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: Math.min(i * 0.05, 0.3) }}
                   onClick={() => navigate(item.link)}
-                  className="flex items-center gap-4 p-3 rounded-xl bg-gray-50/50 hover:bg-gray-50 transition-colors cursor-pointer group"
+                  className="group relative bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
                 >
-                  <div className="w-16 text-center shrink-0">
-                    <span className="text-xl font-bold text-gray-900">{item.year}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-xs px-2 py-0.5 rounded-md font-medium border ${item.color}`}>
-                        {item.type}
-                      </span>
-                      <span className="font-medium text-gray-900 text-sm truncate">{item.title}</span>
-                    </div>
-                    <p className="text-xs text-gray-500 truncate">{item.desc}</p>
-                  </div>
+                  {item.type === "音乐" && <MusicOnThisDayCard item={item.data} year={item.year} />}
+                  {item.type === "视频" && <VideoOnThisDayCard item={item.data} year={item.year} />}
+                  {item.type === "社交" && <SocialOnThisDayCard item={item.data} year={item.year} />}
                 </motion.div>
               ))}
             </div>
