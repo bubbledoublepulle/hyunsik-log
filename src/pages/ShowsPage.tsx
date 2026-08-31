@@ -118,8 +118,8 @@ export default function ShowsPage() {
   const autoRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [flashId, setFlashId] = useState<string | null>(null);
-  const [activeCardId, setActiveCardId] = useState<string | null>(null);
 
+  // ===== 时间轴状态 =====
   const [expandedYear, setExpandedYear] = useState<number | null>(null);
   const [expandedMonth, setExpandedMonth] = useState<{ year: number; month: number } | null>(null);
 
@@ -136,17 +136,6 @@ export default function ShowsPage() {
       const t2 = setTimeout(() => setFlashId(null), 1500);
       return () => { clearTimeout(t1); clearTimeout(t2); };
     }
-  }, []);
-
-  useEffect(() => {
-    const handleDocClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest("[data-show-card]")) {
-        setActiveCardId(null);
-      }
-    };
-    document.addEventListener("click", handleDocClick);
-    return () => document.removeEventListener("click", handleDocClick);
   }, []);
 
   const [formOpen, setFormOpen] = useState(false);
@@ -275,6 +264,7 @@ export default function ShowsPage() {
     }
   }, [showData]);
 
+  // ===== 时间轴数据计算（三层：年→月→日） =====
   const timelineData = useMemo((): TimelineNode[] => {
     const map = new Map<number, Map<number, Map<number, { count: number; firstItemId: string }>>>();
 
@@ -672,7 +662,7 @@ export default function ShowsPage() {
             <motion.aside
               initial={{ opacity: 0, x: -15 }}
               animate={{ opacity: 1, x: 0 }}
-              className="w-full lg:w-52 shrink-0"
+              className="w-full lg:w-56 shrink-0"
             >
               <div className="lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
                 <div className="flex items-center gap-2 mb-4">
@@ -683,7 +673,6 @@ export default function ShowsPage() {
                 <div className="space-y-1">
                   {timelineData.map((node) => (
                     <div key={node.year}>
-                      {/* 年份 */}
                       <button
                         onClick={() => handleToggleYear(node.year)}
                         className="w-full flex items-center gap-1.5 px-2 py-2 rounded-lg text-sm font-semibold transition-all text-gray-700 hover:bg-gray-50"
@@ -700,7 +689,6 @@ export default function ShowsPage() {
                         </span>
                       </button>
 
-                      {/* 月份列表 */}
                       {expandedYear === node.year && (
                         <div className="ml-2 mt-1 space-y-0.5 border-l-2 border-gray-100 pl-2">
                           {node.months.map((m) => (
@@ -721,7 +709,6 @@ export default function ShowsPage() {
                                 </span>
                               </button>
 
-                              {/* 日期列表 */}
                               {expandedMonth?.year === node.year && expandedMonth?.month === m.month && (
                                 <div className="ml-3 mt-0.5 space-y-0.5 border-l-2 border-gray-50 pl-2">
                                   {m.days.map((d) => (
@@ -768,8 +755,6 @@ export default function ShowsPage() {
                         onClick={() => {
                           if (batchEditMode) {
                             toggleBatchSelect(item.id);
-                          } else {
-                            setActiveCardId(item.id);
                           }
                         }}
                         data-show-card
@@ -802,8 +787,9 @@ export default function ShowsPage() {
                             </div>
                           )}
 
+                          {/* ===== 鼠标悬停显示平台链接 ===== */}
                           {item.links.length > 0 && !batchEditMode && (
-                            <div className={`absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity flex flex-col items-center justify-center gap-2 p-4 ${activeCardId === item.id ? "opacity-100" : "opacity-0"}`}>
+                            <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-4">
                               <span className="text-white/80 text-xs font-medium mb-1">选择平台观看</span>
                               {item.links.map((link, linkIdx) => {
                                 const style = getPlatformStyleLocal(link.platform);
@@ -813,6 +799,7 @@ export default function ShowsPage() {
                                     href={link.url}
                                     target="_blank"
                                     rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
                                     className={`flex items-center gap-2 px-4 py-2 rounded-xl ${style.bg} ${style.text} text-sm font-medium hover:scale-105 transition-transform shadow-lg`}
                                   >
                                     <ExternalLink className="w-3.5 h-3.5" />
