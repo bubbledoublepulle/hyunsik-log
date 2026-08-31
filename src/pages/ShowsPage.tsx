@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
   Plus,
@@ -100,12 +100,15 @@ interface TimelineNode {
   }[];
 }
 
+const BATCH_SIZE = 30;
+
 export default function ShowsPage() {
   const { isAdmin } = useAuth();
   const { data: rtShowData } = useRealtimeData("shows");
 
   const [showData, setShowData] = useState<ShowItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortBy>("date-desc");
   const [selectedMembers, setSelectedMembers] = useState<Set<ShowMember>>(new Set());
   const [viewMode, setViewMode] = useState<ViewMode>("archive");
@@ -119,9 +122,40 @@ export default function ShowsPage() {
 
   const [flashId, setFlashId] = useState<string | null>(null);
 
-  // ===== 时间轴状态 =====
   const [expandedYear, setExpandedYear] = useState<number | null>(null);
   const [expandedMonth, setExpandedMonth] = useState<{ year: number; month: number } | null>(null);
+
+  // ===== 防抖搜索 =====
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // ===== 无限滚动 =====
+  const [displayCount, setDisplayCount] = useState(BATCH_SIZE);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = loadMoreRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setDisplayCount((prev) => prev + BATCH_SIZE);
+        }
+      },
+      { rootMargin: "400px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // 筛选条件变化时重置显示数量
+  useEffect(() => {
+    setDisplayCount(BATCH_SIZE);
+  }, [debouncedSearchQuery, selectedMembers, sortBy]);
 
   useEffect(() => {
     const hash = window.location.hash.slice(1);
@@ -264,7 +298,6 @@ export default function ShowsPage() {
     }
   }, [showData]);
 
-  // ===== 时间轴数据计算（三层：年→月→日） =====
   const timelineData = useMemo((): TimelineNode[] => {
     const map = new Map<number, Map<number, Map<number, { count: number; firstItemId: string }>>>();
 
@@ -336,8 +369,8 @@ export default function ShowsPage() {
 
   const filteredData = useMemo(() => {
     let result = [...showData];
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+    if (debouncedSearchQuery.trim()) {
+      const q = debouncedSearchQuery.toLowerCase();
       result = result.filter(
         (item) =>
           item.title.toLowerCase().includes(q) ||
@@ -366,7 +399,13 @@ export default function ShowsPage() {
     }
     return result;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showData, searchQuery, selectedMembers, sortBy, metaVersion]);
+  }, [showData, debouncedSearchQuery, selectedMembers, sortBy, metaVersion]);
+
+  const visibleData = useMemo(() => {
+    return filteredData.slice(0, displayCount);
+  }, [filteredData, displayCount]);
+
+  const hasMore = displayCount < filteredData.length;
 
   const toggleMember = (member: ShowMember) => {
     const next = new Set(selectedMembers);
@@ -563,7 +602,6 @@ export default function ShowsPage() {
         </motion.div>
       ) : (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-          {/* 搜索 + 筛选栏 */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
             <div className="flex flex-col lg:flex-row gap-4">
               <div className="relative flex-1">
@@ -656,9 +694,7 @@ export default function ShowsPage() {
             </div>
           </div>
 
-          {/* ===== 左右两栏布局 ===== */}
           <div className="flex flex-col lg:flex-row gap-6">
-            {/* 左侧时间轴 */}
             <motion.aside
               initial={{ opacity: 0, x: -15 }}
               animate={{ opacity: 1, x: 0 }}
@@ -689,57 +725,76 @@ export default function ShowsPage() {
                         </span>
                       </button>
 
-                      {expandedYear === node.year && (
-                        <div className="ml-2 mt-1 space-y-0.5 border-l-2 border-gray-100 pl-2">
-                          {node.months.map((m) => (
-                            <div key={m.month}>
-                              <button
-                                onClick={() => handleToggleMonth(node.year, m.month)}
-                                className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs transition-all text-gray-500 hover:bg-gray-50"
-                              >
-                                {expandedMonth?.year === node.year && expandedMonth?.month === m.month ? (
-                                  <ChevronDown className="w-3 h-3 text-gray-400 shrink-0" />
-                                ) : (
-                                  <ChevronRight className="w-3 h-3 text-gray-400 shrink-0" />
-                                )}
-                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${expandedMonth?.year === node.year && expandedMonth?.month === m.month ? "bg-sky-400" : "bg-gray-200"}`} />
-                                <span className="whitespace-nowrap">{m.month}月</span>
-                                <span className="ml-auto text-[10px] text-gray-400 whitespace-nowrap">
-                                  {m.days.reduce((s, d) => s + d.count, 0)}
-                                </span>
-                              </button>
+                      <AnimatePresence initial={false}>
+                        {expandedYear === node.year && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2, ease: "easeInOut" }}
+                            className="overflow-hidden"
+                          >
+                            <div className="ml-2 mt-1 space-y-0.5 border-l-2 border-gray-100 pl-2">
+                              {node.months.map((m) => (
+                                <div key={m.month}>
+                                  <button
+                                    onClick={() => handleToggleMonth(node.year, m.month)}
+                                    className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs transition-all text-gray-500 hover:bg-gray-50"
+                                  >
+                                    {expandedMonth?.year === node.year && expandedMonth?.month === m.month ? (
+                                      <ChevronDown className="w-3 h-3 text-gray-400 shrink-0" />
+                                    ) : (
+                                      <ChevronRight className="w-3 h-3 text-gray-400 shrink-0" />
+                                    )}
+                                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${expandedMonth?.year === node.year && expandedMonth?.month === m.month ? "bg-sky-400" : "bg-gray-200"}`} />
+                                    <span className="whitespace-nowrap">{m.month}月</span>
+                                    <span className="ml-auto text-[10px] text-gray-400 whitespace-nowrap">
+                                      {m.days.reduce((s, d) => s + d.count, 0)}
+                                    </span>
+                                  </button>
 
-                              {expandedMonth?.year === node.year && expandedMonth?.month === m.month && (
-                                <div className="ml-3 mt-0.5 space-y-0.5 border-l-2 border-gray-50 pl-2">
-                                  {m.days.map((d) => (
-                                    <button
-                                      key={d.day}
-                                      onClick={() => handleScrollToDate(d.firstItemId)}
-                                      className="w-full flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] transition-all text-gray-400 hover:bg-sky-50 hover:text-sky-600"
-                                    >
-                                      <span className="w-1 h-1 rounded-full bg-gray-200 shrink-0" />
-                                      <span className="whitespace-nowrap">{d.day}日</span>
-                                      <span className="ml-auto text-[10px] text-gray-400 whitespace-nowrap">
-                                        ({d.count}条)
-                                      </span>
-                                    </button>
-                                  ))}
+                                  <AnimatePresence initial={false}>
+                                    {expandedMonth?.year === node.year && expandedMonth?.month === m.month && (
+                                      <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: "auto", opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.2, ease: "easeInOut" }}
+                                        className="overflow-hidden"
+                                      >
+                                        <div className="ml-3 mt-0.5 space-y-0.5 border-l-2 border-gray-50 pl-2">
+                                          {m.days.map((d) => (
+                                            <button
+                                              key={d.day}
+                                              onClick={() => handleScrollToDate(d.firstItemId)}
+                                              className="w-full flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] transition-all text-gray-400 hover:bg-sky-50 hover:text-sky-600"
+                                            >
+                                              <span className="w-1 h-1 rounded-full bg-gray-200 shrink-0" />
+                                              <span className="whitespace-nowrap">{d.day}日</span>
+                                              <span className="ml-auto text-[10px] text-gray-400 whitespace-nowrap">
+                                                ({d.count}条)
+                                              </span>
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </motion.div>
+                                    )}
+                                  </AnimatePresence>
                                 </div>
-                              )}
+                              ))}
                             </div>
-                          ))}
-                        </div>
-                      )}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
                   ))}
                 </div>
               </div>
             </motion.aside>
 
-            {/* 右侧卡片网格 */}
             <div className="flex-1 min-w-0">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {filteredData.map((item) => {
+                {visibleData.map((item) => {
                   const thumbUrl = getPreferredThumbnail(item);
                   const dataSource = getPreferredSource(item);
                   const displayDuration = getDisplayDuration(item);
@@ -787,7 +842,6 @@ export default function ShowsPage() {
                             </div>
                           )}
 
-                          {/* ===== 鼠标悬停显示平台链接 ===== */}
                           {item.links.length > 0 && !batchEditMode && (
                             <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-4">
                               <span className="text-white/80 text-xs font-medium mb-1">选择平台观看</span>
@@ -866,6 +920,24 @@ export default function ShowsPage() {
                 })}
               </div>
 
+              {/* 加载更多触发器 + 状态提示 */}
+              {filteredData.length > 0 && (
+                <div className="mt-6 text-center">
+                  {hasMore ? (
+                    <>
+                      <div ref={loadMoreRef} className="h-4" />
+                      <p className="text-xs text-gray-400">
+                        已显示 {visibleData.length} / {filteredData.length} 条 · 向下滚动加载更多
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-xs text-gray-400">
+                      已显示全部 {filteredData.length} 条档案
+                    </p>
+                  )}
+                </div>
+              )}
+
               {filteredData.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-16 text-center">
                   <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mb-3">
@@ -875,8 +947,6 @@ export default function ShowsPage() {
                   <p className="text-xs text-gray-400">尝试调整筛选条件或清除筛选</p>
                 </div>
               )}
-
-              <p className="text-xs text-gray-400 mt-4">共 {filteredData.length} 条档案{filteredData.length !== showData.length && ` (总计 ${showData.length} 条)`}</p>
             </div>
           </div>
         </motion.div>
