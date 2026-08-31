@@ -130,13 +130,13 @@ export default function BatchEditShowsModal({ open, onClose, items, onSave }: Ba
         }
       }
 
-      results[item.id] = translated || item.title;
+            results[item.id] = translated || item.title;
       if (i < items.length - 1) await new Promise((r) => setTimeout(r, 500));
+    }
 
     setTranslations(results);
     setIsTranslating(false);
   };
-
   const generatePreview = () => {
     const updated = items.map((item) => {
       let newItem = { ...item };
