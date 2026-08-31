@@ -397,7 +397,7 @@ export default function ShowFormModal({
       .filter((l) => l.url.trim())
       .map((l) => ({ platform: l.platform, url: l.url.trim() }));
 
-    onSave({
+        onSave({
       id: editingItem?.id || `s${Date.now()}`,
       title: title.trim(),
       platform,
@@ -406,7 +406,7 @@ export default function ShowFormModal({
       views: views.trim(),
       members: Array.from(members),
       status: "已补档",
-      thumbnailFrom: grad.from,
+      thumbnailFrom: thumbnailPreview || grad.from,
       thumbnailTo: grad.to,
       description: description.trim(),
       links: validLinks,
