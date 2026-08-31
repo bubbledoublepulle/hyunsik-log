@@ -108,6 +108,18 @@ export default function ShowsPage() {
     document.addEventListener("click", handleDocClick);
     return () => document.removeEventListener("click", handleDocClick);
   }, []);
+    const [activeCardId, setActiveCardId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleDocClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest("[data-show-card]")) {
+        setActiveCardId(null);
+      }
+    };
+    document.addEventListener("click", handleDocClick);
+    return () => document.removeEventListener("click", handleDocClick);
+  }, []);
   const [formOpen, setFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ShowItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ShowItem | null>(null);
@@ -201,17 +213,7 @@ export default function ShowsPage() {
     }
   }, [showData]);
 
-  useEffect(() => {
-    if (showData.length === 0 || metaRefreshing) return;
-    const needsRefresh = showData.some((item) => {
-      const meta = getCachedMetadata(item.id);
-      return isCacheStale(meta);
-    });
-    if (needsRefresh) {
-      refreshMetadata();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showData]);
+  
 
   const refreshMetadata = useCallback(async () => {
     if (refreshAbortRef.current) return;
