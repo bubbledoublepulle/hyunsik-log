@@ -203,7 +203,7 @@ function BatchEditSocialModal({ open, onClose, items, onSave }: {
                 },
                 {
                   role: "user",
-                  content: item.title,
+                  content: item.content,
                 },
               ],
               temperature: 0.1,
@@ -213,7 +213,7 @@ function BatchEditSocialModal({ open, onClose, items, onSave }: {
           if (data.choices?.[0]?.message?.content) {
             const raw = data.choices[0].message.content.trim();
             // 如果返回了内容，且和原文不一样，才算成功
-            if (raw && raw !== item.title) {
+            if (raw && raw !== item.content) {
               translated = raw;
             }
           }
@@ -226,7 +226,8 @@ function BatchEditSocialModal({ open, onClose, items, onSave }: {
         }
       }
 
-            results[item.id] = translated || item.title;
+            results[item.id] = translated || item.content;
+
       if (i < items.length - 1) await new Promise((r) => setTimeout(r, 500));
     }
 
