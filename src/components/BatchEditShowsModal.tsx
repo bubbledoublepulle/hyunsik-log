@@ -328,16 +328,18 @@ export default function BatchEditShowsModal({ open, onClose, items, onSave }: Ba
                           <th className="px-3 py-2 text-left font-medium text-gray-600">译文</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-50">
+                                            <tbody className="divide-y divide-gray-50">
                         {items.map((item) => (
                           <tr key={item.id}>
-                            <td className="px-3 py-2 text-gray-500 align-top">{item.title}</td>
+                            <td className="px-3 py-2 text-gray-500 align-top">
+                              <div className="max-w-[280px] whitespace-pre-wrap break-words text-sm">{item.title}</div>
+                            </td>
                             <td className="px-3 py-2 align-top">
-                              <input
-                                type="text"
+                              <textarea
                                 value={translations[item.id] || item.title}
                                 onChange={(e) => updateTranslation(item.id, e.target.value)}
-                                className="w-full px-2 py-1 rounded border border-gray-200 text-sm outline-none focus:border-violet-400"
+                                rows={Math.min(Math.max(Math.ceil(item.title.length / 25), 2), 6)}
+                                className="w-full px-2 py-1.5 rounded border border-gray-200 text-sm outline-none focus:border-violet-400 resize-y min-h-[50px]"
                               />
                             </td>
                           </tr>
