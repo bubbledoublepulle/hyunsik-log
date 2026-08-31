@@ -798,8 +798,9 @@ export default function HomePage() {
                       onError={(e) => {
                         const target = e.currentTarget as HTMLImageElement;
                         target.style.display = "none";
-                        if (target.parentElement) {
-                          target.parentElement.style.background = `linear-gradient(135deg, ${randomShow.thumbnailFrom}, ${randomShow.thumbnailTo})`;
+                                                if (target.parentElement) {
+                          const fromColor = /^https?:\/\//.test(randomShow.thumbnailFrom) ? "#42B4E6" : randomShow.thumbnailFrom;
+                          target.parentElement.style.background = `linear-gradient(135deg, ${fromColor}, ${randomShow.thumbnailTo})`;
                         }
                       }}
                     />
