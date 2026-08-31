@@ -120,7 +120,6 @@ export default function ShowsPage() {
   const [flashId, setFlashId] = useState<string | null>(null);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
 
-  // ===== 时间轴状态 =====
   const [expandedYear, setExpandedYear] = useState<number | null>(null);
   const [expandedMonth, setExpandedMonth] = useState<{ year: number; month: number } | null>(null);
 
@@ -276,7 +275,6 @@ export default function ShowsPage() {
     }
   }, [showData]);
 
-  // ===== 时间轴数据计算（三层：年→月→日） =====
   const timelineData = useMemo((): TimelineNode[] => {
     const map = new Map<number, Map<number, Map<number, { count: number; firstItemId: string }>>>();
 
@@ -674,11 +672,11 @@ export default function ShowsPage() {
             <motion.aside
               initial={{ opacity: 0, x: -15 }}
               animate={{ opacity: 1, x: 0 }}
-              className="w-full lg:w-60 shrink-0"
+              className="w-full lg:w-52 shrink-0"
             >
-              <div className="lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
+              <div className="lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
                 <div className="flex items-center gap-2 mb-4">
-                  <Calendar className="w-4 h-4 text-sky-500" />
+                  <Calendar className="w-4 h-4 text-sky-500 shrink-0" />
                   <h3 className="font-bold text-gray-900 text-sm">时间轴</h3>
                 </div>
 
@@ -688,53 +686,53 @@ export default function ShowsPage() {
                       {/* 年份 */}
                       <button
                         onClick={() => handleToggleYear(node.year)}
-                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-all text-gray-700 hover:bg-gray-50"
+                        className="w-full flex items-center gap-1.5 px-2 py-2 rounded-lg text-sm font-semibold transition-all text-gray-700 hover:bg-gray-50"
                       >
                         {expandedYear === node.year ? (
-                          <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                          <ChevronDown className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                         ) : (
-                          <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                          <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                         )}
-                        <span className={`w-2 h-2 rounded-full ${expandedYear === node.year ? "bg-sky-400" : "bg-gray-300"}`} />
-                        {node.year}年
-                        <span className="ml-auto text-xs text-gray-400 font-normal">
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${expandedYear === node.year ? "bg-sky-400" : "bg-gray-300"}`} />
+                        <span className="whitespace-nowrap">{node.year}年</span>
+                        <span className="ml-auto text-xs text-gray-400 font-normal whitespace-nowrap">
                           {node.months.reduce((sum, m) => sum + m.days.reduce((s, d) => s + d.count, 0), 0)}
                         </span>
                       </button>
 
                       {/* 月份列表 */}
                       {expandedYear === node.year && (
-                        <div className="ml-4 mt-1 space-y-0.5 border-l-2 border-gray-100 pl-3">
+                        <div className="ml-2 mt-1 space-y-0.5 border-l-2 border-gray-100 pl-2">
                           {node.months.map((m) => (
                             <div key={m.month}>
                               <button
                                 onClick={() => handleToggleMonth(node.year, m.month)}
-                                className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-all text-gray-500 hover:bg-gray-50"
+                                className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs transition-all text-gray-500 hover:bg-gray-50"
                               >
                                 {expandedMonth?.year === node.year && expandedMonth?.month === m.month ? (
-                                  <ChevronDown className="w-3 h-3 text-gray-400" />
+                                  <ChevronDown className="w-3 h-3 text-gray-400 shrink-0" />
                                 ) : (
-                                  <ChevronRight className="w-3 h-3 text-gray-400" />
+                                  <ChevronRight className="w-3 h-3 text-gray-400 shrink-0" />
                                 )}
-                                <span className={`w-1.5 h-1.5 rounded-full ${expandedMonth?.year === node.year && expandedMonth?.month === m.month ? "bg-sky-400" : "bg-gray-200"}`} />
-                                {m.month}月
-                                <span className="ml-auto text-[10px] text-gray-400">
+                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${expandedMonth?.year === node.year && expandedMonth?.month === m.month ? "bg-sky-400" : "bg-gray-200"}`} />
+                                <span className="whitespace-nowrap">{m.month}月</span>
+                                <span className="ml-auto text-[10px] text-gray-400 whitespace-nowrap">
                                   {m.days.reduce((s, d) => s + d.count, 0)}
                                 </span>
                               </button>
 
                               {/* 日期列表 */}
                               {expandedMonth?.year === node.year && expandedMonth?.month === m.month && (
-                                <div className="ml-4 mt-0.5 space-y-0.5 border-l-2 border-gray-50 pl-3">
+                                <div className="ml-3 mt-0.5 space-y-0.5 border-l-2 border-gray-50 pl-2">
                                   {m.days.map((d) => (
                                     <button
                                       key={d.day}
                                       onClick={() => handleScrollToDate(d.firstItemId)}
-                                      className="w-full flex items-center gap-2 px-3 py-1 rounded-lg text-[11px] transition-all text-gray-400 hover:bg-sky-50 hover:text-sky-600"
+                                      className="w-full flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] transition-all text-gray-400 hover:bg-sky-50 hover:text-sky-600"
                                     >
-                                      <span className="w-1 h-1 rounded-full bg-gray-200" />
-                                      {d.day}日
-                                      <span className="ml-auto text-[10px] text-gray-400">
+                                      <span className="w-1 h-1 rounded-full bg-gray-200 shrink-0" />
+                                      <span className="whitespace-nowrap">{d.day}日</span>
+                                      <span className="ml-auto text-[10px] text-gray-400 whitespace-nowrap">
                                         ({d.count}条)
                                       </span>
                                     </button>
@@ -753,7 +751,7 @@ export default function ShowsPage() {
 
             {/* 右侧卡片网格 */}
             <div className="flex-1 min-w-0">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {filteredData.map((item) => {
                   const thumbUrl = getPreferredThumbnail(item);
                   const dataSource = getPreferredSource(item);
@@ -869,10 +867,10 @@ export default function ShowsPage() {
                             ))}
                           </div>
 
-                          <div className="flex items-center gap-3 text-xs text-gray-400">
-                            <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{displayDate}</span>
-                            <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{displayDuration}</span>
-                            <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{displayViews}</span>
+                          <div className="flex items-center gap-2 text-xs text-gray-400 flex-wrap">
+                            <span className="flex items-center gap-1 whitespace-nowrap"><Calendar className="w-3 h-3 shrink-0" />{displayDate}</span>
+                            <span className="flex items-center gap-1 whitespace-nowrap"><Clock className="w-3 h-3 shrink-0" />{displayDuration}</span>
+                            <span className="flex items-center gap-1 whitespace-nowrap"><Eye className="w-3 h-3 shrink-0" />{displayViews}</span>
                           </div>
                         </div>
                       </div>
