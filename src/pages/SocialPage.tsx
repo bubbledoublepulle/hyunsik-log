@@ -226,8 +226,9 @@ function BatchEditSocialModal({ open, onClose, items, onSave }: {
         }
       }
 
-      results[item.id] = translated || item.title;
+            results[item.id] = translated || item.title;
       if (i < items.length - 1) await new Promise((r) => setTimeout(r, 500));
+    }
 
     setTranslations(results);
     setIsTranslating(false);
