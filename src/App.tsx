@@ -10,7 +10,7 @@ import SocialPage from "@/pages/SocialPage";
 
 function HomeRedirect() {
   return (
-    <div className="min-h-screen bg-[#F8F9FA] pt-25">
+    <div className="min-h-screen bg-[#F8F9FA] pt-32">
       <Navbar />
       <HomePage />
     </div>
