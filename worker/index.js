@@ -9,6 +9,13 @@ export default {
     }
     return env.ASSETS.fetch(request);
   },
+  async scheduled(event, env, ctx) {
+    // Cron Trigger: 每 2 小时批量刷新所有视频元数据
+    if (event.cron === "0 */2 * * *") {
+      console.log("[cron] Starting batch refresh at", new Date().toISOString());
+      await handleRefreshAllShows(env);
+    }
+  },
 };
 
 async function handleApi(url, request, env) {
@@ -23,6 +30,12 @@ async function handleApi(url, request, env) {
   }
   if (url.pathname === "/api/image-proxy") {
     return handleImageProxy(url);
+  }
+  if (url.pathname === "/api/refresh-show") {
+    return handleRefreshShow(url, env);
+  }
+  if (url.pathname === "/api/refresh-all-shows") {
+    return handleRefreshAllShows(env);
   }
   return Response.json({ error: "not found" }, { status: 404 });
 }
@@ -309,4 +322,192 @@ async function handleImageProxy(url) {
   } catch (e) {
     return new Response(`Error: ${e.message}`, { status: 500 });
   }
+}
+
+
+// ==================== 视频元数据批量刷新 ====================
+
+async function handleRefreshShow(url, env) {
+  const showId = url.searchParams.get("showId");
+  const videoId = url.searchParams.get("videoId");
+  const bvid = url.searchParams.get("bvid");
+
+  if (!showId) {
+    return Response.json({ error: "showId required" }, { status: 400 });
+  }
+
+  try {
+    // 从 Supabase 获取该视频
+    const show = await getShowFromSupabase(env, showId);
+    if (!show) {
+      return Response.json({ error: "show not found" }, { status: 404 });
+    }
+
+    // 抓取元数据
+    const metadata = await scrapeShowMetadata(show, videoId, bvid);
+    if (!metadata) {
+      return Response.json({ error: "failed to fetch metadata" }, { status: 502 });
+    }
+
+    // 更新 Supabase
+    await updateShowInSupabase(env, showId, metadata);
+
+    return jsonResponse({ success: true, metadata });
+  } catch (e) {
+    console.error("[refresh-show] error:", e);
+    return Response.json({ error: "internal error" }, { status: 500 });
+  }
+}
+
+async function handleRefreshAllShows(env) {
+  try {
+    // 从 Supabase 获取所有视频
+    const shows = await getAllShowsFromSupabase(env);
+
+    let updated = 0, failed = 0;
+    for (const show of shows) {
+      try {
+        const metadata = await scrapeShowMetadata(show);
+        if (metadata) {
+          await updateShowInSupabase(env, show.id, metadata);
+          updated++;
+        } else {
+          failed++;
+        }
+      } catch (e) {
+        console.error(`[refresh] Failed for ${show.id}:`, e);
+        failed++;
+      }
+    }
+
+    console.log(`[cron] Batch refresh complete: ${updated} updated, ${failed} failed`);
+    return { updated, failed };
+  } catch (e) {
+    console.error("[refresh-all] error:", e);
+    return { updated: 0, failed: 0 };
+  }
+}
+
+async function getShowFromSupabase(env, showId) {
+  const resp = await fetch(`${env.SUPABASE_URL}/rest/v1/shows?id=eq.${showId}&select=*`, {
+    headers: {
+      'apikey': env.SUPABASE_SERVICE_KEY,
+      'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    },
+  });
+  if (!resp.ok) return null;
+  const data = await resp.json();
+  return data[0] || null;
+}
+
+async function getAllShowsFromSupabase(env) {
+  const resp = await fetch(`${env.SUPABASE_URL}/rest/v1/shows?select=*`, {
+    headers: {
+      'apikey': env.SUPABASE_SERVICE_KEY,
+      'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    },
+  });
+  if (!resp.ok) return [];
+  return await resp.json();
+}
+
+async function scrapeShowMetadata(show, videoIdParam, bvidParam) {
+  // 从 links 中找到 YouTube/Bilibili 链接
+  const links = show.links || [];
+  const youtubeLink = links.find(l => /youtube\.com|youtu\.be/.test(l.url));
+  const bilibiliLink = links.find(l => /bilibili\.com|b23\.tv/.test(l.url));
+
+  let result = null;
+
+  if (youtubeLink || videoIdParam) {
+    const videoId = videoIdParam || extractYouTubeIdWorker(youtubeLink?.url || "");
+    if (videoId) {
+      result = await scrapeYouTubePage(videoId) || await fetchYouTubeInternalAPI(videoId);
+      if (result) {
+        return {
+          views: formatViewsWorker(result.viewCount),
+        };
+      }
+    }
+  }
+
+  if (bilibiliLink || bvidParam) {
+    const bvid = bvidParam || extractBilibiliIdWorker(bilibiliLink?.url || "");
+    if (bvid) {
+      // Bilibili 抓取逻辑（简化版）
+      const apiUrl = `https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`;
+      try {
+        const resp = await fetch(apiUrl, { signal: AbortSignal.timeout(10000) });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data?.code === 0 && data?.data) {
+            const d = data.data;
+            const durationSec = d.duration || 0;
+            const viewCount = d.stat?.view || 0;
+            const publishedAt = d.pubdate ? new Date(d.pubdate * 1000).toISOString().split("T")[0] : "";
+            return {
+              views: formatViewsWorker(viewCount),
+            };
+          }
+        }
+      } catch {
+        // Bilibili 抓取失败
+      }
+    }
+  }
+
+  return null;
+}
+
+async function updateShowInSupabase(env, showId, metadata) {
+  // 只更新播放量，不更新其他字段
+  if (!metadata.views) return false;
+
+  const resp = await fetch(`${env.SUPABASE_URL}/rest/v1/shows?id=eq.${showId}`, {
+    method: 'PATCH',
+    headers: {
+      'apikey': env.SUPABASE_SERVICE_KEY,
+      'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=minimal',
+    },
+    body: JSON.stringify({ views: metadata.views }),
+  });
+  return resp.ok;
+}
+
+function extractYouTubeIdWorker(url) {
+  if (!url) return null;
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/|youtube\.com\/live\/)([a-zA-Z0-9_-]{11})/,
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match && match[1]) return match[1];
+  }
+  return null;
+}
+
+function extractBilibiliIdWorker(url) {
+  if (!url) return null;
+  const fullMatch = url.match(/bilibili\.com\/video\/(BV[a-zA-Z0-9]+)/);
+  if (fullMatch) return fullMatch[1];
+  const b23Match = url.match(/b23\.tv\/(BV[a-zA-Z0-9]+)/i);
+  if (b23Match) return b23Match[1];
+  return null;
+}
+
+function formatViewsWorker(views) {
+  if (views >= 100000000) return `${(views / 100000000).toFixed(1).replace(/\.0$/, "")}亿`;
+  if (views >= 10000) return `${(views / 10000).toFixed(1).replace(/\.0$/, "")}万`;
+  return views.toLocaleString();
+}
+
+function formatDurationWorker(seconds) {
+  if (!seconds || seconds <= 0) return "";
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `${m}:${String(s).padStart(2, "0")}`;
 }
