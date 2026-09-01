@@ -326,37 +326,50 @@ export default function ShowsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 初始加载完成后标记，不再自动监听 showData 变化保存
-  // 保存统一由 handleSave / handleSaveBatch / handleDelete / handleBatchEditSave 手动触发
   useEffect(() => {
-    const timer = setTimeout(() => {
-      initialLoadRef.current = false;
-    }, 100);
-    return () => clearTimeout(timer);
-  }, []);
+    if (showData.length > 0) {
+      if (initialLoadRef.current) {
+        initialLoadRef.current = false;
+        return;
+      }
+      userModifiedRef.current = true;
+      saveShowData(showData).then(({ error }) => {
+        if (error) {
+          toast.error("云端同步失败", { description: error });
+        }
+      }).catch(() => {});
+    }
+  }, [showData]);
 
   const refreshMetadata = useCallback(async () => {
     if (refreshAbortRef.current) return;
     refreshAbortRef.current = true;
     setMetaRefreshing(true);
-    toast.info("正在抓取视频元数据...", { description: "封面、时长、播放量更新中" });
+    toast.info("正在批量刷新播放量...", { description: "调用服务端 Worker 处理" });
     try {
-      for (const item of showData) {
-        await fetchShowMetadata(item, true);
+      const resp = await fetch("/api/refresh-all-shows", {
+        method: "POST",
+        signal: AbortSignal.timeout(300000), // 5分钟超时
+      });
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}`);
       }
-      setMetaVersion((v) => v + 1);
-      const updated = applyCachedMetadataToItems(showData);
-      initialLoadRef.current = true;
-      setShowData(updated);
+      const data = await resp.json();
+
+      // 刷新成功后重新同步数据
+      const synced = await syncShowData();
+      setShowData(synced);
+
       const now = new Date().toLocaleString("zh-CN");
       setLastSync(now);
       localStorage.setItem("hsik_meta_last_sync", now);
-      toast.success("元数据更新完成", {
-        description: "封面、时长、播放量已同步至最新",
+
+      toast.success("播放量更新完成", {
+        description: `已更新 ${data.updated || 0} 条视频，${data.failed || 0} 条失败`,
       });
-    } catch {
-      toast.error("部分元数据抓取失败", {
-        description: "网络异常或平台限制，已使用缓存数据",
+    } catch (e) {
+      toast.error("播放量刷新失败", {
+        description: String(e),
       });
     } finally {
       setMetaRefreshing(false);
@@ -491,30 +504,22 @@ export default function ShowsPage() {
     setFormOpen(false);
     setEditingItem(null);
   };
-  const handleSaveBatch = async (items: ShowItem[]) => {
+  const handleSaveBatch = (items: ShowItem[]) => {
     userModifiedRef.current = true;
     const newData = [...showData, ...items];
     setShowData(newData);
-    const { error } = await saveShowData(newData);
-    if (error) {
-      toast.error("云端同步失败", { description: error });
-    } else {
-      toast.success(`已批量添加 ${items.length} 条综艺`, { description: "数据已同步到云端" });
-    }
+    saveShowData(newData);
+    toast.success(`已批量添加 ${items.length} 条综艺`, { description: "数据正在同步到云端..." });
     setFormOpen(false);
     setEditingItem(null);
   };
 
-  const handleDelete = async (item: ShowItem) => {
+  const handleDelete = (item: ShowItem) => {
     userModifiedRef.current = true;
     const newData = showData.filter((s) => s.id !== item.id);
     setShowData(newData);
-    const { error } = await saveShowData(newData);
-    if (error) {
-      toast.error("删除同步失败", { description: error });
-    } else {
-      toast.success("已删除", { description: item.title });
-    }
+    saveShowData(newData);
+    toast.success("已删除", { description: item.title });
   };
 
   const toggleBatchSelect = (id: string) => {
@@ -524,19 +529,12 @@ export default function ShowsPage() {
     setBatchSelectedIds(next);
   };
 
-  const handleBatchEditSave = async (updatedItems: ShowItem[]) => {
-    userModifiedRef.current = true;
-    const newData = showData.map((item) => {
+  const handleBatchEditSave = (updatedItems: ShowItem[]) => {
+    setShowData((prev) => prev.map((item) => {
       const updated = updatedItems.find((u) => u.id === item.id);
       return updated || item;
-    });
-    setShowData(newData);
-    const { error } = await saveShowData(newData);
-    if (error) {
-      toast.error("批量更新同步失败", { description: error });
-    } else {
-      toast.success(`已批量更新 ${updatedItems.length} 条档案`);
-    }
+    }));
+    toast.success(`已批量更新 ${updatedItems.length} 条档案`);
     setBatchEditOpen(false);
     setBatchSelectedIds(new Set());
     setBatchEditMode(false);
