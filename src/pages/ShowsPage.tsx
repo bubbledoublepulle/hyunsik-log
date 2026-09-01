@@ -338,7 +338,7 @@ export default function ShowsPage() {
     }
   }, [showData]);
 
-  const refreshMetadata = useCallback(async () => {
+    const refreshMetadata = useCallback(async () => {
     if (refreshAbortRef.current) return;
     refreshAbortRef.current = true;
     setMetaRefreshing(true);
@@ -371,7 +371,7 @@ export default function ShowsPage() {
       localStorage.setItem("hsik_meta_last_sync", now);
 
       toast.success("播放量更新完成", {
-        description: `已更新 ${data.updated || 0} 条视频，${data.failed || 0} 条失败`,
+        description: `已更新 ${data.updated || 0} 条，失败 ${data.failed || 0} 条，跳过 ${data.skipped || 0} 条`,
       });
     } catch (e) {
       toast.error("播放量刷新失败", {
