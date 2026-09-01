@@ -344,16 +344,25 @@ export default function ShowsPage() {
     setMetaRefreshing(true);
     toast.info("正在批量刷新播放量...", { description: "调用服务端 Worker 处理" });
     try {
+      // 清除本地缓存，确保显示最新数据
+      try {
+        localStorage.removeItem("hsik_show_metadata_cache");
+        localStorage.removeItem("hsik_video_fetch_cache");
+      } catch {}
+
       const resp = await fetch("/api/refresh-all-shows", {
         method: "POST",
-        signal: AbortSignal.timeout(300000), // 5分钟超时
+        signal: AbortSignal.timeout(300000),
       });
       if (!resp.ok) {
         throw new Error(`HTTP ${resp.status}`);
       }
       const data = await resp.json();
 
-      // 刷新成功后重新同步数据
+      // 等待 Supabase 同步完成（写入有延迟）
+      await new Promise(r => setTimeout(r, 3000));
+
+      // 重新同步数据
       const synced = await syncShowData();
       setShowData(synced);
 
