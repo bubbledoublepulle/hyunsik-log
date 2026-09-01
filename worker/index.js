@@ -364,13 +364,19 @@ async function handleRefreshAllShows(env, ctx) {
     // 从 Supabase 获取所有视频
     const shows = await getAllShowsFromSupabase(env);
 
-    // 限制每次最多刷新 50 个视频（避免 Worker 超时）
-    const BATCH_SIZE = 50;
+    // 限制每次最多刷新 20 个视频，避免 YouTube 限流
+    const BATCH_SIZE = 20;
+    const DELAY_MS = 2000; // 2 秒间隔
     const showsToRefresh = shows.slice(0, BATCH_SIZE);
 
     let updated = 0, failed = 0;
     for (const show of showsToRefresh) {
       try {
+        // 等待 2 秒，避免 YouTube 限流
+        if (updated > 0 || failed > 0) {
+          await new Promise(r => setTimeout(r, DELAY_MS));
+        }
+
         const metadata = await scrapeShowMetadata(show);
         if (metadata) {
           await updateShowInSupabase(env, show.id, metadata);
