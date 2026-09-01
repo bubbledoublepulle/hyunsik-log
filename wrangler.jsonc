@@ -17,5 +17,8 @@
       "zone_name": "siklog.work",
       "custom_domain": true
     }
-  ]
+  ],
+  "triggers": {
+    "crons": ["0 */2 * * *"]
+  }
 }
