@@ -1,4 +1,5 @@
 // functions/api/refresh-show.js
+// 刷新单个视频播放量
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -13,7 +14,6 @@ export async function onRequestPost(context) {
   }
 
   try {
-    // 获取 show
     const resp = await fetch(env.SUPABASE_URL + '/rest/v1/shows?id=eq.' + showId + '&select=*', {
       headers: {
         'apikey': env.SUPABASE_SERVICE_KEY,
