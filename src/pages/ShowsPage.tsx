@@ -27,7 +27,6 @@ import {
   saveShowData,
   syncShowData,
   fromDbRow,
-  applyCachedMetadataToItems,
   memberColors,
   getPreferredThumbnail,
   getPreferredSource,
@@ -36,7 +35,6 @@ import {
   getDisplayDate,
   getCachedMetadata,
   isCacheStale,
-  fetchShowMetadata,
   type ShowItem,
   type ShowMember,
 } from "@/lib/showData";
@@ -114,7 +112,6 @@ export default function ShowsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("archive");
 
   const [metaRefreshing, setMetaRefreshing] = useState(false);
-  const [metaVersion, setMetaVersion] = useState(0);
   const [lastSync, setLastSync] = useState<string>("");
   const refreshAbortRef = useRef(false);
   const AUTO_REFRESH_INTERVAL = 24 * 60 * 60 * 1000;
@@ -173,7 +170,7 @@ export default function ShowsPage() {
     }
     return result;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showData, debouncedSearchQuery, selectedMembers, sortBy, metaVersion]);
+  }, [showData, debouncedSearchQuery, selectedMembers, sortBy]);
 
   const visibleData = useMemo(() => {
     return filteredData.slice(0, displayCount);
@@ -420,7 +417,7 @@ export default function ShowsPage() {
               })),
           })),
       }));
-  }, [showData, metaVersion]);
+  }, [showData]);
 
   const handleToggleYear = (year: number) => {
     if (expandedYear === year) {
@@ -553,7 +550,7 @@ export default function ShowsPage() {
     });
     return { total, totalViews, platformCount, memberStats };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showData, metaVersion]);
+  }, [showData]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
