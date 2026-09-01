@@ -343,29 +343,48 @@ const refreshMetadata = useCallback(async () => {
   refreshAbortRef.current = true;
   setMetaRefreshing(true);
   
+  let totalUpdated = 0;
+  let totalFailed = 0;
+  let totalSkipped = 0;
+  let offset = 0;
+  const limit = 50;
+  
   try {
+    // 清除本地缓存
     try {
       localStorage.removeItem("hsik_show_metadata_cache");
       localStorage.removeItem("hsik_video_fetch_cache");
     } catch {}
 
-    const resp = await fetch("/api/refresh-all-shows", {
-      method: "POST",
-      signal: AbortSignal.timeout(30000),
-    });
-    
-    if (!resp.ok) {
-      throw new Error(`HTTP ${resp.status}`);
-    }
-    
-    const data = await resp.json();
-    
-    toast.success("刷新任务已提交", {
-      description: `共 ${data.total} 条视频，分 ${data.batches} 批处理，后台正在刷新...`,
-    });
+    // 循环分批刷新
+    while (true) {
+      const resp = await fetch(`/api/refresh-all-shows?offset=${offset}&limit=${limit}`, {
+        method: "POST",
+        signal: AbortSignal.timeout(30000),
+      });
+      
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}`);
+      }
+      
+      const data = await resp.json();
+      
+      totalUpdated += data.updated || 0;
+      totalFailed += data.failed || 0;
+      totalSkipped += data.skipped || 0;
 
-    await new Promise(r => setTimeout(r, 30000));
-    
+      // 如果没有更多数据，结束循环
+      if (!data.hasMore) {
+        break;
+      }
+      
+      offset = data.nextOffset;
+    }
+
+    // 等待 Supabase 同步完成
+    await new Promise(r => setTimeout(r, 2000));
+
+    // 重新同步数据
     const synced = await syncShowData();
     setShowData(synced);
 
@@ -373,57 +392,21 @@ const refreshMetadata = useCallback(async () => {
     setLastSync(now);
     localStorage.setItem("hsik_meta_last_sync", now);
 
+    toast.success("播放量更新完成", {
+      description: `已更新 ${totalUpdated} 条，失败 ${totalFailed} 条，跳过 ${totalSkipped} 条`,
+    });
   } catch (e) {
-    toast.error("提交刷新任务失败", {
+    toast.error("播放量刷新失败", {
       description: String(e),
     });
   } finally {
     setMetaRefreshing(false);
     refreshAbortRef.current = false;
+    const now = new Date().toLocaleString("zh-CN");
+    setLastSync(now);
+    localStorage.setItem("hsik_meta_last_sync", now);
   }
 }, [showData]);
-
-  const timelineData = useMemo((): TimelineNode[] => {
-    const map = new Map<number, Map<number, Map<number, { count: number; firstItemId: string }>>>();
-
-    showData.forEach((item) => {
-      const displayDate = getDisplayDate(item);
-      const d = new Date(displayDate);
-      if (isNaN(d.getTime())) return;
-      const year = d.getFullYear();
-      const month = d.getMonth() + 1;
-      const day = d.getDate();
-
-      if (!map.has(year)) map.set(year, new Map());
-      const yearMap = map.get(year)!;
-      if (!yearMap.has(month)) yearMap.set(month, new Map());
-      const monthMap = yearMap.get(month)!;
-      const existing = monthMap.get(day);
-      if (existing) {
-        existing.count += 1;
-      } else {
-        monthMap.set(day, { count: 1, firstItemId: item.id });
-      }
-    });
-
-    return Array.from(map.entries())
-      .sort((a, b) => b[0] - a[0])
-      .map(([year, monthsMap]) => ({
-        year,
-        months: Array.from(monthsMap.entries())
-          .sort((a, b) => b[0] - a[0])
-          .map(([month, daysMap]) => ({
-            month,
-            days: Array.from(daysMap.entries())
-              .sort((a, b) => b[0] - a[0])
-              .map(([day, info]) => ({
-                day,
-                count: info.count,
-                firstItemId: info.firstItemId,
-              })),
-          })),
-      }));
-  }, [showData]);
 
   const handleToggleYear = (year: number) => {
     if (expandedYear === year) {
