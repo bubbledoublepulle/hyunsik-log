@@ -26,7 +26,7 @@ async function handleApi(url, request, env) {
     return handleVerify(request, env);
   }
   if (url.pathname === "/api/youtube-meta") {
-    return handleYouTubeMeta(url);
+    return handleYouTubeMeta(url, env);
   }
   if (url.pathname === "/api/image-proxy") {
     return handleImageProxy(url);
@@ -149,23 +149,64 @@ function jsonResponse(data, cacheable = true) {
   return Response.json(data, { headers });
 }
 
-async function handleYouTubeMeta(url) {
+async function handleYouTubeMeta(url, env) {
   const videoId = url.searchParams.get("videoId");
   if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
     return Response.json({ error: "invalid videoId" }, { status: 400 });
   }
-  try {
-    const result = await scrapeYouTubePage(videoId);
-    if (result) {
-      return jsonResponse(result);
+
+  // 优先使用 YouTube Data API v3
+  if (env.YOUTUBE_API_KEY) {
+    try {
+      const apiUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${videoId}&key=${env.YOUTUBE_API_KEY}`;
+      const resp = await fetch(apiUrl);
+      if (resp.ok) {
+        const data = await resp.json();
+        const item = data.items?.[0];
+        if (item) {
+          const snippet = item.snippet;
+          const stats = item.statistics;
+          const content = item.contentDetails;
+          let lengthSeconds = 0;
+          if (content?.duration) {
+            const match = content.duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+            if (match) {
+              const h = parseInt(match[1] || "0", 10);
+              const m = parseInt(match[2] || "0", 10);
+              const s = parseInt(match[3] || "0", 10);
+              lengthSeconds = h * 3600 + m * 60 + s;
+            }
+          }
+          return jsonResponse({
+            title: snippet?.title || "",
+            viewCount: parseInt(stats?.viewCount || "0", 10),
+            lengthSeconds: lengthSeconds,
+            publishedAt: snippet?.publishedAt || "",
+            thumbnail: snippet?.thumbnails?.maxres?.url || snippet?.thumbnails?.high?.url || snippet?.thumbnails?.medium?.url || snippet?.thumbnails?.default?.url || "",
+          });
+        }
+      }
+    } catch (e) {
+      console.log("[youtube-meta] Data API failed:", e.message);
     }
-  } catch {}
+  }
+
+  // 降级：YouTube 内部 API
   try {
     const result = await fetchYouTubeInternalAPI(videoId);
-    if (result) {
+    if (result && result.viewCount > 0) {
       return jsonResponse(result);
     }
   } catch {}
+
+  // 降级：页面爬取
+  try {
+    const result = await scrapeYouTubePage(videoId);
+    if (result && result.viewCount > 0) {
+      return jsonResponse(result);
+    }
+  } catch {}
+
   return Response.json(
     { error: "Failed to fetch video metadata" },
     { status: 502 }
@@ -352,16 +393,17 @@ async function handleRefreshShow(url, env) {
     }
 
     console.log("[handleRefreshShow] scraping metadata...");
-    const metadata = await scrapeShowMetadata(show, videoId, bvid);
-    console.log("[handleRefreshShow] metadata:", metadata ? "found" : "null");
+    const metadata = await scrapeShowMetadata(show, videoId, bvid, env);
+    console.log("[handleRefreshShow] metadata:", metadata ? JSON.stringify(metadata) : "null");
     if (!metadata) {
-      return Response.json({ error: "failed to fetch metadata" }, { status: 502 });
+      // 抓取失败，保留原值，返回成功但不更新
+      return jsonResponse({ success: true, updated: false, reason: "fetch failed, preserving original value" }, false);
     }
 
     console.log("[handleRefreshShow] updating Supabase...");
     await updateShowInSupabase(env, showId, metadata);
 
-    return jsonResponse({ success: true, metadata }, false);
+    return jsonResponse({ success: true, updated: true, metadata }, false);
   } catch (e) {
     console.error("[refresh-show] error:", e);
     return Response.json({ error: "internal error" }, { status: 500 });
@@ -372,45 +414,43 @@ async function handleRefreshAllShows(env, ctx) {
   try {
     const shows = await getAllShowsFromSupabase(env);
     
-    const BATCH_SIZE = 20;
-    const DELAY_MS = 2000;
+    const DELAY_MS = 2000; // 串行间隔 2 秒
+    let updated = 0, failed = 0, skipped = 0;
     
-    let updated = 0, failed = 0;
-    
-    for (let i = 0; i < shows.length; i += BATCH_SIZE) {
-      const batch = shows.slice(i, i + BATCH_SIZE);
-      
-      const results = await Promise.all(
-        batch.map(async (show) => {
-          try {
-            const metadata = await scrapeShowMetadata(show);
-            if (metadata) {
-              await updateShowInSupabase(env, show.id, metadata);
-              return { success: true };
-            }
-            return { success: false };
-          } catch (e) {
-            console.error(`[refresh] Failed for ${show.id}:`, e);
-            return { success: false };
-          }
-        })
-      );
-      
-      results.forEach(r => {
-        if (r.success) updated++;
-        else failed++;
-      });
-      
-      if (i + BATCH_SIZE < shows.length) {
-        await new Promise(r => setTimeout(r, DELAY_MS));
+    for (const show of shows) {
+      try {
+        // 串行处理：等待间隔
+        if (updated + failed + skipped > 0) {
+          await new Promise(r => setTimeout(r, DELAY_MS));
+        }
+
+        const metadata = await scrapeShowMetadata(show, null, null, env);
+        if (!metadata) {
+          // 抓取失败，保留原值，不计入失败
+          console.log(`[refresh] Skipped ${show.id}: fetch failed, preserving original value`);
+          skipped++;
+          continue;
+        }
+
+        const updateOk = await updateShowInSupabase(env, show.id, metadata);
+        if (updateOk) {
+          console.log(`[refresh] Updated ${show.id}: views=${metadata.views}`);
+          updated++;
+        } else {
+          console.log(`[refresh] Failed to update ${show.id} in Supabase`);
+          failed++;
+        }
+      } catch (e) {
+        console.error(`[refresh] Error for ${show.id}:`, e);
+        failed++;
       }
     }
 
-    console.log(`[refresh] Complete: ${updated} updated, ${failed} failed, total: ${shows.length}`);
-    return { updated, failed, total: shows.length };
+    console.log(`[refresh] Complete: ${updated} updated, ${failed} failed, ${skipped} skipped, total: ${shows.length}`);
+    return { updated, failed, skipped, total: shows.length };
   } catch (e) {
     console.error("[refresh-all] error:", e);
-    return { updated: 0, failed: 0, total: 0 };
+    return { updated: 0, failed: 0, skipped: 0, total: 0 };
   }
 }
 
@@ -437,26 +477,72 @@ async function getAllShowsFromSupabase(env) {
   return await resp.json();
 }
 
-async function scrapeShowMetadata(show, videoIdParam, bvidParam) {
+async function scrapeShowMetadata(show, videoIdParam, bvidParam, env) {
+  // 只刷新有 YouTube 链接的视频，不碰 Bilibili
   const links = show.links || [];
   const youtubeLink = links.find(l => /youtube\.com|youtu\.be/.test(l.url));
 
   if (youtubeLink || videoIdParam) {
     const videoId = videoIdParam || extractYouTubeIdWorker(youtubeLink?.url || "");
     if (videoId) {
-      const result = await scrapeYouTubePage(videoId) || await fetchYouTubeInternalAPI(videoId);
-      if (result) {
-        return {
-          views: formatViewsWorker(result.viewCount),
-        };
+      // 优先使用 YouTube Data API v3
+      if (env.YOUTUBE_API_KEY) {
+        try {
+          const apiUrl = `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${videoId}&key=${env.YOUTUBE_API_KEY}`;
+          const resp = await fetch(apiUrl);
+          if (resp.ok) {
+            const data = await resp.json();
+            const item = data.items?.[0];
+            if (item?.statistics?.viewCount) {
+              const viewCount = parseInt(item.statistics.viewCount, 10);
+              console.log(`[scrape] Data API success for ${videoId}: ${viewCount} views`);
+              return {
+                views: formatViewsWorker(viewCount),
+              };
+            }
+          }
+          console.log(`[scrape] Data API no data for ${videoId}, trying fallback...`);
+        } catch (e) {
+          console.log(`[scrape] Data API failed for ${videoId}:`, e.message);
+        }
       }
+
+      // 降级：YouTube 内部 API
+      try {
+        const result = await fetchYouTubeInternalAPI(videoId);
+        if (result && result.viewCount > 0) {
+          console.log(`[scrape] Internal API success for ${videoId}: ${result.viewCount} views`);
+          return {
+            views: formatViewsWorker(result.viewCount),
+          };
+        }
+      } catch (e) {
+        console.log(`[scrape] Internal API failed for ${videoId}:`, e.message);
+      }
+
+      // 降级：页面爬取
+      try {
+        const result = await scrapeYouTubePage(videoId);
+        if (result && result.viewCount > 0) {
+          console.log(`[scrape] Page scrape success for ${videoId}: ${result.viewCount} views`);
+          return {
+            views: formatViewsWorker(result.viewCount),
+          };
+        }
+      } catch (e) {
+        console.log(`[scrape] Page scrape failed for ${videoId}:`, e.message);
+      }
+
+      console.log(`[scrape] All methods failed for ${videoId}, returning null (preserving original)`);
     }
   }
 
+  // 跳过 Bilibili，返回 null（保留原值）
   return null;
 }
 
 async function updateShowInSupabase(env, showId, metadata) {
+  // 只更新播放量，不更新其他字段
   if (!metadata.views) return false;
 
   const resp = await fetch(`${env.SUPABASE_URL}/rest/v1/shows?id=eq.${showId}`, {
