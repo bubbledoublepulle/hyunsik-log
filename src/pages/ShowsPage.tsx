@@ -326,20 +326,14 @@ export default function ShowsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 初始加载完成后标记，不再自动监听 showData 变化保存
+  // 保存统一由 handleSave / handleSaveBatch / handleDelete / handleBatchEditSave 手动触发
   useEffect(() => {
-    if (showData.length > 0) {
-      if (initialLoadRef.current) {
-        initialLoadRef.current = false;
-        return;
-      }
-      userModifiedRef.current = true;
-      saveShowData(showData).then(({ error }) => {
-        if (error) {
-          toast.error("云端同步失败", { description: error });
-        }
-      }).catch(() => {});
-    }
-  }, [showData]);
+    const timer = setTimeout(() => {
+      initialLoadRef.current = false;
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   const refreshMetadata = useCallback(async () => {
     if (refreshAbortRef.current) return;
@@ -497,22 +491,30 @@ export default function ShowsPage() {
     setFormOpen(false);
     setEditingItem(null);
   };
-  const handleSaveBatch = (items: ShowItem[]) => {
+  const handleSaveBatch = async (items: ShowItem[]) => {
     userModifiedRef.current = true;
     const newData = [...showData, ...items];
     setShowData(newData);
-    saveShowData(newData);
-    toast.success(`已批量添加 ${items.length} 条综艺`, { description: "数据正在同步到云端..." });
+    const { error } = await saveShowData(newData);
+    if (error) {
+      toast.error("云端同步失败", { description: error });
+    } else {
+      toast.success(`已批量添加 ${items.length} 条综艺`, { description: "数据已同步到云端" });
+    }
     setFormOpen(false);
     setEditingItem(null);
   };
 
-  const handleDelete = (item: ShowItem) => {
+  const handleDelete = async (item: ShowItem) => {
     userModifiedRef.current = true;
     const newData = showData.filter((s) => s.id !== item.id);
     setShowData(newData);
-    saveShowData(newData);
-    toast.success("已删除", { description: item.title });
+    const { error } = await saveShowData(newData);
+    if (error) {
+      toast.error("删除同步失败", { description: error });
+    } else {
+      toast.success("已删除", { description: item.title });
+    }
   };
 
   const toggleBatchSelect = (id: string) => {
@@ -522,12 +524,19 @@ export default function ShowsPage() {
     setBatchSelectedIds(next);
   };
 
-  const handleBatchEditSave = (updatedItems: ShowItem[]) => {
-    setShowData((prev) => prev.map((item) => {
+  const handleBatchEditSave = async (updatedItems: ShowItem[]) => {
+    userModifiedRef.current = true;
+    const newData = showData.map((item) => {
       const updated = updatedItems.find((u) => u.id === item.id);
       return updated || item;
-    }));
-    toast.success(`已批量更新 ${updatedItems.length} 条档案`);
+    });
+    setShowData(newData);
+    const { error } = await saveShowData(newData);
+    if (error) {
+      toast.error("批量更新同步失败", { description: error });
+    } else {
+      toast.success(`已批量更新 ${updatedItems.length} 条档案`);
+    }
     setBatchEditOpen(false);
     setBatchSelectedIds(new Set());
     setBatchEditMode(false);
