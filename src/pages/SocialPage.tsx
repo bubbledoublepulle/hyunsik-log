@@ -738,20 +738,14 @@ export default function SocialPage() {
     }).catch(() => {});
   }, []);
 
+  // 初始加载完成后标记，不再自动监听 socialData 变化保存
+  // 保存统一由 handleSave / handleDelete / handleBatchEditSave / handleBatchImport / togglePin 手动触发
   useEffect(() => {
-    if (socialData.length > 0) {
-      if (initialLoadRef.current) {
-        initialLoadRef.current = false;
-        return;
-      }
-      userModifiedRef.current = true;
-      saveSocialData(socialData).then(({ error }) => {
-        if (error) {
-          toast.error("云端同步失败", { description: error });
-        }
-      }).catch(() => {});
-    }
-  }, [socialData]);
+    const timer = setTimeout(() => {
+      initialLoadRef.current = false;
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   const timelineData = useMemo((): TimelineNode[] => {
     const map = new Map<number, Map<number, number>>();
@@ -847,20 +841,34 @@ export default function SocialPage() {
     setBatchSelectedIds(next);
   };
 
-    const handleBatchEditSave = (updatedItems: SocialPost[]) => {
-    setSocialData((prev) => prev.map((item) => {
+    const handleBatchEditSave = async (updatedItems: SocialPost[]) => {
+    userModifiedRef.current = true;
+    const newData = socialData.map((item) => {
       const updated = updatedItems.find((u) => u.id === item.id);
       return updated || item;
-    }));
-    toast.success(`已批量更新 ${updatedItems.length} 条动态文案`);
+    });
+    setSocialData(newData);
+    const { error } = await saveSocialData(newData);
+    if (error) {
+      toast.error("批量更新同步失败", { description: error });
+    } else {
+      toast.success(`已批量更新 ${updatedItems.length} 条动态文案`);
+    }
     setBatchEditOpen(false);
     setBatchSelectedIds(new Set());
     setBatchEditMode(false);
   };
 
-  const handleBatchImport = (posts: SocialPost[]) => {
-    setSocialData((prev) => [...posts, ...prev]);
-    toast.success(`成功导入 ${posts.length} 条动态`);
+  const handleBatchImport = async (posts: SocialPost[]) => {
+    userModifiedRef.current = true;
+    const newData = [...posts, ...socialData];
+    setSocialData(newData);
+    const { error } = await saveSocialData(newData);
+    if (error) {
+      toast.error("批量导入同步失败", { description: error });
+    } else {
+      toast.success(`成功导入 ${posts.length} 条动态`);
+    }
     setBatchImportOpen(false);
   };
 
@@ -874,30 +882,52 @@ export default function SocialPage() {
     setFormOpen(true);
   };
 
-  const handleSave = (post: SocialPost) => {
+  const handleSave = async (post: SocialPost) => {
+    userModifiedRef.current = true;
+    let newData: SocialPost[];
     if (editingPost) {
-      setSocialData((prev) => prev.map((p) => (p.id === post.id ? post : p)));
+      newData = socialData.map((p) => (p.id === post.id ? post : p));
+      setSocialData(newData);
       toast.success("动态已更新", { description: post.content.slice(0, 30) + "..." });
     } else {
-      setSocialData((prev) => [post, ...prev]);
+      newData = [post, ...socialData];
+      setSocialData(newData);
       toast.success("动态已添加", { description: post.content.slice(0, 30) + "..." });
+    }
+    const { error } = await saveSocialData(newData);
+    if (error) {
+      toast.error("云端同步失败", { description: error });
     }
     setFormOpen(false);
     setEditingPost(null);
   };
 
-  const handleDelete = (post: SocialPost) => {
-    setSocialData((prev) => prev.filter((p) => p.id !== post.id));
-    toast.success("动态已删除");
+  const handleDelete = async (post: SocialPost) => {
+    userModifiedRef.current = true;
+    const newData = socialData.filter((p) => p.id !== post.id);
+    setSocialData(newData);
+    const { error } = await saveSocialData(newData);
+    if (error) {
+      toast.error("删除同步失败", { description: error });
+    } else {
+      toast.success("动态已删除");
+    }
   };
 
-  const togglePin = (post: SocialPost) => {
-    setSocialData((prev) =>
-      prev.map((p) => (p.id === post.id ? { ...p, pinned: !p.pinned } : p))
+  const togglePin = async (post: SocialPost) => {
+    userModifiedRef.current = true;
+    const newData = socialData.map((p) =>
+      p.id === post.id ? { ...p, pinned: !p.pinned } : p
     );
-    toast.success(post.pinned ? "已取消置顶" : "已置顶", {
-      description: post.content.slice(0, 30) + "...",
-    });
+    setSocialData(newData);
+    const { error } = await saveSocialData(newData);
+    if (error) {
+      toast.error("置顶同步失败", { description: error });
+    } else {
+      toast.success(post.pinned ? "已取消置顶" : "已置顶", {
+        description: post.content.slice(0, 30) + "...",
+      });
+    }
   };
 
   const hasTimeFilter = selectedYear !== null;
