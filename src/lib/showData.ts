@@ -347,7 +347,7 @@ export async function syncShowData(): Promise<ShowItem[]> {
       return { error: null };
     }
     const BATCH_SIZE = 20;
-    const rows = data.map(toDbRow);
+    const rows = uniqueData.map(toDbRow);
     console.log("[saveShowData] 准备 upsert", rows.length, "条, 分", Math.ceil(rows.length / BATCH_SIZE), "批");
 
     // 分批 upsert，避免单请求过大导致超时或失败
@@ -373,11 +373,11 @@ export async function syncShowData(): Promise<ShowItem[]> {
     }
 
     // 分批 delete：先获取所有远程 ID，找出不在 currentIds 中的，分批删除
-    if (data.length === 0) {
+    if (uniqueData.length === 0) {
       console.log("[saveShowData] data 为空，跳过删除");
       return { error: null };
     }
-    const currentIds = new Set(data.map((d) => d.id));
+    const currentIds = new Set(uniqueData.map((d) => d.id));
    const { data: remoteRows, error: fetchErr } = await supabase.from("shows").select("id").limit(9995);
     if (fetchErr) {
       console.warn("[shows] fetch ids for delete failed:", fetchErr.message);
