@@ -416,17 +416,14 @@ async function getAllShowsFromSupabase(env) {
 }
 
 async function scrapeShowMetadata(show, videoIdParam, bvidParam) {
-  // 从 links 中找到 YouTube/Bilibili 链接
+  // 只刷新有 YouTube 链接的视频
   const links = show.links || [];
-  const youtubeLink = links.find(l => /youtube\.com|youtu\.be/.test(l.url));
-  const bilibiliLink = links.find(l => /bilibili\.com|b23\.tv/.test(l.url));
-
-  let result = null;
+  const youtubeLink = links.find(l => /youtube\\.com|youtu\\.be/.test(l.url));
 
   if (youtubeLink || videoIdParam) {
     const videoId = videoIdParam || extractYouTubeIdWorker(youtubeLink?.url || "");
     if (videoId) {
-      result = await scrapeYouTubePage(videoId) || await fetchYouTubeInternalAPI(videoId);
+      const result = await scrapeYouTubePage(videoId) || await fetchYouTubeInternalAPI(videoId);
       if (result) {
         return {
           views: formatViewsWorker(result.viewCount),
@@ -435,31 +432,7 @@ async function scrapeShowMetadata(show, videoIdParam, bvidParam) {
     }
   }
 
-  if (bilibiliLink || bvidParam) {
-    const bvid = bvidParam || extractBilibiliIdWorker(bilibiliLink?.url || "");
-    if (bvid) {
-      // Bilibili 抓取逻辑（简化版）
-      const apiUrl = `https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`;
-      try {
-        const resp = await fetch(apiUrl, { signal: AbortSignal.timeout(10000) });
-        if (resp.ok) {
-          const data = await resp.json();
-          if (data?.code === 0 && data?.data) {
-            const d = data.data;
-            const durationSec = d.duration || 0;
-            const viewCount = d.stat?.view || 0;
-            const publishedAt = d.pubdate ? new Date(d.pubdate * 1000).toISOString().split("T")[0] : "";
-            return {
-              views: formatViewsWorker(viewCount),
-            };
-          }
-        }
-      } catch {
-        // Bilibili 抓取失败
-      }
-    }
-  }
-
+  // 跳过 Bilibili，返回 null
   return null;
 }
 
