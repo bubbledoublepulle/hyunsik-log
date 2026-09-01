@@ -24,4 +24,33 @@ export async function onRequestPost(context) {
     const batchSize = 50;
     const batches = Math.ceil(total / batchSize);
     
-    for (let i = 0; i < batches
+    for (let i = 0; i < batches; i++) {
+      await env.REFRESH_QUEUE.send({
+        offset: i * batchSize,
+        limit: batchSize,
+      });
+    }
+    
+    return jsonResponse({
+      success: true,
+      message: 'Refresh queued',
+      total,
+      batches,
+      batchSize,
+    });
+    
+  } catch (e) {
+    return jsonResponse({ error: e.message }, 500);
+  }
+}
+
+function jsonResponse(data, status) {
+  return new Response(JSON.stringify(data), {
+    status: status || 200,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+      'Cache-Control': 'no-store'
+    }
+  });
+}
