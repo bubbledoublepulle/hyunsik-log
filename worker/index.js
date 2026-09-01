@@ -9,11 +9,11 @@ export default {
     }
     return env.ASSETS.fetch(request);
   },
-  async scheduled(event, env, ctx) {
+  async scheduled(controller, env, ctx) {
     // Cron Trigger: 每 2 小时批量刷新所有视频元数据
-    if (event.cron === "0 */2 * * *") {
+    if (controller.cron === "0 */2 * * *") {
       console.log("[cron] Starting batch refresh at", new Date().toISOString());
-      await handleRefreshAllShows(env);
+      ctx.waitUntil(handleRefreshAllShows(env, ctx));
     }
   },
 };
@@ -35,7 +35,7 @@ async function handleApi(url, request, env) {
     return handleRefreshShow(url, env);
   }
   if (url.pathname === "/api/refresh-all-shows") {
-    return handleRefreshAllShows(env);
+    return jsonResponse(await handleRefreshAllShows(env));
   }
   return Response.json({ error: "not found" }, { status: 404 });
 }
@@ -359,13 +359,17 @@ async function handleRefreshShow(url, env) {
   }
 }
 
-async function handleRefreshAllShows(env) {
+async function handleRefreshAllShows(env, ctx) {
   try {
     // 从 Supabase 获取所有视频
     const shows = await getAllShowsFromSupabase(env);
 
+    // 限制每次最多刷新 50 个视频（避免 Worker 超时）
+    const BATCH_SIZE = 50;
+    const showsToRefresh = shows.slice(0, BATCH_SIZE);
+
     let updated = 0, failed = 0;
-    for (const show of shows) {
+    for (const show of showsToRefresh) {
       try {
         const metadata = await scrapeShowMetadata(show);
         if (metadata) {
@@ -380,11 +384,11 @@ async function handleRefreshAllShows(env) {
       }
     }
 
-    console.log(`[cron] Batch refresh complete: ${updated} updated, ${failed} failed`);
-    return { updated, failed };
+    console.log(`[refresh] Batch complete: ${updated} updated, ${failed} failed, total: ${shows.length}`);
+    return { updated, failed, total: shows.length, batchSize: BATCH_SIZE };
   } catch (e) {
     console.error("[refresh-all] error:", e);
-    return { updated: 0, failed: 0 };
+    return { updated: 0, failed: 0, total: 0, batchSize: 50 };
   }
 }
 
