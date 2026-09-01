@@ -284,31 +284,76 @@ export default function ShowFormModal({
       return;
     }
 
-    setBatchProgress({ current: 0, total: lines.length, success: 0, failed: 0 });
+    // ===== 自动规避已存在的视频链接 =====
+    let existingUrls: Set<string> = new Set();
+    try {
+      const stored = localStorage.getItem("hsik_shows_data");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((item: any) => {
+            if (item.links && Array.isArray(item.links)) {
+              item.links.forEach((link: any) => {
+                if (link.url) existingUrls.add(link.url.trim());
+              });
+            }
+            if (item.link) existingUrls.add(item.link.trim());
+          });
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    const newLines = lines.filter((url) => {
+      const trimmed = url.trim();
+      if (!trimmed) return false;
+      if (existingUrls.has(trimmed)) {
+        toast.info(`已跳过重复链接: ${trimmed.slice(0, 50)}...`);
+        return false;
+      }
+      return true;
+    });
+
+    if (newLines.length === 0) {
+      toast.warning("所有链接都已存在，没有新视频需要导入");
+      setFetchState("idle");
+      return;
+    }
+
+    if (newLines.length < lines.length) {
+      toast.info(`已过滤 ${lines.length - newLines.length} 个重复链接，将导入 ${newLines.length} 个新视频`);
+    }
+
+    setBatchProgress({ current: 0, total: newLines.length, success: 0, failed: 0 });
     setFetchState("fetching");
     const results: ShowItem[] = [];
     let successCount = 0;
     let failedCount = 0;
 
-    for (let i = 0; i < lines.length; i++) {
-      const url = lines[i];
-      setBatchProgress({ current: i + 1, total: lines.length, success: successCount, failed: failedCount });
+    for (let i = 0; i < newLines.length; i++) {
+      const url = newLines[i];
+      setBatchProgress({ current: i + 1, total: newLines.length, success: successCount, failed: failedCount });
 
       try {
         const detected = detectPlatform(url);
-        // 统一走 fetchVideoInfo，自动调用 Cloudflare Worker 上的 YouTube API
         const info: VideoInfo = await fetchVideoInfo(url);
 
         const linkPlatform = detected === "youtube" ? "YouTube" : detected === "bilibili" ? "Bilibili" : "其他";
         const grad = gradientPresets[Math.floor(Math.random() * gradientPresets.length)];
 
+        const urlHash = url.split('').reduce((a, b) => {
+          a = ((a << 5) - a) + b.charCodeAt(0);
+          return a & a;
+        }, 0).toString(36).replace('-', 'n');
+
         const item: ShowItem = {
-          id: `s${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          id: `s${urlHash}`,
           title: info.title || "未识别标题",
           platform: linkPlatform,
-          date: info.publishedAt || "",  // ← 关键修改：抓不到就留空，不再填今天！
+          date: info.publishedAt || "",
           duration: info.durationFormatted || info.duration || "",
-          views: info.viewCountFormatted || "",  // ← 关键修改：抓不到就留空
+          views: info.viewCountFormatted || "",
           members: ["BTOB"],
           status: "待补档",
           thumbnailFrom: grad.from,
@@ -319,16 +364,16 @@ export default function ShowFormModal({
 
         results.push(item);
         successCount++;
-        setBatchProgress({ current: i + 1, total: lines.length, success: successCount, failed: failedCount });
+        setBatchProgress({ current: i + 1, total: newLines.length, success: successCount, failed: failedCount });
       } catch (e: unknown) {
         failedCount++;
-        setBatchProgress({ current: i + 1, total: lines.length, success: successCount, failed: failedCount });
+        setBatchProgress({ current: i + 1, total: newLines.length, success: successCount, failed: failedCount });
         toast.error(`解析失败: ${url.slice(0, 50)}...`, {
           description: (e as FetchError)?.message || (e as Error)?.message || "无法识别该链接",
         });
       }
 
-      if (i < lines.length - 1) {
+      if (i < newLines.length - 1) {
         await new Promise((r) => setTimeout(r, 600));
       }
     }
@@ -344,7 +389,8 @@ export default function ShowFormModal({
       if (emptyViewsCount > 0) desc += `${emptyDateCount > 0 && emptyViewsCount > 0 ? "，" : ""}${emptyViewsCount} 条缺少播放量`;
       if (!desc) desc = "所有数据已完整抓取";
       
-      toast.success(`成功导入 ${results.length} 条视频`, {
+      const skippedCount = lines.length - newLines.length;
+      toast.success(`成功导入 ${results.length} 条视频${skippedCount > 0 ? `，跳过 ${skippedCount} 条重复` : ""}`, {
         description: failedCount > 0 ? `${failedCount} 条解析失败。${desc}` : desc,
       });
     } else {
