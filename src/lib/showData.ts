@@ -316,10 +316,16 @@ export async function syncShowData(): Promise<ShowItem[]> {
     }
   }
 
-  const items = allRows.map(fromDbRow);
-  saveLocalShowData(items);
+    const items = allRows.map(fromDbRow);
+  const localData = loadShowData();
+  
+  // 合并：保留云端数据 + 本地独有的数据（防止未上传成功的数据被覆盖）
+  const remoteIds = new Set(items.map(i => i.id));
+  const merged = [...items, ...localData.filter(i => !remoteIds.has(i.id))];
+  
+  saveLocalShowData(merged);
   recordSyncTime();
-  return items;
+  return merged;
 }
 
   export async function saveShowData(data: ShowItem[]): Promise<{ error: string | null }> {
