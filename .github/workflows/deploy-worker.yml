@@ -17,7 +17,7 @@ jobs:
           node-version: '22'  # 从 20 改为 22
       
       - name: Install Wrangler
-        run: npm install -g wrangler@3  # 使用 wrangler v3，更稳定
+        run: npm install -g wrangler@4  # 使用 wrangler v3，更稳定
       
       - name: Deploy Worker
         run: npx wrangler deploy --config wrangler-worker.toml
