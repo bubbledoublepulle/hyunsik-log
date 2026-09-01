@@ -338,7 +338,7 @@ export default function ShowsPage() {
     }
   }, [showData]);
 
-    const refreshMetadata = useCallback(async () => {
+      const refreshMetadata = useCallback(async () => {
     if (refreshAbortRef.current) return;
     refreshAbortRef.current = true;
     setMetaRefreshing(true);
