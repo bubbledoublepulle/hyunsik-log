@@ -332,24 +332,31 @@ async function handleRefreshShow(url, env) {
   const videoId = url.searchParams.get("videoId");
   const bvid = url.searchParams.get("bvid");
 
+  console.log("[handleRefreshShow] showId:", showId, "videoId:", videoId, "bvid:", bvid);
+
   if (!showId) {
     return Response.json({ error: "showId required" }, { status: 400 });
   }
 
   try {
     // 从 Supabase 获取该视频
+    console.log("[handleRefreshShow] fetching show from Supabase...");
     const show = await getShowFromSupabase(env, showId);
+    console.log("[handleRefreshShow] show found:", show ? "yes" : "no");
     if (!show) {
       return Response.json({ error: "show not found" }, { status: 404 });
     }
 
     // 抓取元数据
+    console.log("[handleRefreshShow] scraping metadata...");
     const metadata = await scrapeShowMetadata(show, videoId, bvid);
+    console.log("[handleRefreshShow] metadata:", metadata ? "found" : "null");
     if (!metadata) {
       return Response.json({ error: "failed to fetch metadata" }, { status: 502 });
     }
 
     // 更新 Supabase
+    console.log("[handleRefreshShow] updating Supabase...");
     await updateShowInSupabase(env, showId, metadata);
 
     return jsonResponse({ success: true, metadata });
