@@ -14,10 +14,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'  # 从 20 改为 22
       
       - name: Install Wrangler
-        run: npm install -g wrangler@latest
+        run: npm install -g wrangler@3  # 使用 wrangler v3，更稳定
       
       - name: Deploy Worker
         run: npx wrangler deploy --config wrangler-worker.toml
