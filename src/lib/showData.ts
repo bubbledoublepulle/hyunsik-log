@@ -930,22 +930,19 @@ function normalizeDuration(raw: string): string | null {
 
 /** 获取展示用的时长：优先缓存的 API 数据（自动刷新），其次手动数据 */
 export function getDisplayDuration(item: ShowItem): string {
-  const meta = getCachedMetadata(item.id);
-
-  // 优先用 lengthSeconds 重新格式化为数字格式
-  if (meta?.lengthSeconds && meta.lengthSeconds > 0) {
-    return formatDuration(meta.lengthSeconds);
-  }
-
-  // 处理 meta.duration 的各种格式
-  if (meta?.duration) {
-    const normalized = normalizeDuration(meta.duration);
+  // 优先使用 Supabase 中的最新数据
+  if (item.duration) {
+    const normalized = normalizeDuration(item.duration);
     if (normalized) return normalized;
   }
 
-  // 处理 item.duration 的各种格式
-  if (item.duration) {
-    const normalized = normalizeDuration(item.duration);
+  // 降级到本地缓存
+  const meta = getCachedMetadata(item.id);
+  if (meta?.lengthSeconds && meta.lengthSeconds > 0) {
+    return formatDuration(meta.lengthSeconds);
+  }
+  if (meta?.duration) {
+    const normalized = normalizeDuration(meta.duration);
     if (normalized) return normalized;
   }
 
@@ -954,23 +951,29 @@ export function getDisplayDuration(item: ShowItem): string {
 
 /** 获取展示用的播放量：优先缓存的 API 数据（自动刷新），其次手动数据 */
 export function getDisplayViews(item: ShowItem): string {
+  // 优先使用 Supabase 中的最新数据（Worker Cron 已更新）
+  if (item.views && item.views !== "0") return item.views;
+  // 降级到本地缓存
   const meta = getCachedMetadata(item.id);
   if (meta?.views) return meta.views;
-  return item.views;
+  return "0";
 }
 
 /** 获取展示用的发布日期：优先缓存的 API 数据（自动刷新），其次手动数据 */
 export function getDisplayDate(item: ShowItem): string {
-  const meta = getCachedMetadata(item.id);
-  if (meta?.publishedAt) {
-    // 兼容 ISO 8601 格式，只取日期部分
-    return meta.publishedAt.split("T")[0];
-  }
-  // 兼容 item.date 可能是 ISO 格式的情况
+  // 优先使用 Supabase 中的最新数据
   if (item.date && item.date.includes("T")) {
     return item.date.split("T")[0];
   }
-  return item.date;
+  if (item.date) return item.date;
+
+  // 降级到本地缓存
+  const meta = getCachedMetadata(item.id);
+  if (meta?.publishedAt) {
+    return meta.publishedAt.split("T")[0];
+  }
+
+  return "";
 }
 
 /** 平台图标颜色映射 */
@@ -1037,4 +1040,66 @@ export async function checkRemoteUpdates(): Promise<ShowItem[] | null> {
     return syncShowData();
   }
   return null;
+}
+
+
+// ==================== 服务端元数据刷新 ====================
+
+/**
+ * 立即刷新单个视频的元数据（调用 Worker）
+ * 用于管理员添加/更新视频后，立即获取最新播放量
+ */
+export async function refreshSingleShowMetadata(item: ShowItem): Promise<{ error: string | null; metadata?: any }> {
+  const youtubeLink = item.links.find(l => isYouTubeLink(l.url));
+  const bilibiliLink = item.links.find(l => isBilibiliLink(l.url));
+
+  if (!youtubeLink && !bilibiliLink) {
+    return { error: null };
+  }
+
+  try {
+    const videoId = youtubeLink ? extractYouTubeId(youtubeLink.url) : null;
+    const bvid = bilibiliLink ? extractBilibiliId(bilibiliLink.url) : null;
+
+    const params = new URLSearchParams();
+    params.append("showId", item.id);
+    if (videoId) params.append("videoId", videoId);
+    if (bvid) params.append("bvid", bvid);
+
+    const resp = await fetch(`/api/refresh-show?${params.toString()}`, { 
+      signal: AbortSignal.timeout(30000) 
+    });
+    if (!resp.ok) {
+      return { error: `刷新失败: HTTP ${resp.status}` };
+    }
+
+    const data = await resp.json();
+    if (data.error) {
+      return { error: data.error };
+    }
+
+    return { error: null, metadata: data.metadata };
+  } catch (e) {
+    return { error: String(e) };
+  }
+}
+
+/**
+ * 批量刷新所有视频的元数据（调用 Worker）
+ * 用于批量导入后，或 Cron 触发后前端手动刷新
+ */
+export async function batchRefreshMetadata(): Promise<{ error: string | null; updated?: number }> {
+  try {
+    const resp = await fetch('/api/refresh-all-shows', { 
+      method: 'POST',
+      signal: AbortSignal.timeout(120000) 
+    });
+    if (!resp.ok) {
+      return { error: `批量刷新失败: HTTP ${resp.status}` };
+    }
+    const data = await resp.json();
+    return { error: null, updated: data.updated };
+  } catch (e) {
+    return { error: String(e) };
+  }
 }
