@@ -248,9 +248,17 @@ export default function MusicPage() {
     setBatchImportOpen(false);
   };
 
-  const handleDelete = (item: MusicItem) => {
-    setMusicData((prev) => prev.filter((m) => m.id !== item.id));
-    toast.success("已删除", { description: item.title });
+  // ========== 修复：删除时同步保存到 localStorage + Supabase ==========
+  const handleDelete = async (item: MusicItem) => {
+    userModifiedRef.current = true;
+    const newData = musicData.filter((m) => m.id !== item.id);
+    setMusicData(newData);
+    const { error } = await saveMusicData(newData);
+    if (error) {
+      toast.error("删除同步失败", { description: error });
+    } else {
+      toast.success("已删除", { description: item.title });
+    }
   };
 
   const handleReset = async () => {
@@ -388,7 +396,7 @@ export default function MusicPage() {
                           </td>
                          <td className="px-4 py-3.5">
   <div className="flex items-center justify-end gap-1">
-    {item.link && (
+    {item.link && item.link !== "https://music.apple.com" && (
       <a href={item.link} target="_blank" rel="noopener noreferrer" className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-sky-50 hover:text-sky-500 transition-colors">
         <ExternalLink className="w-3.5 h-3.5" />
       </a>
@@ -467,7 +475,7 @@ export default function MusicPage() {
                               </div>
                             </div>
                            <div className="flex items-center gap-0.5">
-  {item.link && (
+  {item.link && item.link !== "https://music.apple.com" && (
     <a href={item.link} target="_blank" rel="noopener noreferrer" className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-sky-50 hover:text-sky-500 transition-colors">
       <ExternalLink className="w-3.5 h-3.5" />
     </a>
