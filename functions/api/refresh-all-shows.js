@@ -2,7 +2,20 @@ export async function onRequestPost(context) {
   const { env } = context;
   
   try {
-    const resp = await fetch(env.SUPABASE_URL + "/rest/v1/shows?select=*", {
+    // 检查环境变量
+    if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) {
+      return new Response(JSON.stringify({ 
+        error: 'Missing environment variables',
+        supabase_url: !!env.SUPABASE_URL,
+        supabase_key: !!env.SUPABASE_SERVICE_KEY
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // 测试 Supabase 连接
+    const resp = await fetch(env.SUPABASE_URL + "/rest/v1/shows?select=id,title,links&limit=1", {
       headers: {
         'apikey': env.SUPABASE_SERVICE_KEY,
         'Authorization': 'Bearer ' + env.SUPABASE_SERVICE_KEY,
@@ -10,38 +23,39 @@ export async function onRequestPost(context) {
     });
     
     if (!resp.ok) {
-      return new Response(JSON.stringify({ error: 'Supabase fetch failed' }), {
+      return new Response(JSON.stringify({ 
+        error: 'Supabase connection failed',
+        status: resp.status 
+      }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       });
     }
     
     const shows = await resp.json();
-    let updated = 0, failed = 0, skipped = 0;
-
-    for (let i = 0; i < shows.length; i++) {
-      const show = shows[i];
-      if (i > 0) await new Promise(r => setTimeout(r, 2000));
-
-      try {
-        const links = show.links || [];
-        const youtubeLink = links.find(l => /youtube\.com|youtu\.be/.test(l.url));
-        if (!youtubeLink) { skipped++; continue; }
-
+    
+    // 只处理第一条视频作为测试
+    const show = shows[0];
+    let result = { test: true, showFound: !!show };
+    
+    if (show) {
+      const links = show.links || [];
+      const youtubeLink = links.find(l => /youtube\.com|youtu\.be/.test(l.url));
+      
+      if (youtubeLink) {
         const videoId = extractYouTubeId(youtubeLink.url);
-        if (!videoId) { skipped++; continue; }
-
-        const views = await fetchViews(videoId, env.YOUTUBE_API_KEY);
-        if (!views) { skipped++; continue; }
-
-        const ok = await updateShow(env, show.id, views);
-        if (ok) updated++; else failed++;
-      } catch (e) { failed++; }
+        if (videoId) {
+          const views = await fetchViews(videoId, env.YOUTUBE_API_KEY);
+          result = { ...result, videoId, views: views || 'failed' };
+        } else {
+          result = { ...result, error: 'Could not extract videoId' };
+        }
+      } else {
+        result = { ...result, error: 'No YouTube link' };
+      }
     }
 
-    return new Response(JSON.stringify({
-      updated, failed, skipped, total: shows.length
-    }), {
+    return new Response(JSON.stringify(result), {
       headers: {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
@@ -50,7 +64,11 @@ export async function onRequestPost(context) {
     });
     
   } catch (e) {
-    return new Response(JSON.stringify({ error: e.message }), {
+    return new Response(JSON.stringify({ 
+      error: 'Exception',
+      message: e.message,
+      stack: e.stack 
+    }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
     });
@@ -67,27 +85,18 @@ async function fetchViews(videoId, apiKey) {
         const count = data.items?.[0]?.statistics?.viewCount;
         if (count) return formatViews(parseInt(count, 10));
       }
-    } catch (e) {}
+    } catch (e) { return e.message; }
   }
-
-  try {
-    const resp = await fetch('https://www.youtube.com/youtubei/v1/player?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        videoId,
-        context: { client: { clientName: 'WEB', clientVersion: '2.20240701.00.00', hl: 'en', gl: 'US' } }
-      }),
-      signal: AbortSignal.timeout(5000)
-    });
-    if (resp.ok) {
-      const data = await resp.json();
-      const count = data.videoDetails?.viewCount;
-      if (count) return formatViews(parseInt(count, 10));
-    }
-  } catch (e) {}
-
   return null;
 }
 
-async function updateShow(env
+function extractYouTubeId(url) {
+  const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/|youtube\.com\/live\/)([a-zA-Z0-9_-]{11})/);
+  return match ? match[1] : null;
+}
+
+function formatViews(views) {
+  if (views >= 100000000) return Math.round(views / 100000000) + '亿';
+  if (views >= 10000) return Math.round(views / 10000) + '万';
+  return views.toLocaleString();
+}
