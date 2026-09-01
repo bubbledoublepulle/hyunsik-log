@@ -412,7 +412,7 @@ export async function saveSocialData(data: SocialPost[]): Promise<{ error: strin
   }
 
   // Delete rows that no longer exist in current data
-  const currentIds = data.map((d) => d.id);
+  const currentIds = uniqueData.map((d) => d.id);
   if (currentIds.length > 0) {
     const { error: delError } = await supabase
       .from("social_posts")
