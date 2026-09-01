@@ -338,53 +338,50 @@ export default function ShowsPage() {
     }
   }, [showData]);
 
-      const refreshMetadata = useCallback(async () => {
-    if (refreshAbortRef.current) return;
-    refreshAbortRef.current = true;
-    setMetaRefreshing(true);
-    toast.info("正在批量刷新播放量...", { description: "调用服务端 Worker 处理" });
+const refreshMetadata = useCallback(async () => {
+  if (refreshAbortRef.current) return;
+  refreshAbortRef.current = true;
+  setMetaRefreshing(true);
+  
+  try {
     try {
-      // 清除本地缓存，确保显示最新数据
-      try {
-        localStorage.removeItem("hsik_show_metadata_cache");
-        localStorage.removeItem("hsik_video_fetch_cache");
-      } catch {}
+      localStorage.removeItem("hsik_show_metadata_cache");
+      localStorage.removeItem("hsik_video_fetch_cache");
+    } catch {}
 
-      const resp = await fetch("/api/refresh-all-shows", {
-        method: "POST",
-        signal: AbortSignal.timeout(300000),
-      });
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`);
-      }
-      const data = await resp.json();
-
-      // 等待 Supabase 同步完成（写入有延迟）
-      await new Promise(r => setTimeout(r, 3000));
-
-      // 重新同步数据
-      const synced = await syncShowData();
-      setShowData(synced);
-
-      const now = new Date().toLocaleString("zh-CN");
-      setLastSync(now);
-      localStorage.setItem("hsik_meta_last_sync", now);
-
-      toast.success("播放量更新完成", {
-        description: `已更新 ${data.updated || 0} 条，失败 ${data.failed || 0} 条，跳过 ${data.skipped || 0} 条`,
-      });
-    } catch (e) {
-      toast.error("播放量刷新失败", {
-        description: String(e),
-      });
-    } finally {
-      setMetaRefreshing(false);
-      refreshAbortRef.current = false;
-      const now = new Date().toLocaleString("zh-CN");
-      setLastSync(now);
-      localStorage.setItem("hsik_meta_last_sync", now);
+    const resp = await fetch("/api/refresh-all-shows", {
+      method: "POST",
+      signal: AbortSignal.timeout(30000),
+    });
+    
+    if (!resp.ok) {
+      throw new Error(`HTTP ${resp.status}`);
     }
-  }, [showData]);
+    
+    const data = await resp.json();
+    
+    toast.success("刷新任务已提交", {
+      description: `共 ${data.total} 条视频，分 ${data.batches} 批处理，后台正在刷新...`,
+    });
+
+    await new Promise(r => setTimeout(r, 30000));
+    
+    const synced = await syncShowData();
+    setShowData(synced);
+
+    const now = new Date().toLocaleString("zh-CN");
+    setLastSync(now);
+    localStorage.setItem("hsik_meta_last_sync", now);
+
+  } catch (e) {
+    toast.error("提交刷新任务失败", {
+      description: String(e),
+    });
+  } finally {
+    setMetaRefreshing(false);
+    refreshAbortRef.current = false;
+  }
+}, [showData]);
 
   const timelineData = useMemo((): TimelineNode[] => {
     const map = new Map<number, Map<number, Map<number, { count: number; firstItemId: string }>>>();
