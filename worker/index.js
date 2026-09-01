@@ -32,10 +32,10 @@ async function handleApi(url, request, env) {
     return handleImageProxy(url);
   }
   if (url.pathname === "/api/refresh-show") {
-    return handleRefreshShow(url, env);
+    return jsonResponse(await handleRefreshShow(url, env), false);
   }
   if (url.pathname === "/api/refresh-all-shows") {
-    return jsonResponse(await handleRefreshAllShows(env));
+    return jsonResponse(await handleRefreshAllShows(env), false);
   }
   return Response.json({ error: "not found" }, { status: 404 });
 }
@@ -134,14 +134,19 @@ async function verifyToken(token, env) {
   }
 }
 
-function jsonResponse(data) {
-  return Response.json(data, {
-    headers: {
-      "Content-Type": "application/json",
-      "Cache-Control": "public, max-age=86400",
-      "Access-Control-Allow-Origin": "*",
-    },
-  });
+function jsonResponse(data, cacheable = true) {
+  const headers = {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+  };
+  if (!cacheable) {
+    headers["Cache-Control"] = "no-store, no-cache, must-revalidate, proxy-revalidate";
+    headers["Pragma"] = "no-cache";
+    headers["Expires"] = "0";
+  } else {
+    headers["Cache-Control"] = "public, max-age=86400";
+  }
+  return Response.json(data, { headers });
 }
 
 async function handleYouTubeMeta(url) {
@@ -339,7 +344,6 @@ async function handleRefreshShow(url, env) {
   }
 
   try {
-    // 从 Supabase 获取该视频
     console.log("[handleRefreshShow] fetching show from Supabase...");
     const show = await getShowFromSupabase(env, showId);
     console.log("[handleRefreshShow] show found:", show ? "yes" : "no");
@@ -347,7 +351,6 @@ async function handleRefreshShow(url, env) {
       return Response.json({ error: "show not found" }, { status: 404 });
     }
 
-    // 抓取元数据
     console.log("[handleRefreshShow] scraping metadata...");
     const metadata = await scrapeShowMetadata(show, videoId, bvid);
     console.log("[handleRefreshShow] metadata:", metadata ? "found" : "null");
@@ -355,11 +358,10 @@ async function handleRefreshShow(url, env) {
       return Response.json({ error: "failed to fetch metadata" }, { status: 502 });
     }
 
-    // 更新 Supabase
     console.log("[handleRefreshShow] updating Supabase...");
     await updateShowInSupabase(env, showId, metadata);
 
-    return jsonResponse({ success: true, metadata });
+    return jsonResponse({ success: true, metadata }, false);
   } catch (e) {
     console.error("[refresh-show] error:", e);
     return Response.json({ error: "internal error" }, { status: 500 });
@@ -368,40 +370,47 @@ async function handleRefreshShow(url, env) {
 
 async function handleRefreshAllShows(env, ctx) {
   try {
-    // 从 Supabase 获取所有视频
     const shows = await getAllShowsFromSupabase(env);
-
-    // 限制每次最多刷新 20 个视频，避免 YouTube 限流
+    
     const BATCH_SIZE = 20;
-    const DELAY_MS = 2000; // 2 秒间隔
-    const showsToRefresh = shows.slice(0, BATCH_SIZE);
-
+    const DELAY_MS = 2000;
+    
     let updated = 0, failed = 0;
-    for (const show of showsToRefresh) {
-      try {
-        // 等待 2 秒，避免 YouTube 限流
-        if (updated > 0 || failed > 0) {
-          await new Promise(r => setTimeout(r, DELAY_MS));
-        }
-
-        const metadata = await scrapeShowMetadata(show);
-        if (metadata) {
-          await updateShowInSupabase(env, show.id, metadata);
-          updated++;
-        } else {
-          failed++;
-        }
-      } catch (e) {
-        console.error(`[refresh] Failed for ${show.id}:`, e);
-        failed++;
+    
+    for (let i = 0; i < shows.length; i += BATCH_SIZE) {
+      const batch = shows.slice(i, i + BATCH_SIZE);
+      
+      const results = await Promise.all(
+        batch.map(async (show) => {
+          try {
+            const metadata = await scrapeShowMetadata(show);
+            if (metadata) {
+              await updateShowInSupabase(env, show.id, metadata);
+              return { success: true };
+            }
+            return { success: false };
+          } catch (e) {
+            console.error(`[refresh] Failed for ${show.id}:`, e);
+            return { success: false };
+          }
+        })
+      );
+      
+      results.forEach(r => {
+        if (r.success) updated++;
+        else failed++;
+      });
+      
+      if (i + BATCH_SIZE < shows.length) {
+        await new Promise(r => setTimeout(r, DELAY_MS));
       }
     }
 
-    console.log(`[refresh] Batch complete: ${updated} updated, ${failed} failed, total: ${shows.length}`);
-    return { updated, failed, total: shows.length, batchSize: BATCH_SIZE };
+    console.log(`[refresh] Complete: ${updated} updated, ${failed} failed, total: ${shows.length}`);
+    return { updated, failed, total: shows.length };
   } catch (e) {
     console.error("[refresh-all] error:", e);
-    return { updated: 0, failed: 0, total: 0, batchSize: 50 };
+    return { updated: 0, failed: 0, total: 0 };
   }
 }
 
@@ -429,9 +438,8 @@ async function getAllShowsFromSupabase(env) {
 }
 
 async function scrapeShowMetadata(show, videoIdParam, bvidParam) {
-  // 只刷新有 YouTube 链接的视频
   const links = show.links || [];
-  const youtubeLink = links.find(l => /youtube\\.com|youtu\\.be/.test(l.url));
+  const youtubeLink = links.find(l => /youtube\.com|youtu\.be/.test(l.url));
 
   if (youtubeLink || videoIdParam) {
     const videoId = videoIdParam || extractYouTubeIdWorker(youtubeLink?.url || "");
@@ -445,12 +453,10 @@ async function scrapeShowMetadata(show, videoIdParam, bvidParam) {
     }
   }
 
-  // 跳过 Bilibili，返回 null
   return null;
 }
 
 async function updateShowInSupabase(env, showId, metadata) {
-  // 只更新播放量，不更新其他字段
   if (!metadata.views) return false;
 
   const resp = await fetch(`${env.SUPABASE_URL}/rest/v1/shows?id=eq.${showId}`, {
