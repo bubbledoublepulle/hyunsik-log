@@ -90,14 +90,6 @@ const allMembers: ShowMember[] = [
 type SortBy = "date-desc" | "date-asc" | "views-desc" | "title-asc";
 type ViewMode = "archive" | "stats";
 
-interface TimelineNode {
-  year: number;
-  months: {
-    month: number;
-    days: { day: number; count: number; firstItemId: string }[];
-  }[];
-}
-
 const BATCH_SIZE = 30;
 
 export default function ShowsPage() {
@@ -526,6 +518,42 @@ const refreshMetadata = useCallback(async () => {
     setBatchEditMode(false);
   };
 
+  const timelineData = useMemo(() => {
+    const grouped: Record<number, Record<number, Record<number, { count: number; firstItemId: string }>>> = {};
+
+    showData.forEach((item) => {
+      const date = new Date(getDisplayDate(item));
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+
+      if (!grouped[year]) grouped[year] = {};
+      if (!grouped[year][month]) grouped[year][month] = {};
+      if (!grouped[year][month][day]) {
+        grouped[year][month][day] = { count: 0, firstItemId: item.id };
+      }
+      grouped[year][month][day].count++;
+    });
+
+    return Object.entries(grouped)
+      .sort(([a], [b]) => parseInt(b) - parseInt(a))
+      .map(([year, months]) => ({
+        year: parseInt(year),
+        months: Object.entries(months)
+          .sort(([a], [b]) => parseInt(b) - parseInt(a))
+          .map(([month, days]) => ({
+            month: parseInt(month),
+            days: Object.entries(days)
+              .sort(([a], [b]) => parseInt(a) - parseInt(b))
+              .map(([day, data]) => ({
+                day: parseInt(day),
+                count: data.count,
+                firstItemId: data.firstItemId,
+              })),
+          })),
+      }));
+  }, [showData]);
+
   const stats = useMemo(() => {
     const total = showData.length;
     const totalViews = showData.reduce((sum, s) => sum + parseViews(getDisplayViews(s)), 0);
@@ -772,7 +800,7 @@ const refreshMetadata = useCallback(async () => {
                         <span className={`w-2 h-2 rounded-full shrink-0 ${expandedYear === node.year ? "bg-sky-400" : "bg-gray-300"}`} />
                         <span className="whitespace-nowrap">{node.year}年</span>
                         <span className="ml-auto text-xs text-gray-400 font-normal whitespace-nowrap">
-                          {node.months.reduce((sum, m) => sum + m.days.reduce((s, d) => s + d.count, 0), 0)}
+                          {node.months.reduce((sum: number, m: any) => sum + m.days.reduce((s: number, d: any) => s + d.count, 0), 0)}
                         </span>
                       </button>
 
@@ -800,7 +828,7 @@ const refreshMetadata = useCallback(async () => {
                                     <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${expandedMonth?.year === node.year && expandedMonth?.month === m.month ? "bg-sky-400" : "bg-gray-200"}`} />
                                     <span className="whitespace-nowrap">{m.month}月</span>
                                     <span className="ml-auto text-[10px] text-gray-400 whitespace-nowrap">
-                                      {m.days.reduce((s, d) => s + d.count, 0)}
+                                      {m.days.reduce((s: number, d: any) => s + d.count, 0)}
                                     </span>
                                   </button>
 
@@ -814,7 +842,7 @@ const refreshMetadata = useCallback(async () => {
                                         className="overflow-hidden"
                                       >
                                         <div className="ml-3 mt-0.5 space-y-0.5 border-l-2 border-gray-50 pl-2">
-                                          {m.days.map((d) => (
+                                          {m.days.map((d: any) => (
                                             <button
                                               key={d.day}
                                               onClick={() => handleScrollToDate(d.firstItemId)}
