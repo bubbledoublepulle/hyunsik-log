@@ -474,19 +474,29 @@ export default function ShowsPage() {
     setFormOpen(true);
   };
 
-    const handleSave = (item: ShowItem) => {
+    const handleSave = async (item: ShowItem) => {
     userModifiedRef.current = true;
+    let newData: ShowItem[];
+    
     if (editingItem) {
-      setShowData((prev) => prev.map((s) => (s.id === item.id ? item : s)));
+      newData = showData.map((s) => (s.id === item.id ? item : s));
+      setShowData(newData);
       toast.success("修改已保存", { description: item.title });
     } else {
-      setShowData((prev) => [...prev, item]);
+      newData = [...showData, item];
+      setShowData(newData);
       toast.success("综艺已添加", { description: item.title });
     }
+    
+    // 真正保存到 localStorage + Supabase
+    const { error } = await saveShowData(newData);
+    if (error) {
+      toast.error("云端同步失败", { description: error });
+    }
+    
     setFormOpen(false);
     setEditingItem(null);
   };
-
   const handleSaveBatch = (items: ShowItem[]) => {
     userModifiedRef.current = true;
     const newData = [...showData, ...items];
