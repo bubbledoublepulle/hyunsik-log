@@ -484,17 +484,41 @@ function BatchImportSocialModal({ open, onClose, onImport }: {
   }, [open]);
 
   const handleFetch = async () => {
-    const urls = linksText
+    // ① 提取所有链接
+    const rawUrls = linksText
       .split("\n")
       .map((s) => s.trim())
       .filter((s) => s.length > 0 && s.startsWith("http"));
-    if (urls.length === 0) {
+    
+    if (rawUrls.length === 0) {
       toast.error("请输入至少一个有效的链接");
       return;
     }
-    if (urls.length > 300) {
-      toast.error("一次最多导入 300 条链接");
-      return;
+
+    // ② 去重：基于 URL 本身（去掉末尾斜杠和查询参数后比较）
+    const seen = new Set<string>();
+    const urls: string[] = [];
+    for (const url of rawUrls) {
+      try {
+        const u = new URL(url);
+        // 去掉末尾斜杠，忽略查询参数（如 tracking_id 等）
+        const key = `${u.origin}${u.pathname}`.replace(/\/+$/, "");
+        if (!seen.has(key)) {
+          seen.add(key);
+          urls.push(url); // 保留原始 URL（带查询参数）
+        }
+      } catch {
+        // URL 解析失败，用原始字符串去重
+        if (!seen.has(url)) {
+          seen.add(url);
+          urls.push(url);
+        }
+      }
+    }
+
+    const dupCount = rawUrls.length - urls.length;
+    if (dupCount > 0) {
+      toast.info(`已剔除 ${dupCount} 条重复链接`);
     }
 
     setIsFetching(true);
@@ -598,7 +622,7 @@ function BatchImportSocialModal({ open, onClose, onImport }: {
           {/* 链接输入 */}
           <div>
             <label className="text-sm font-medium text-gray-700 mb-1.5 block">
-              链接列表 <span className="text-xs text-gray-400 font-normal">(每行一个，最多20条)</span>
+              链接列表 <span className="text-xs text-gray-400 font-normal">(每行一个)</span>
             </label>
             <textarea
               value={linksText}
