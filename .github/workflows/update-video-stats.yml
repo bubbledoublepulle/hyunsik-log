@@ -26,7 +26,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
       
-            - name: Auto-update YouTube stats
+      - name: Auto-update YouTube stats
         env:
           VITE_YOUTUBE_API_KEY: ${{ secrets.VITE_YOUTUBE_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
