@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Users, Type, Replace, UserPlus, UserMinus, Loader2, Languages, KeyRound } from "lucide-react";
+import { X, Users, Type, Replace, UserPlus, UserMinus, Loader2, Languages, KeyRound, Ban } from "lucide-react";
 import type { ShowItem, ShowMember } from "@/lib/showData";
 
 const allMembers: ShowMember[] = [
@@ -27,6 +27,11 @@ interface BatchEditShowsModalProps {
   onSave: (items: ShowItem[]) => void;
 }
 
+/** 检测文本中是否包含韩文（가-힣 范围） */
+function containsKorean(text: string): boolean {
+  return /[\uAC00-\uD7AF]/.test(text);
+}
+
 export default function BatchEditShowsModal({ open, onClose, items, onSave }: BatchEditShowsModalProps) {
   const [activeTab, setActiveTab] = useState<"title" | "members" | "translate">("title");
 
@@ -46,12 +51,14 @@ export default function BatchEditShowsModal({ open, onClose, items, onSave }: Ba
   const [isTranslating, setIsTranslating] = useState(false);
   const [translationProgress, setTranslationProgress] = useState({ current: 0, total: 0 });
   const [translations, setTranslations] = useState<Record<string, string>>({});
+  const [skippedIds, setSkippedIds] = useState<Set<string>>(new Set());
 
   const [preview, setPreview] = useState<ShowItem[] | null>(null);
 
   useEffect(() => {
     if (open) {
       setTranslations({});
+      setSkippedIds(new Set());
       setPreview(null);
     }
   }, [open]);
@@ -63,17 +70,33 @@ export default function BatchEditShowsModal({ open, onClose, items, onSave }: Ba
     }
     localStorage.setItem("hsik_deepseek_key", apiKey);
 
+    // 先筛选出含韩语的标题
+    const itemsNeedTranslation = items.filter((item) => containsKorean(item.title));
+    const skipped = new Set(items.filter((item) => !containsKorean(item.title)).map((item) => item.id));
+    setSkippedIds(skipped);
+
+    // 如果没有需要翻译的，直接结束
+    if (itemsNeedTranslation.length === 0) {
+      const results: Record<string, string> = {};
+      items.forEach((item) => {
+        results[item.id] = item.title;
+      });
+      setTranslations(results);
+      setIsTranslating(false);
+      return;
+    }
+
     setIsTranslating(true);
     setTranslations({});
-    setTranslationProgress({ current: 0, total: items.length });
+    setTranslationProgress({ current: 0, total: itemsNeedTranslation.length });
 
     const results: Record<string, string> = {};
 
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      setTranslationProgress({ current: i + 1, total: items.length });
-      
-            let translated = "";
+    for (let i = 0; i < itemsNeedTranslation.length; i++) {
+      const item = itemsNeedTranslation[i];
+      setTranslationProgress({ current: i + 1, total: itemsNeedTranslation.length });
+
+      let translated = "";
       let attempts = 0;
       const maxRetries = 2;
 
@@ -132,8 +155,16 @@ export default function BatchEditShowsModal({ open, onClose, items, onSave }: Ba
       }
 
       results[item.id] = translated || item.title;
-      if (i < items.length - 1) await new Promise((r) => setTimeout(r, 500));
+      if (i < itemsNeedTranslation.length - 1) await new Promise((r) => setTimeout(r, 500));
     }
+
+    // 补充跳过的项目（保持原文）
+    skipped.forEach((id) => {
+      const item = items.find((it) => it.id === id);
+      if (item) {
+        results[id] = item.title;
+      }
+    });
 
     setTranslations(results);
     setIsTranslating(false);
@@ -190,6 +221,7 @@ export default function BatchEditShowsModal({ open, onClose, items, onSave }: Ba
     setMembersToAdd(new Set());
     setMembersToRemove(new Set());
     setTranslations({});
+    setSkippedIds(new Set());
     setPreview(null);
     setActiveTab("title");
   };
@@ -216,6 +248,10 @@ export default function BatchEditShowsModal({ open, onClose, items, onSave }: Ba
   const updateTranslation = (id: string, value: string) => {
     setTranslations((prev) => ({ ...prev, [id]: value }));
   };
+
+  // 计算需要翻译的数量（用于按钮显示）
+  const needTranslationCount = items.filter((item) => containsKorean(item.title)).length;
+  const skipCount = items.length - needTranslationCount;
 
   if (!open) return null;
 
@@ -306,7 +342,7 @@ export default function BatchEditShowsModal({ open, onClose, items, onSave }: Ba
                   <span className="text-sm font-medium text-gray-700">DeepSeek API 设置</span>
                 </div>
                 <div className="space-y-2">
-                                    <input
+                  <input
                     type="password"
                     name="deepseek-api-key"
                     autoComplete="off"
@@ -327,6 +363,13 @@ export default function BatchEditShowsModal({ open, onClose, items, onSave }: Ba
                       ))}
                     </select>
                   </div>
+                  {/* 韩语检测提示 */}
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-100 text-xs text-amber-700">
+                    <Ban className="w-3.5 h-3.5 shrink-0" />
+                    <span>
+                      已启用韩语检测：{needTranslationCount} 条需要翻译，{skipCount} 条将自动跳过（不含韩语）
+                    </span>
+                  </div>
                   <button
                     onClick={handleTranslate}
                     disabled={isTranslating || items.length === 0}
@@ -340,7 +383,7 @@ export default function BatchEditShowsModal({ open, onClose, items, onSave }: Ba
                     ) : (
                       <>
                         <Languages className="w-4 h-4" />
-                        开始翻译
+                        开始翻译 {needTranslationCount > 0 ? `(${needTranslationCount}条)` : ""}
                       </>
                     )}
                   </button>
@@ -358,22 +401,34 @@ export default function BatchEditShowsModal({ open, onClose, items, onSave }: Ba
                           <th className="px-3 py-2 text-left font-medium text-gray-600">译文</th>
                         </tr>
                       </thead>
-                                            <tbody className="divide-y divide-gray-50">
-                        {items.map((item) => (
-                          <tr key={item.id}>
-                            <td className="px-3 py-2 text-gray-500 align-top">
-                              <div className="max-w-[280px] whitespace-pre-wrap break-words text-sm">{item.title}</div>
-                            </td>
-                            <td className="px-3 py-2 align-top">
-                              <textarea
-                                value={translations[item.id] || item.title}
-                                onChange={(e) => updateTranslation(item.id, e.target.value)}
-                                rows={Math.min(Math.max(Math.ceil(item.title.length / 25), 2), 6)}
-                                className="w-full px-2 py-1.5 rounded border border-gray-200 text-sm outline-none focus:border-violet-400 resize-y min-h-[50px]"
-                              />
-                            </td>
-                          </tr>
-                        ))}
+                      <tbody className="divide-y divide-gray-50">
+                        {items.map((item) => {
+                          const isSkipped = skippedIds.has(item.id);
+                          return (
+                            <tr key={item.id} className={isSkipped ? "bg-gray-50/50" : ""}>
+                              <td className="px-3 py-2 text-gray-500 align-top">
+                                <div className="max-w-[280px] whitespace-pre-wrap break-words text-sm">
+                                  {item.title}
+                                </div>
+                              </td>
+                              <td className="px-3 py-2 align-top">
+                                {isSkipped ? (
+                                  <div className="flex items-center gap-1.5 text-xs text-gray-400 py-1">
+                                    <Ban className="w-3 h-3" />
+                                    <span>无需翻译（不含韩语）</span>
+                                  </div>
+                                ) : (
+                                  <textarea
+                                    value={translations[item.id] || item.title}
+                                    onChange={(e) => updateTranslation(item.id, e.target.value)}
+                                    rows={Math.min(Math.max(Math.ceil(item.title.length / 25), 2), 6)}
+                                    className="w-full px-2 py-1.5 rounded border border-gray-200 text-sm outline-none focus:border-violet-400 resize-y min-h-[50px]"
+                                  />
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
