@@ -467,10 +467,36 @@ export async function migrateSocialToSupabase(): Promise<{ success: number; erro
   return { success: items.length, error: null };
 }
 
+/** 将任意时区的时间字符串转换为北京时间 YYYY-MM-DDTHH:mm */
+export function toBeijingTimeString(dateStr: string): string {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+
+  const formatter = new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(d);
+  const get = (type: string) => parts.find(p => p.type === type)?.value.padStart(2, '0') || '00';
+
+  return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`;
+}
+
+/** 获取当前北京时间字符串 */
+export function getNowBeijingTimeString(): string {
+  return toBeijingTimeString(new Date().toISOString());
+}
 /** 格式化日期为相对时间 */
 export function formatRelativeTime(dateStr: string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
+  // 统一按北京时间解析
+  const date = new Date(dateStr + '+08:00');
+  const now = new Date(getNowBeijingTimeString() + '+08:00');
   const diffMs = now.getTime() - date.getTime();
   const diffMin = Math.floor(diffMs / 60000);
   const diffHour = Math.floor(diffMin / 60);
@@ -480,13 +506,15 @@ export function formatRelativeTime(dateStr: string): string {
   if (diffMin < 60) return `${diffMin} 分钟前`;
   if (diffHour < 24) return `${diffHour} 小时前`;
   if (diffDay < 7) return `${diffDay} 天前`;
-  return date.toLocaleDateString("zh-CN", { month: "short", day: "numeric" });
+  return date.toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai", month: "short", day: "numeric" });
 }
 
 /** 格式化日期为绝对时间 */
 export function formatAbsoluteTime(dateStr: string): string {
-  const date = new Date(dateStr);
+  // 统一按北京时间解析
+  const date = new Date(dateStr + '+08:00');
   return date.toLocaleString("zh-CN", {
+    timeZone: "Asia/Shanghai",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
