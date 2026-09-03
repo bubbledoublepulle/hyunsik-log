@@ -7,6 +7,8 @@ import {
   categoryStyles,
   platformVisualStyles,
   allPlatforms,
+  toBeijingTimeString,
+  getNowBeijingTimeString, 
   type SocialPost,
   type SocialPlatform,
   type SocialCategory,
@@ -54,7 +56,7 @@ export default function SocialFormModal({
       setAuthor("");
       setContent("");
       setPostUrl("");
-      setPostDate(new Date().toISOString().slice(0, 16));
+      setPostDate(getNowBeijingTimeString());
       setImages([""]);
       setVideos([]);
     }
@@ -86,7 +88,7 @@ export default function SocialFormModal({
         if (data.date) {
           const d = new Date(data.date);
           if (!isNaN(d.getTime())) {
-            setPostDate(d.toISOString().slice(0, 16));
+            setPostDate(toBeijingTimeString(data.date));
             fields.add("postDate");
           }
         }
