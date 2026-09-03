@@ -651,65 +651,6 @@ export default function HomePage() {
         </div>
       </motion.section>
 
-      {/* Quick entries */}
-      <motion.section
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.15, duration: 0.6 }}
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-10"
-      >
-        <Link to="/music">
-          <motion.div
-            whileHover={{ y: -4 }}
-            transition={{ type: "spring", damping: 20, stiffness: 300 }}
-            className="group relative overflow-hidden rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-xl transition-shadow p-7 cursor-pointer"
-          >
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-sky-400 to-sky-600" />
-            <div className="flex items-start justify-between mb-4">
-              <div className="w-12 h-12 rounded-xl bg-sky-50 flex items-center justify-center">
-                <Disc3 className="w-6 h-6 text-sky-500" />
-              </div>
-              <ArrowRight className="w-5 h-5 text-gray-300 group-hover:text-sky-400 group-hover:translate-x-1 transition-all" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-1">音乐档案</h3>
-          </motion.div>
-        </Link>
-
-        <Link to="/shows">
-          <motion.div
-            whileHover={{ y: -4 }}
-            transition={{ type: "spring", damping: 20, stiffness: 300 }}
-            className="group relative overflow-hidden rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-xl transition-shadow p-7 cursor-pointer"
-          >
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-violet-400 to-sky-500" />
-            <div className="flex items-start justify-between mb-4">
-              <div className="w-12 h-12 rounded-xl bg-violet-50 flex items-center justify-center">
-                <Film className="w-6 h-6 text-violet-500" />
-              </div>
-              <ArrowRight className="w-5 h-5 text-gray-300 group-hover:text-violet-400 group-hover:translate-x-1 transition-all" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-1">视频档案馆</h3>
-          </motion.div>
-        </Link>
-
-        <Link to="/social">
-          <motion.div
-            whileHover={{ y: -4 }}
-            transition={{ type: "spring", damping: 20, stiffness: 300 }}
-            className="group relative overflow-hidden rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-xl transition-shadow p-7 cursor-pointer"
-          >
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-rose-400 to-sky-500" />
-            <div className="flex items-start justify-between mb-4">
-              <div className="w-12 h-12 rounded-xl bg-rose-50 flex items-center justify-center">
-                <MessageCircle className="w-6 h-6 text-rose-500" />
-              </div>
-              <ArrowRight className="w-5 h-5 text-gray-300 group-hover:text-rose-400 group-hover:translate-x-1 transition-all" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-1">社交动态</h3>
-          </motion.div>
-        </Link>
-      </motion.section>
-
       {/* 那年今日 */}
       <motion.section
         initial={{ opacity: 0, y: 20 }}
