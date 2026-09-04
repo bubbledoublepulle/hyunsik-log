@@ -493,10 +493,27 @@ export function getNowBeijingTimeString(): string {
   return toBeijingTimeString(new Date().toISOString());
 }
 /** 格式化日期为相对时间 */
+/** 智能解析日期字符串（兼容带时区和无时区的旧数据） */
+function parseSmartDate(dateStr: string): Date {
+  if (!dateStr || dateStr === "undefined" || dateStr === "null") {
+    return new Date(NaN);
+  }
+
+  // 如果已经包含时区偏移（如 +09:00 或 -05:00），直接解析
+  if (/[+-]\d{2}:?\d{2}$/.test(dateStr)) {
+    return new Date(dateStr);
+  }
+
+  // 如果是纯 YYYY-MM-DDTHH:mm 格式（无时区），当作北京时间解析
+  return new Date(dateStr + '+08:00');
+}
+
+/** 格式化日期为相对时间（基于北京时间） */
 export function formatRelativeTime(dateStr: string): string {
-  // 统一按北京时间解析
-  const date = new Date(dateStr + '+08:00');
-  const now = new Date(getNowBeijingTimeString() + '+08:00');
+  const date = parseSmartDate(dateStr);
+  if (isNaN(date.getTime())) return "";
+
+  const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffMin = Math.floor(diffMs / 60000);
   const diffHour = Math.floor(diffMin / 60);
@@ -511,8 +528,9 @@ export function formatRelativeTime(dateStr: string): string {
 
 /** 格式化日期为绝对时间 */
 export function formatAbsoluteTime(dateStr: string): string {
-  // 统一按北京时间解析
-  const date = new Date(dateStr + '+08:00');
+  const date = parseSmartDate(dateStr);
+  if (isNaN(date.getTime())) return dateStr;
+
   return date.toLocaleString("zh-CN", {
     timeZone: "Asia/Shanghai",
     year: "numeric",
