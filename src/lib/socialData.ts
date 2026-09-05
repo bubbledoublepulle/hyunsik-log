@@ -499,8 +499,8 @@ function parseSmartDate(dateStr: string): Date {
     return new Date(NaN);
   }
 
-  // 如果已经包含时区偏移（如 +09:00 或 -05:00），直接解析
-  if (/[+-]\d{2}:?\d{2}$/.test(dateStr)) {
+    // 如果已经包含时区偏移（如 +09:00、-05:00 或 Z），直接解析
+  if (/[+-]\d{2}:?\d{2}$|Z$/.test(dateStr)) {
     return new Date(dateStr);
   }
 
