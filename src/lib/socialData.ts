@@ -492,7 +492,6 @@ export function toBeijingTimeString(dateStr: string): string {
 export function getNowBeijingTimeString(): string {
   return toBeijingTimeString(new Date().toISOString());
 }
-/** 格式化日期为相对时间 */
 /** 智能解析日期字符串（兼容带时区和无时区的旧数据） */
 export function parseSmartDate(dateStr: string): Date {
   if (!dateStr || dateStr === "undefined" || dateStr === "null") {
