@@ -56,6 +56,7 @@ import {
   allPlatforms,
   formatRelativeTime,
   formatAbsoluteTime,
+  parseSmartDate,
   type SocialPost,
   type SocialCategory,
   type SocialPlatform,
@@ -114,6 +115,36 @@ function linkifyText(text: string): React.ReactNode[] {
   }
 
   return result;
+}
+
+/** 将社交动态日期统一转换为北京时间的年月日，避免浏览器本地时区影响筛选 */
+function getBeijingDateParts(dateStr: string): {
+  year: number;
+  month: number;
+  day: number;
+} | null {
+  const date = parseSmartDate(dateStr);
+
+  if (Number.isNaN(date.getTime())) return null;
+
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  }).formatToParts(date);
+
+  const getPart = (type: string) => {
+    const value = parts.find((part) => part.type === type)?.value;
+    return value ? Number(value) : NaN;
+  };
+
+  const year = getPart("year");
+  const month = getPart("month");
+  const day = getPart("day");
+
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+  return { year, month, day };
 }
 
 interface TimelineNode {
@@ -773,14 +804,17 @@ export default function SocialPage() {
 
   const timelineData = useMemo((): TimelineNode[] => {
     const map = new Map<number, Map<number, number>>();
+
     socialData.forEach((post) => {
-      const date = new Date(post.postDate);
-      const year = date.getFullYear();
-      const month = date.getMonth() + 1;
+      const dateParts = getBeijingDateParts(post.postDate);
+      if (!dateParts) return;
+
+      const { year, month } = dateParts;
       if (!map.has(year)) map.set(year, new Map());
       const monthMap = map.get(year)!;
       monthMap.set(month, (monthMap.get(month) || 0) + 1);
     });
+
     return Array.from(map.entries())
       .sort((a, b) => b[0] - a[0])
       .map(([year, months]) => ({
@@ -841,18 +875,26 @@ export default function SocialPage() {
       result = result.filter((post) => selectedPlatforms.has(post.platform));
     }
 
-    if (selectedYear !== null) {
-      result = result.filter((post) => new Date(post.postDate).getFullYear() === selectedYear);
-    }
+    // 年/月筛选统一使用北京时间，避免浏览器所在地时区导致跨年/跨月错位
+    if (selectedYear !== null || selectedMonth !== null) {
+      result = result.filter((post) => {
+        const dateParts = getBeijingDateParts(post.postDate);
+        if (!dateParts) return false;
 
-    if (selectedMonth !== null && selectedYear !== null) {
-      result = result.filter((post) => new Date(post.postDate).getMonth() + 1 === selectedMonth);
+        const { year, month } = dateParts;
+        if (selectedYear !== null && year !== selectedYear) return false;
+        if (selectedMonth !== null && month !== selectedMonth) return false;
+        return true;
+      });
     }
 
     result.sort((a, b) => {
       if (a.pinned && !b.pinned) return -1;
       if (!a.pinned && b.pinned) return 1;
-      return new Date(b.postDate).getTime() - new Date(a.postDate).getTime();
+
+      const dateA = parseSmartDate(a.postDate);
+      const dateB = parseSmartDate(b.postDate);
+      return dateB.getTime() - dateA.getTime();
     });
 
     return result;
