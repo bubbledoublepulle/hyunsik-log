@@ -497,6 +497,11 @@ export function parseSmartDate(dateStr: string): Date {
   if (!dateStr || dateStr === "undefined" || dateStr === "null") {
     return new Date(NaN);
   }
+  if (/[+-]\d{2}:?\d{2}$|Z$/.test(dateStr)) {
+    return new Date(dateStr);
+  }
+  return new Date(dateStr + '+08:00');
+}
 
     // 如果已经包含时区偏移（如 +09:00、-05:00 或 Z），直接解析
   if (/[+-]\d{2}:?\d{2}$|Z$/.test(dateStr)) {
