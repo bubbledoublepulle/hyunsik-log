@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 
 const decorations = [
-  { top: "15%", left: "10%", size: 32, opacity: 0.12, delay: "delay-100", anim: "animate-float-medium" },
-  { top: "8%", left: "25%", size: 24, opacity: 0.1, delay: "delay-500", anim: "animate-float-slow" },
-  { top: "20%", right: "15%", size: 40, opacity: 0.11, delay: "delay-300", anim: "animate-float-fast" },
-  { top: "72%", left: "8%", size: 28, opacity: 0.1, delay: "delay-700", anim: "animate-float-slow" },
-  { top: "68%", right: "12%", size: 36, opacity: 0.12, delay: "delay-1000", anim: "animate-float-medium" },
-  { top: "45%", left: "4%", size: 20, opacity: 0.14, delay: "delay-300", anim: "animate-float-fast" },
-  { top: "38%", right: "5%", size: 22, opacity: 0.12, delay: "delay-500", anim: "animate-float-medium" },
+  { top: "15%", left: "10%", size: 32, opacity: 1, delay: "delay-100", anim: "animate-float-medium" },
+  { top: "8%", left: "25%", size: 24, opacity: 1, delay: "delay-500", anim: "animate-float-slow" },
+  { top: "20%", right: "15%", size: 40, opacity: 1, delay: "delay-300", anim: "animate-float-fast" },
+  { top: "72%", left: "8%", size: 28, opacity: 1, delay: "delay-700", anim: "animate-float-slow" },
+  { top: "68%", right: "12%", size: 36, opacity: 1, delay: "delay-1000", anim: "animate-float-medium" },
+  { top: "45%", left: "4%", size: 20, opacity: 1, delay: "delay-300", anim: "animate-float-fast" },
+  { top: "38%", right: "5%", size: 22, opacity: 1, delay: "delay-500", anim: "animate-float-medium" },
 ];
 
 export default function LogoDecorations() {
@@ -53,7 +53,7 @@ export default function LogoDecorations() {
                 alt=""
                 className="w-full h-full object-contain drop-shadow-sm"
                 style={{
-                  filter: "brightness(1.1) hue-rotate(10deg) saturate(1.2)",
+                  filter: "brightness(0) invert(1)",
                 }}
               />
             </div>
