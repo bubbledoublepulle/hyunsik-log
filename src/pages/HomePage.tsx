@@ -643,7 +643,7 @@ export default function HomePage() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.8 }}
-        className="relative min-h-[80vh] md:min-h-screen flex flex-col items-center justify-start -mt-32 pt-32 pb-8 md:pb-24 mb-4 md:mb-10"
+        className="relative min-h-[70vh] md:min-h-screen flex flex-col items-center justify-start -mt-32 pt-32 pb-6 md:pb-24 mb-3 md:mb-10"
       >
         {/* Top-left portfolio label */}
         <motion.div
@@ -680,7 +680,7 @@ export default function HomePage() {
           </a>
         </motion.div>
 
-        <div className="relative z-10 w-full max-w-6xl mx-auto px-6 text-center pt-14 md:pt-36">
+        <div className="relative z-10 w-full max-w-6xl mx-auto px-6 text-center pt-10 md:pt-36">
           <div className="relative inline-block group cursor-default">
             {/* Top-left decorative label */}
             <motion.span
@@ -752,7 +752,7 @@ export default function HomePage() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.8, duration: 0.6 }}
-          className="absolute bottom-4 md:bottom-8 left-0 right-0 p-4 md:p-8 flex justify-between items-end z-30 text-[10px] md:text-xs font-mono font-bold uppercase tracking-[0.15em] text-steel-500/60"
+          className="absolute bottom-2 md:bottom-8 left-0 right-0 p-3 md:p-8 flex justify-between items-end z-30 text-[10px] md:text-xs font-mono font-bold uppercase tracking-[0.15em] text-steel-500/60"
         >
           <div className="flex flex-col gap-1 md:gap-2">
             <span>Personal Archive</span>
@@ -774,10 +774,10 @@ export default function HomePage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2, duration: 0.6 }}
-        className="-mt-6 md:mt-0 mb-6 md:mb-10"
+        className="-mt-8 md:mt-0 mb-5 md:mb-10"
       >
-        <div className="bg-white/40 rounded-sm border border-steel-200/60 shadow-sm p-5 sm:p-6">
-          <div className="flex items-center justify-between mb-6">
+        <div className="bg-white/40 rounded-sm border border-steel-200/60 shadow-sm p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <Calendar className="w-5 h-5 text-steel-500" />
               <div>
@@ -825,9 +825,9 @@ export default function HomePage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.25, duration: 0.6 }}
-        className="mb-6 md:mb-10"
+        className="mb-5 md:mb-10"
       >
-        <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <Film className="w-5 h-5 text-steel-500" />
             <div>
@@ -938,7 +938,7 @@ export default function HomePage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3, duration: 0.6 }}
       >
-        <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <TrendingUp className="w-5 h-5 text-steel-500" />
             <div>
@@ -948,7 +948,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="flex gap-4 mb-4 border-b border-steel-200/40 pb-1">
+        <div className="flex gap-4 mb-3 border-b border-steel-200/40 pb-1">
           {TAB_CONFIG.map((tab) => {
             const active = activeTab === tab.key;
             const count = groupedUpdates[tab.key].length;
