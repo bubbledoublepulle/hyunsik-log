@@ -119,7 +119,6 @@ export default function ShowsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("archive");
 
   const [metaRefreshing, setMetaRefreshing] = useState(false);
-  const [lastSync, setLastSync] = useState<string>("");
   const refreshAbortRef = useRef(false);
   const AUTO_REFRESH_INTERVAL = 24 * 60 * 60 * 1000;
   const autoRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -283,19 +282,6 @@ export default function ShowsPage() {
         setShowData(synced);
       }
     }).catch(() => {});
-    const stored = localStorage.getItem("hsik_show_metadata_cache");
-    if (stored) {
-      try {
-        const cache = JSON.parse(stored);
-        const timestamps = Object.values(cache).map((m: any) => m.fetchedAt || 0);
-        if (timestamps.length > 0) {
-          const latest = Math.max(...timestamps);
-          setLastSync(new Date(latest).toLocaleString("zh-CN"));
-        }
-      } catch {
-        // ignore
-      }
-    }
     autoRefreshTimerRef.current = setInterval(() => {
       if (!metaRefreshing && showData.length > 0) {
         refreshMetadata();
@@ -382,9 +368,7 @@ export default function ShowsPage() {
       const synced = await syncShowData();
       setShowData(synced);
 
-      const now = new Date().toLocaleString("zh-CN");
-      setLastSync(now);
-      localStorage.setItem("hsik_meta_last_sync", now);
+      localStorage.setItem("hsik_meta_last_sync", new Date().toLocaleString("zh-CN"));
 
       toast.success("播放量更新完成", {
         description: `已更新 ${totalUpdated} 条，失败 ${totalFailed} 条，跳过 ${totalSkipped} 条`,
@@ -396,9 +380,7 @@ export default function ShowsPage() {
     } finally {
       setMetaRefreshing(false);
       refreshAbortRef.current = false;
-      const now = new Date().toLocaleString("zh-CN");
-      setLastSync(now);
-      localStorage.setItem("hsik_meta_last_sync", now);
+      localStorage.setItem("hsik_meta_last_sync", new Date().toLocaleString("zh-CN"));
     }
   }, [showData]);
 
