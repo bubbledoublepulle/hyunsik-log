@@ -1,8 +1,8 @@
 import type { ShowMember } from "./showData";
 import { supabase, isSupabaseConfigured } from "./supabase";
 
-/** 社交动态分类标签（二选一） */
-export type SocialCategory = "个人动态" | "官方动态";
+/** 社交动态分类标签 */
+export type SocialCategory = "个人动态" | "官方动态" | "他人更新相关";
 
 /** 社交平台（实际发布平台） */
 export type SocialPlatform =
@@ -43,6 +43,7 @@ export interface SocialPost {
 export const socialCategories: { key: SocialCategory; label: string; desc: string }[] = [
   { key: "个人动态", label: "个人动态", desc: "成员个人发布的内容" },
   { key: "官方动态", label: "官方动态", desc: "官方账号发布的动态" },
+  { key: "他人更新相关", label: "他人更新相关", desc: "其他相关更新内容" },
 ];
 
 /** 平台样式映射 */
@@ -109,6 +110,11 @@ export const categoryStyles: Record<
     inactive: "bg-white text-violet-600 border-violet-200 hover:border-violet-400",
     dot: "bg-violet-500",
   },
+  "他人更新相关": {
+    active: "bg-amber-500 text-white border-amber-500",
+    inactive: "bg-white text-amber-600 border-amber-200 hover:border-amber-400",
+    dot: "bg-amber-500",
+  },
 };
 
 /** 所有可选平台列表 */
@@ -126,6 +132,7 @@ export const allPlatforms: SocialPlatform[] = [
 export const categoryToPlatforms: Record<string, SocialPlatform[]> = {
   个人动态: ["Weverse", "YouTube Community", "bubble"],
   官方动态: ["Weverse", "X", "YouTube Community"],
+  他人更新相关: ["X", "Instagram", "fromm", "bubble", "Weverse", "YouTube Community", "Fan Club"],
   X: ["X"],
   Instagram: ["Instagram"],
   fromm: ["fromm", "bubble"],
