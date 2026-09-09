@@ -208,16 +208,42 @@ export default function MusicPage() {
       groups.get(key)!.push(item);
     });
     return Array.from(groups.entries())
-      .map(([album, songs]) => ({ album, songs: songs.sort((a, b) => (a.albumNo ?? 1) - (b.albumNo ?? 1)) }))
+      .map(([album, songs]) => {
+        const sortedSongs = [...songs];
+        if (sortBy === "title-asc") {
+          sortedSongs.sort((a, b) => a.title.localeCompare(b.title, "zh-CN"));
+        } else {
+          sortedSongs.sort((a, b) => {
+            const dateDiff = new Date(a.releaseDate).getTime() - new Date(b.releaseDate).getTime();
+            if (dateDiff !== 0) return dateDiff;
+            return (a.albumNo ?? 1) - (b.albumNo ?? 1);
+          });
+        }
+        return { album, songs: sortedSongs };
+      })
       .filter((group) => group.songs.length > 0)
       .sort((a, b) => {
-        const aTimes = a.songs.map((s) => new Date(s.releaseDate).getTime()).filter((t) => !Number.isNaN(t));
-        const bTimes = b.songs.map((s) => new Date(s.releaseDate).getTime()).filter((t) => !Number.isNaN(t));
-        const aLatest = aTimes.length > 0 ? Math.max(...aTimes) : 0;
-        const bLatest = bTimes.length > 0 ? Math.max(...bTimes) : 0;
-        return bLatest - aLatest;
+        switch (sortBy) {
+          case "title-asc":
+            return a.album.localeCompare(b.album, "zh-CN");
+          case "date-asc": {
+            const aTimes = a.songs.map((s) => new Date(s.releaseDate).getTime()).filter((t) => !Number.isNaN(t));
+            const bTimes = b.songs.map((s) => new Date(s.releaseDate).getTime()).filter((t) => !Number.isNaN(t));
+            const aEarliest = aTimes.length > 0 ? Math.min(...aTimes) : 0;
+            const bEarliest = bTimes.length > 0 ? Math.min(...bTimes) : 0;
+            return aEarliest - bEarliest;
+          }
+          case "date-desc":
+          default: {
+            const aTimes = a.songs.map((s) => new Date(s.releaseDate).getTime()).filter((t) => !Number.isNaN(t));
+            const bTimes = b.songs.map((s) => new Date(s.releaseDate).getTime()).filter((t) => !Number.isNaN(t));
+            const aLatest = aTimes.length > 0 ? Math.max(...aTimes) : 0;
+            const bLatest = bTimes.length > 0 ? Math.max(...bTimes) : 0;
+            return bLatest - aLatest;
+          }
+        }
       });
-  }, [filteredData]);
+  }, [filteredData, sortBy]);
 
   const toggleType = (type: MusicType) => {
     const next = new Set(selectedTypes);
@@ -391,7 +417,6 @@ export default function MusicPage() {
                           className={`group relative border-b border-steel-100/60 last:border-0 hover:bg-steel-50/30 transition-colors ${index % 2 === 1 ? "bg-white/30" : ""} ${item.isSelfComposed ? "shadow-[inset_3px_0_0_0_#4682B4]" : ""} ${flashId === item.id ? "flash-highlight" : ""}`}>
                           <td className="px-4 py-3.5">
                             <div className="flex items-center gap-2.5">
-                              <span className="text-[10px] font-mono text-steel-400 w-8 shrink-0">No.{String(item.albumNo ?? 1).padStart(2, "0")}</span>
                               <div>
                                 <div className="flex items-center gap-1.5">
                                   <span className="font-medium text-steel-700 text-sm">{item.title}</span>
