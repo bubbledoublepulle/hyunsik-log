@@ -44,10 +44,10 @@ export default function Navbar() {
               <Link
                 key={path}
                 to={path}
-                className={`group relative py-2 text-[10px] sm:text-xs md:text-base font-mono font-bold sm:font-black uppercase tracking-[0.08em] sm:tracking-[0.15em] md:tracking-[0.2em] transition-all shrink-0 ${
+                className={`group relative py-2 text-base font-mono font-black uppercase tracking-[0.2em] transition-all shrink-0 ${
                   isActive
                     ? "text-[#4682b4]"
-                    : "text-[#4682b4]/80 hover:text-[#4682b4]"
+                    : "text-[#4682b4]/80 md:hover:text-[#4682b4] active:opacity-70"
                 }`}
               >
                 <span className="relative z-10">{label}</span>
@@ -59,7 +59,7 @@ export default function Navbar() {
                   />
                 )}
                 {!isActive && (
-                  <span className="absolute bottom-0 left-0 w-0 h-[3px] bg-[#8daabf] group-hover:w-full transition-all duration-300" />
+                  <span className="absolute bottom-0 left-0 w-0 h-[3px] bg-[#8daabf] md:group-hover:w-full transition-all duration-300" />
                 )}
               </Link>
             );
