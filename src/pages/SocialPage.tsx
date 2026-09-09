@@ -59,6 +59,7 @@ import {
   formatRelativeTime,
   formatAbsoluteTime,
   parseSmartDate,
+  toBeijingTimeString,
   type SocialPost,
   type SocialCategory,
   type SocialPlatform,
@@ -119,15 +120,16 @@ function linkifyText(text: string): React.ReactNode[] {
   return result;
 }
 
-/** 从日期字符串解析年月日，兼容 YYYY-MM-DD / YYYY/MM/DD / YYYY-M-D 等格式，避免时区转换导致筛选错位 */
+/** 从日期字符串解析年月日（统一按北京时间），兼容 YYYY-MM-DD / YYYY/MM/DD / YYYY-M-D 等格式 */
 function getDateParts(dateStr: string): {
   year: number;
   month: number;
   day: number;
 } | null {
   if (!dateStr) return null;
-  const normalized = String(dateStr).trim().replace(/\//g, "-");
-  const match = normalized.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  // 先转换为北京时间字符串，避免 UTC/其他时区数据导致跨年月错位
+  const beijing = toBeijingTimeString(String(dateStr).trim());
+  const match = beijing.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!match) return null;
   const year = parseInt(match[1], 10);
   const month = parseInt(match[2], 10);

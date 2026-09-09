@@ -72,7 +72,7 @@ module.exports = {
         xs: "0 1px 2px 0 rgb(0 0 0 / 0.05)",
       },
       fontFamily: {
-        serif: ["'Playfair Display'", "Georgia", "serif"],
+        serif: ["'Playfair Display'", "'Noto Serif SC'", "Georgia", "serif"],
         mono: ["'Space Mono'", "ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "monospace"],
         sans: ["'Pretendard'", "'Inter'", "-apple-system", "BlinkMacSystemFont", "'Segoe UI'", "Roboto", "'PingFang SC'", "'Microsoft YaHei'", "'Noto Sans SC'", "sans-serif"],
       },
