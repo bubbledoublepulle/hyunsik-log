@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 205 84% 93%;
+    --foreground: 204 43% 31%;
+    --card: 0 0% 100%;
+    --card-foreground: 204 43% 31%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 204 43% 31%;
+    --primary: 207 41% 49%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 205 60% 90%;
+    --secondary-foreground: 204 43% 31%;
+    --muted: 205 40% 90%;
+    --muted-foreground: 207 30% 50%;
+    --accent: 205 60% 90%;
+    --accent-foreground: 204 43% 31%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 207 41% 75%;
+    --input: 207 41% 75%;
+    --ring: 207 41% 49%;
+    --radius: 0.75rem;
+    --sidebar-background: 205 84% 93%;
+    --sidebar-foreground: 204 43% 31%;
+    --sidebar-primary: 207 41% 49%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 205 60% 90%;
+    --sidebar-accent-foreground: 204 43% 31%;
+    --sidebar-border: 207 41% 75%;
+    --sidebar-ring: 207 41% 49%;
+
+    /* Variant Works reference tokens */
+    --bg-blue: #E3F2FD;
+    --grid-color: rgba(70, 130, 180, 0.12);
+    --text-main: #4682B4;
+    --text-accent: #2C5271;
+    --flower-white: #FFFFFF;
+    --flower-core: #B0C4DE;
+    --stem-color: #8DAABF;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Pretendard', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  /* Hide page-level scrollbars to match the reference design */
+  html, body {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  html::-webkit-scrollbar, body::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: hsl(207 41% 75%);
+    border-radius: 3px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: hsl(207 41% 60%);
+  }
+}
+@keyframes flash-outline {
+  0% { outline: 3px solid rgba(70, 130, 180, 0.8); outline-offset: 2px; }
+  100% { outline: 3px solid rgba(70, 130, 180, 0); outline-offset: 10px; }
+}
+.flash-highlight {
+  animation: flash-outline 0.7s ease-out forwards;
+  border-radius: 8px;
+}

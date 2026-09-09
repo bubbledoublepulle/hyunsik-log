@@ -1,0 +1,12 @@
+name = "refresh-worker"
+main = "workers/refresh-queue.js"
+compatibility_date = "2024-01-01"
+
+[[queues.producers]]
+queue = "refresh-queue"
+
+[[queues.consumers]]
+queue = "refresh-queue"
+max_batch_size = 1
+max_batch_timeout = 300
+max_retries = 3

@@ -1,0 +1,24 @@
+{
+  "name": "hyunsik-log",
+  "main": "worker/index.js",
+  "compatibility_date": "2025-07-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  },
+  "routes": [
+    {
+      "pattern": "www.siklog.work",
+      "zone_name": "siklog.work",
+      "custom_domain": true
+    },
+    {
+      "pattern": "siklog.work",
+      "zone_name": "siklog.work",
+      "custom_domain": true
+    }
+  ],
+  "triggers": {
+    "crons": ["0 */2 * * *"]
+  }
+}
