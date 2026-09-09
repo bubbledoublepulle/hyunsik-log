@@ -50,7 +50,7 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: 'Pretendard', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'Pretendard', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
   }
 
   /* Hide page-level scrollbars to match the reference design */

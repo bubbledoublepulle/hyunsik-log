@@ -696,7 +696,7 @@ export default function HomePage() {
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3, duration: 0.8 }}
-              className="text-[15vw] md:text-[16vw] font-serif italic leading-none tracking-tighter flex items-end select-none drop-shadow-xl"
+              className="text-[18vw] md:text-[16vw] font-serif italic leading-none tracking-tighter flex items-end select-none drop-shadow-xl"
               style={{
                 color: "#4682b4",
                 textShadow: `

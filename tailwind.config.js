@@ -74,7 +74,7 @@ module.exports = {
       fontFamily: {
         serif: ["'Playfair Display'", "Georgia", "serif"],
         mono: ["'Space Mono'", "ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "monospace"],
-        sans: ["'Pretendard'", "'Inter'", "-apple-system", "BlinkMacSystemFont", "'Segoe UI'", "Roboto", "sans-serif"],
+        sans: ["'Pretendard'", "'Inter'", "-apple-system", "BlinkMacSystemFont", "'Segoe UI'", "Roboto", "'PingFang SC'", "'Microsoft YaHei'", "'Noto Sans SC'", "sans-serif"],
       },
       keyframes: {
         "accordion-down": {
