@@ -12,7 +12,7 @@ import SocialPage from "@/pages/SocialPage";
 
 function HomeRedirect() {
   return (
-    <div className="min-h-screen bg-transparent pt-32">
+    <div className="min-h-0 md:min-h-screen bg-transparent pt-32">
       <GridBackground />
       <LogoDecorations />
       <Navbar />
@@ -30,7 +30,7 @@ function App() {
           <Route
             path="/music"
             element={
-              <div className="min-h-screen bg-transparent pt-32">
+              <div className="min-h-0 md:min-h-screen bg-transparent pt-32">
                 <GridBackground />
                 <Navbar />
                 <MusicPage />
@@ -40,7 +40,7 @@ function App() {
           <Route
             path="/shows"
             element={
-              <div className="min-h-screen bg-transparent pt-32">
+              <div className="min-h-0 md:min-h-screen bg-transparent pt-32">
                 <GridBackground />
                 <Navbar />
                 <ShowsPage />
@@ -50,7 +50,7 @@ function App() {
           <Route
             path="/social"
             element={
-              <div className="min-h-screen bg-transparent pt-32">
+              <div className="min-h-0 md:min-h-screen bg-transparent pt-32">
                 <GridBackground />
                 <Navbar />
                 <SocialPage />
