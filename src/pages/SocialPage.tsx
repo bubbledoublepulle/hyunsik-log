@@ -43,7 +43,9 @@ import {
   AlignLeft,
   Loader2,
   Link2,
+  Search,
 } from "lucide-react";
+
 import { toast } from "sonner";
 import { fetchLinkPreview, type LinkPreview } from "@/lib/linkPreviewFetcher";
 import {
@@ -751,8 +753,9 @@ export default function SocialPage() {
   const [socialData, setSocialData] = useState<SocialPost[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<Set<SocialCategory>>(new Set());
   const [selectedPlatforms, setSelectedPlatforms] = useState<Set<SocialPlatform>>(new Set());
-  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+    const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
     const [flashId, setFlashId] = useState<string | null>(null);
 
@@ -867,6 +870,18 @@ export default function SocialPage() {
   const sortedAndFilteredData = useMemo(() => {
     let result = [...socialData];
 
+    // 关键词搜索：content / author / category / platform，不区分大小写
+    const query = searchQuery.trim().toLowerCase();
+    if (query) {
+      result = result.filter((post) => {
+        const contentMatch = post.content?.toLowerCase().includes(query);
+        const authorMatch = post.author?.toLowerCase().includes(query);
+        const categoryMatch = post.category?.toLowerCase().includes(query);
+        const platformMatch = post.platform?.toLowerCase().includes(query);
+        return contentMatch || authorMatch || categoryMatch || platformMatch;
+      });
+    }
+
     if (selectedCategories.size > 0) {
       result = result.filter((post) => post.category && selectedCategories.has(post.category));
     }
@@ -898,7 +913,8 @@ export default function SocialPage() {
     });
 
     return result;
-  }, [socialData, selectedCategories, selectedPlatforms, selectedYear, selectedMonth]);
+  }, [socialData, searchQuery, selectedCategories, selectedPlatforms, selectedYear, selectedMonth]);
+
 
   const toggleBatchSelect = (id: string) => {
     const next = new Set(batchSelectedIds);
@@ -1160,8 +1176,28 @@ export default function SocialPage() {
 
         {/* Right content */}
         <div className="flex-1 min-w-0">
-          {/* Filter tags */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-6 space-y-3">
+             {/* Filter tags */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-6 space-y-4">
+            {/* 关键词搜索 */}
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="搜索帖子内容、分类、平台..."
+                className="w-full pl-10 pr-9 py-2.5 rounded-xl border border-gray-200 bg-white text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 transition-all"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs text-gray-400 mr-1">分类：</span>
               {socialCategories.map((cat) => {
@@ -1219,7 +1255,7 @@ export default function SocialPage() {
                 </button>
               )}
               <span className="ml-auto text-xs text-gray-400">
-                {selectedCategories.size > 0 || selectedPlatforms.size > 0 || hasTimeFilter
+                {selectedCategories.size > 0 || selectedPlatforms.size > 0 || hasTimeFilter || searchQuery.trim()
                   ? `分类 ${selectedCategories.size} 个 · 平台 ${selectedPlatforms.size} 个 · ${sortedAndFilteredData.length} 条动态`
                   : `全部 · ${sortedAndFilteredData.length} 条动态`}
               </span>
@@ -1342,19 +1378,20 @@ export default function SocialPage() {
             </AnimatePresence>
           </div>
 
-          {sortedAndFilteredData.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mb-3">
-                <MessageSquare className="w-8 h-8 text-gray-300" />
-              </div>
-              <p className="text-sm text-gray-500 mb-1">没有找到匹配的动态</p>
-              <p className="text-xs text-gray-400">
-                {selectedCategories.size > 0 || selectedPlatforms.size > 0 || hasTimeFilter
-                  ? "尝试调整筛选条件或清除筛选"
-                  : "管理员可点击「添加动态」创建内容"}
-              </p>
-            </div>
-          )}
+   {sortedAndFilteredData.length === 0 && (
+  <div className="flex flex-col items-center justify-center py-16 text-center">
+    <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mb-3">
+      <MessageSquare className="w-8 h-8 text-gray-300" />
+    </div>
+    <p className="text-sm text-gray-500 mb-1">没有找到匹配的帖子，尝试其他关键词</p>
+    <p className="text-xs text-gray-400">
+      {selectedCategories.size > 0 || selectedPlatforms.size > 0 || hasTimeFilter || searchQuery.trim()
+        ? "尝试调整筛选条件、搜索关键词或清除筛选"
+        : "管理员可点击「添加动态」创建内容"}
+    </p>
+  </div>
+)}
+
         </div>
       </div>
 
