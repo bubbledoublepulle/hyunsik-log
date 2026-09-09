@@ -3,6 +3,9 @@ CREATE TABLE IF NOT EXISTS music (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
   album TEXT NOT NULL,
+  album_no INTEGER NOT NULL DEFAULT 0,
+  is_title_track BOOLEAN NOT NULL DEFAULT false,
+  cover_image_url TEXT,
   release_date TEXT NOT NULL,
   type TEXT NOT NULL,
   roles TEXT[] NOT NULL DEFAULT '{}',
@@ -77,3 +80,9 @@ CREATE POLICY "Allow public read" ON social_posts FOR SELECT USING (true);
 CREATE POLICY "Allow public insert" ON social_posts FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow public update" ON social_posts FOR UPDATE USING (true);
 CREATE POLICY "Allow public delete" ON social_posts FOR DELETE USING (true);
+
+-- 迁移：为已存在的 music 表补充 album_no / is_title_track / cover_image_url 列
+ALTER TABLE music
+  ADD COLUMN IF NOT EXISTS album_no INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS is_title_track BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS cover_image_url TEXT;
