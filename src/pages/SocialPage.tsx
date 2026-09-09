@@ -834,8 +834,13 @@ export default function SocialPage() {
 
   const handleSelectYear = (year: number) => {
     if (selectedYear === year) {
-      setSelectedYear(null);
-      setSelectedMonth(null);
+      if (selectedMonth !== null) {
+        // 已选中年份+月份时再次点击年份，只清除月份，回到该年全年
+        setSelectedMonth(null);
+      } else {
+        // 只选中年份时再次点击年份，清除年份
+        setSelectedYear(null);
+      }
     } else {
       setSelectedYear(year);
       setSelectedMonth(null);
@@ -1005,7 +1010,7 @@ export default function SocialPage() {
   const hasTimeFilter = selectedYear !== null;
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-8 pb-4 md:pb-8">
       {/* Page toolbar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
