@@ -1075,7 +1075,7 @@ export default function SocialPage() {
         )}
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-6 min-h-[calc(100vh-8rem)]">
+      <div className="flex flex-col lg:flex-row gap-6 min-h-0 lg:min-h-[calc(100vh-8rem)]">
         {/* Left sidebar - Timeline filter */}
         <motion.aside
           initial={{ opacity: 0, x: -15 }}
