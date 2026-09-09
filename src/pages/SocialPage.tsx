@@ -938,7 +938,10 @@ export default function SocialPage() {
 
   const handleBatchImport = async (posts: SocialPost[]) => {
     userModifiedRef.current = true;
-    const newData = [...posts, ...socialData];
+    // 新数据覆盖旧数据，避免同一 id 重复出现
+    const merged = new Map(socialData.map((p) => [p.id, p]));
+    posts.forEach((post) => merged.set(post.id, post));
+    const newData = Array.from(merged.values());
     setSocialData(newData);
     const { error } = await saveSocialData(newData);
     if (error) {
@@ -1072,7 +1075,7 @@ export default function SocialPage() {
         )}
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-6">
+      <div className="flex flex-col lg:flex-row gap-6 min-h-[calc(100vh-8rem)]">
         {/* Left sidebar - Timeline filter */}
         <motion.aside
           initial={{ opacity: 0, x: -15 }}

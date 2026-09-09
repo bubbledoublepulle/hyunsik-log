@@ -396,8 +396,12 @@ export async function syncSocialData(): Promise<SocialPost[]> {
   }
 
   const items = allRows.map(fromDbRow);
-  saveLocalSocialData(items);
-  return items;
+  // 按 id 去重，避免重复行导致同一条动态反复出现
+  const uniqueItems = Array.from(
+    new Map(items.map((item) => [item.id, item])).values()
+  );
+  saveLocalSocialData(uniqueItems);
+  return uniqueItems;
 }
 
 export async function saveSocialData(data: SocialPost[]): Promise<{ error: string | null }> {
