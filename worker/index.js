@@ -13,7 +13,17 @@ export default {
     // Cron Trigger: 每 2 小时批量刷新所有视频元数据
     if (controller.cron === "0 */2 * * *") {
       console.log("[cron] Starting batch refresh at", new Date().toISOString());
-      ctx.waitUntil(handleRefreshAllShows(env, ctx));
+      ctx.waitUntil((async () => {
+        let offset = 0;
+        const limit = 50;
+        while (true) {
+          const url = new URL(`http://localhost/api/refresh-all-shows?offset=${offset}&limit=${limit}`);
+          const result = await handleRefreshAllShows(env, url);
+          if (!result.hasMore) break;
+          offset = result.nextOffset;
+        }
+        console.log("[cron] Batch refresh complete");
+      })());
     }
   },
 };
@@ -35,7 +45,7 @@ async function handleApi(url, request, env) {
     return jsonResponse(await handleRefreshShow(url, env), false);
   }
   if (url.pathname === "/api/refresh-all-shows") {
-    return jsonResponse(await handleRefreshAllShows(env), false);
+    return jsonResponse(await handleRefreshAllShows(env, url), false);
   }
   return Response.json({ error: "not found" }, { status: 404 });
 }
@@ -410,47 +420,65 @@ async function handleRefreshShow(url, env) {
   }
 }
 
-async function handleRefreshAllShows(env, ctx) {
+async function handleRefreshAllShows(env, url) {
   try {
-    const shows = await getAllShowsFromSupabase(env);
-    
-    const DELAY_MS = 2000; // 串行间隔 2 秒
+    const offset = parseInt(url?.searchParams?.get("offset") || "0", 10) || 0;
+    const limit = parseInt(url?.searchParams?.get("limit") || "50", 10) || 50;
+
+    const { shows, total } = await getShowsFromSupabase(env, offset, limit);
+
+    // 分批并发刷新：每批 5 个，避免对 YouTube 造成过大压力
+    const CONCURRENCY = 5;
     let updated = 0, failed = 0, skipped = 0;
-    
-    for (const show of shows) {
-      try {
-        // 串行处理：等待间隔
-        if (updated + failed + skipped > 0) {
-          await new Promise(r => setTimeout(r, DELAY_MS));
-        }
 
-        const metadata = await scrapeShowMetadata(show, null, null, env);
-        if (!metadata) {
-          // 抓取失败，保留原值，不计入失败
-          console.log(`[refresh] Skipped ${show.id}: fetch failed, preserving original value`);
-          skipped++;
-          continue;
-        }
+    for (let i = 0; i < shows.length; i += CONCURRENCY) {
+      const batch = shows.slice(i, i + CONCURRENCY);
+      const batchResults = await Promise.all(
+        batch.map(async (show) => {
+          try {
+            const metadata = await scrapeShowMetadata(show, null, null, env);
+            if (!metadata) {
+              console.log(`[refresh] Skipped ${show.id}: fetch failed, preserving original value`);
+              return { status: "skipped" };
+            }
+            const updateOk = await updateShowInSupabase(env, show.id, metadata);
+            if (updateOk) {
+              console.log(`[refresh] Updated ${show.id}: views=${metadata.views}`);
+              return { status: "updated" };
+            }
+            console.log(`[refresh] Failed to update ${show.id} in Supabase`);
+            return { status: "failed" };
+          } catch (e) {
+            console.error(`[refresh] Error for ${show.id}:`, e);
+            return { status: "failed" };
+          }
+        })
+      );
 
-        const updateOk = await updateShowInSupabase(env, show.id, metadata);
-        if (updateOk) {
-          console.log(`[refresh] Updated ${show.id}: views=${metadata.views}`);
-          updated++;
-        } else {
-          console.log(`[refresh] Failed to update ${show.id} in Supabase`);
-          failed++;
-        }
-      } catch (e) {
-        console.error(`[refresh] Error for ${show.id}:`, e);
-        failed++;
+      for (const r of batchResults) {
+        if (r.status === "updated") updated++;
+        else if (r.status === "failed") failed++;
+        else skipped++;
       }
     }
 
-    console.log(`[refresh] Complete: ${updated} updated, ${failed} failed, ${skipped} skipped, total: ${shows.length}`);
-    return { updated, failed, skipped, total: shows.length };
+    const processed = shows.length;
+    console.log(`[refresh] Page offset=${offset} limit=${limit}: ${updated} updated, ${failed} failed, ${skipped} skipped, processed: ${processed}`);
+
+    return {
+      updated,
+      failed,
+      skipped,
+      processed,
+      offset,
+      limit,
+      total,
+      hasMore: offset + processed < total,
+      nextOffset: offset + processed,
+    };
   } catch (e) {
     console.error("[refresh-all] error:", e);
-    return { updated: 0, failed: 0, skipped: 0, total: 0 };
+    return { updated: 0, failed: 0, skipped: 0, total: 0, hasMore: false, nextOffset: 0 };
   }
 }
 
@@ -475,6 +503,35 @@ async function getAllShowsFromSupabase(env) {
   });
   if (!resp.ok) return [];
   return await resp.json();
+}
+
+async function getShowsFromSupabase(env, offset = 0, limit = 50) {
+  const showsResp = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/shows?select=*&order=created_at.desc&offset=${offset}&limit=${limit}`,
+    {
+      headers: {
+        'apikey': env.SUPABASE_SERVICE_KEY,
+        'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      },
+    }
+  );
+  if (!showsResp.ok) {
+    throw new Error(`Supabase shows query failed: HTTP ${showsResp.status}`);
+  }
+  const shows = await showsResp.json();
+
+  const countResp = await fetch(`${env.SUPABASE_URL}/rest/v1/shows?select=count`, {
+    headers: {
+      'apikey': env.SUPABASE_SERVICE_KEY,
+      'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      'Prefer': 'count=exact',
+    },
+  });
+  const contentRange = countResp.headers.get('content-range') || '';
+  const totalMatch = contentRange.match(/\/(\d+)/);
+  const total = totalMatch ? parseInt(totalMatch[1], 10) : shows.length;
+
+  return { shows, total };
 }
 
 async function scrapeShowMetadata(show, videoIdParam, bvidParam, env) {

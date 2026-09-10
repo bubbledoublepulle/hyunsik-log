@@ -252,9 +252,14 @@ export default function ShowsPage() {
 
   const initialLoadRef = useRef(true);
   const userModifiedRef = useRef(false);
+  const showDataRef = useRef<ShowItem[]>([]);
 
   const prevRtShowCountRef = useRef(0);
   const rtShowNotifiedRef = useRef(false);
+
+  useEffect(() => {
+    showDataRef.current = showData;
+  }, [showData]);
 
   useEffect(() => {
     if (!rtShowData || rtShowData.length === 0) return;
@@ -283,13 +288,13 @@ export default function ShowsPage() {
       }
     }).catch(() => {});
     autoRefreshTimerRef.current = setInterval(() => {
-      if (!metaRefreshing && showData.length > 0) {
+      if (!metaRefreshing && showDataRef.current.length > 0) {
         refreshMetadata();
       }
     }, AUTO_REFRESH_INTERVAL);
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible" && !metaRefreshing && showData.length > 0) {
-        const hasStale = showData.some((item) => {
+      if (document.visibilityState === "visible" && !metaRefreshing && showDataRef.current.length > 0) {
+        const hasStale = showDataRef.current.some((item) => {
           const meta = getCachedMetadata(item.id);
           return isCacheStale(meta);
         });
@@ -335,11 +340,6 @@ export default function ShowsPage() {
     const limit = 50;
 
     try {
-      try {
-        localStorage.removeItem("hsik_show_metadata_cache");
-        localStorage.removeItem("hsik_video_fetch_cache");
-      } catch {}
-
       while (true) {
         const resp = await fetch(`/api/refresh-all-shows?offset=${offset}&limit=${limit}`, {
           method: "POST",
@@ -368,6 +368,12 @@ export default function ShowsPage() {
       const synced = await syncShowData();
       setShowData(synced);
 
+      // 成功后清理前端本地元数据缓存，下次会从 Supabase 重新拉取
+      try {
+        localStorage.removeItem("hsik_show_metadata_cache");
+        localStorage.removeItem("hsik_video_fetch_cache");
+      } catch {}
+
       localStorage.setItem("hsik_meta_last_sync", new Date().toLocaleString("zh-CN"));
 
       toast.success("播放量更新完成", {
@@ -382,7 +388,9 @@ export default function ShowsPage() {
       refreshAbortRef.current = false;
       localStorage.setItem("hsik_meta_last_sync", new Date().toLocaleString("zh-CN"));
     }
-  }, [showData]);
+    // 该函数只依赖 stable refs 和全局函数，不依赖 showData 当前值
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleToggleYear = (year: number) => {
     if (expandedYear === year) {
