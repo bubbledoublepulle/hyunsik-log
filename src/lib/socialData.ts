@@ -344,7 +344,7 @@ export function loadSocialData(): SocialPost[] {
   } catch {
     // ignore
   }
-  return migrateSocialData(JSON.parse(JSON.stringify(initialSocialData)));
+  return [];
 }
 
 function saveLocalSocialData(data: SocialPost[]): void {

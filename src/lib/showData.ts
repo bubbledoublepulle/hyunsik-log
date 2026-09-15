@@ -272,7 +272,7 @@ export function loadShowData(): ShowItem[] {
   } catch {
     // ignore parse errors
   }
-  return JSON.parse(JSON.stringify(initialShowData));
+  return [];
 }
 
 function saveLocalShowData(data: ShowItem[]): void {

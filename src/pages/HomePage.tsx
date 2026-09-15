@@ -31,6 +31,7 @@ import {
 } from "@/lib/showData";
 import { loadSocialData, syncSocialData, type SocialPost } from "@/lib/socialData";
 import DataManager from "@/components/DataManager";
+import PageLoader from "@/components/PageLoader";
 
 interface UpdateItem {
   id: string;
@@ -46,10 +47,10 @@ interface UpdateItem {
 
 type TabKey = "music" | "show" | "social";
 
-const TAB_CONFIG: { key: TabKey; label: string; icon: typeof Music; color: string; activeColor: string; link: string }[] = [
-  { key: "music", label: "音乐", icon: Disc3, color: "border-sky-200 text-sky-600 bg-sky-50", activeColor: "border-sky-400 text-sky-700 bg-sky-100", link: "/music" },
-  { key: "show", label: "视频", icon: Film, color: "border-violet-200 text-violet-600 bg-violet-50", activeColor: "border-violet-400 text-violet-700 bg-violet-100", link: "/shows" },
-  { key: "social", label: "社交", icon: MessageCircle, color: "border-rose-200 text-rose-600 bg-rose-50", activeColor: "border-rose-400 text-rose-700 bg-rose-100", link: "/social" },
+const TAB_CONFIG: { key: TabKey; label: string; icon: typeof Music; link: string }[] = [
+  { key: "music", label: "音乐", icon: Disc3, link: "/music" },
+  { key: "show", label: "视频", icon: Film, link: "/shows" },
+  { key: "social", label: "社交", icon: MessageCircle, link: "/social" },
 ];
 
 function getProxiedThumbnail(url: string | null | undefined): string | null {
@@ -84,24 +85,41 @@ function getPlatformStyleLocal(platform: string) {
   return styles[platform] || styles["其他"];
 }
 
-function MusicOnThisDayCard({ item, year }: { item: MusicItem; year: number }) {
+function CardLogoDecoration() {
+  return (
+    <div className="absolute top-3 right-3 w-8 h-8 opacity-0 scale-50 -rotate-12 group-hover:opacity-100 group-hover:scale-100 group-hover:rotate-0 transition-all duration-300 pointer-events-none">
+      <img
+        src="/logo.svg"
+        alt=""
+        className="w-full h-full object-contain"
+        style={{ filter: 'brightness(1.1) hue-rotate(10deg) saturate(1.2)' }}
+      />
+    </div>
+  );
+}
+
+function MusicOnThisDayCard({ item, year, index }: { item: MusicItem; year: number; index: number }) {
+  const no = String(index + 1).padStart(2, '0');
   return (
     <>
-      <div className="h-2 bg-gradient-to-r from-sky-400 to-sky-600" />
+      <div className="relative aspect-[4/3] bg-steel-50/30 flex items-center justify-center overflow-hidden">
+        <span className="font-serif italic text-3xl sm:text-4xl text-steel-400/40">Music N°{no}</span>
+        <CardLogoDecoration />
+      </div>
       <div className="p-4">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs px-2 py-0.5 rounded-md bg-sky-50 text-sky-600 font-medium border border-sky-100">音乐</span>
-          <span className="text-xs text-gray-400 font-medium">{year}年</span>
+          <span className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600">Music</span>
+          <span className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600">{year}</span>
         </div>
-        <h3 className="font-bold text-gray-900 text-sm mb-1 line-clamp-1">{item.title}</h3>
-        <p className="text-xs text-gray-500 mb-2">{item.album} · {item.artist}</p>
+        <h3 className="font-bold text-steel-700 text-sm mb-1 line-clamp-1">{item.title}</h3>
+        <p className="text-xs text-steel-500/70 mb-2">{item.album} · {item.artist}</p>
         <div className="flex flex-wrap gap-1">
           {item.roles.map((role) => (
-            <span key={role} className="text-[10px] px-1.5 py-0.5 rounded border border-sky-100 bg-sky-50 text-sky-600 font-medium">{role}</span>
+            <span key={role} className="text-[10px] px-1.5 py-0.5 rounded-sm border border-steel-200/60 bg-steel-50/70 text-steel-600 font-medium">{role}</span>
           ))}
         </div>
         {item.isSelfComposed && (
-          <div className="mt-2 flex items-center gap-1 text-[10px] text-sky-500">
+          <div className="mt-2 flex items-center gap-1 text-[10px] text-steel-500">
             <Sparkles className="w-3 h-3" />自作曲
           </div>
         )}
@@ -110,11 +128,12 @@ function MusicOnThisDayCard({ item, year }: { item: MusicItem; year: number }) {
   );
 }
 
-function VideoOnThisDayCard({ item, year }: { item: ShowItem; year: number }) {
+function VideoOnThisDayCard({ item, year, index }: { item: ShowItem; year: number; index: number }) {
   const thumbUrl = getPreferredThumbnail(item);
+  const no = String(index + 1).padStart(2, '0');
   return (
     <>
-      <div className="relative aspect-[16/10] overflow-hidden">
+      <div className="relative aspect-[16/10] overflow-hidden bg-steel-50/30">
         {thumbUrl ? (
           <img
             src={getProxiedThumbnail(thumbUrl) || thumbUrl}
@@ -128,19 +147,25 @@ function VideoOnThisDayCard({ item, year }: { item: ShowItem; year: number }) {
             style={{ background: `linear-gradient(135deg, ${item.thumbnailFrom}, ${item.thumbnailTo})` }}
           />
         )}
-        <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-black/30 backdrop-blur-sm text-white text-[10px] font-medium">
+        {!thumbUrl && (
+          <span className="absolute inset-0 flex items-center justify-center font-serif italic text-3xl sm:text-4xl text-steel-400/40">
+            Show N°{no}
+          </span>
+        )}
+        <CardLogoDecoration />
+        <div className="absolute bottom-3 left-3 px-2 py-0.5 rounded-sm bg-black/30 backdrop-blur-sm text-white text-[10px] font-mono uppercase tracking-[0.15em]">
           {item.platform}
         </div>
       </div>
       <div className="p-4">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs px-2 py-0.5 rounded-md bg-violet-50 text-violet-600 font-medium border border-violet-100">视频</span>
-          <span className="text-xs text-gray-400 font-medium">{year}年</span>
+          <span className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600">Show</span>
+          <span className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600">{year}</span>
         </div>
-        <h3 className="font-bold text-gray-900 text-sm mb-1 line-clamp-2 min-h-[2.5rem]">{item.title}</h3>
+        <h3 className="font-bold text-steel-700 text-sm mb-1 line-clamp-2 min-h-[2.5rem]">{item.title}</h3>
         <div className="flex flex-wrap gap-1 mt-2">
           {item.members.map((member) => (
-            <span key={member} className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${memberColors[member]}`}>
+            <span key={member} className={`text-[10px] px-1.5 py-0.5 rounded-sm border font-medium ${memberColors[member]}`}>
               {member}
             </span>
           ))}
@@ -150,40 +175,45 @@ function VideoOnThisDayCard({ item, year }: { item: ShowItem; year: number }) {
   );
 }
 
-function SocialOnThisDayCard({ item, year }: { item: SocialPost; year: number }) {
+function SocialOnThisDayCard({ item, year, index }: { item: SocialPost; year: number; index: number }) {
   const hasImages = item.images.length > 0;
+  const no = String(index + 1).padStart(2, '0');
   return (
     <>
       {hasImages ? (
-        <div className="relative aspect-[16/10] overflow-hidden">
+        <div className="relative aspect-[16/10] overflow-hidden bg-steel-50/30">
           <img
             src={getProxiedImageUrl(item.images[0])}
             alt={item.author || "社交动态"}
             loading="lazy"
             className="w-full h-full object-cover"
           />
-          <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-black/30 backdrop-blur-sm text-white text-[10px] font-medium">
+          <CardLogoDecoration />
+          <div className="absolute bottom-3 left-3 px-2 py-0.5 rounded-sm bg-black/30 backdrop-blur-sm text-white text-[10px] font-mono uppercase tracking-[0.15em]">
             {item.platform}
           </div>
           {item.images.length > 1 && (
-            <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-black/40 backdrop-blur-sm text-white text-[10px] font-medium flex items-center gap-1">
+            <div className="absolute bottom-3 right-3 px-2 py-0.5 rounded-sm bg-black/40 backdrop-blur-sm text-white text-[10px] font-medium flex items-center gap-1">
               <ImageIcon className="w-2.5 h-2.5" />
               {item.images.length} 张
             </div>
           )}
         </div>
       ) : (
-        <div className="h-2 bg-gradient-to-r from-rose-400 to-sky-500" />
+        <div className="relative aspect-[16/10] bg-steel-50/30 flex items-center justify-center overflow-hidden">
+          <span className="font-serif italic text-3xl sm:text-4xl text-steel-400/40">Social N°{no}</span>
+          <CardLogoDecoration />
+        </div>
       )}
       <div className="p-4">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs px-2 py-0.5 rounded-md bg-rose-50 text-rose-600 font-medium border border-rose-100">社交</span>
-          <span className="text-xs text-gray-400 font-medium">{year}年</span>
+          <span className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600">Social</span>
+          <span className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600">{year}</span>
         </div>
-        <h3 className="font-bold text-gray-900 text-sm mb-1">{item.author || "新动态"}</h3>
-        <p className="text-xs text-gray-500 line-clamp-3">{item.content.length > 60 ? item.content.slice(0, 60) + "..." : item.content}</p>
+        <h3 className="font-bold text-steel-700 text-sm mb-1">{item.author || "新动态"}</h3>
+        <p className="text-xs text-steel-500/70 line-clamp-3">{item.content.length > 60 ? item.content.slice(0, 60) + "..." : item.content}</p>
         {!hasImages && item.images.length > 0 && (
-          <p className="text-[10px] text-gray-400 mt-2 flex items-center gap-1">
+          <p className="text-[10px] text-steel-500/70 mt-2 flex items-center gap-1">
             <ImageIcon className="w-3 h-3" />{item.images.length} 张图片
           </p>
         )}
@@ -207,34 +237,34 @@ function MusicDetailModal({ item, onClose }: { item: MusicItem; onClose: () => v
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
         transition={{ duration: 0.25 }}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-lg max-h-[85vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+        className="relative w-full max-w-lg max-h-[85vh] bg-white/90 backdrop-blur-xl border border-steel-200/60 rounded-sm shadow-2xl overflow-hidden flex flex-col"
       >
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/40 transition-colors"
+          className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full bg-steel-500/20 backdrop-blur-sm flex items-center justify-center text-steel-700 hover:bg-steel-500/30 transition-colors"
         >
           <X className="w-4 h-4" />
         </button>
 
-        <div className="h-2 bg-gradient-to-r from-sky-400 to-sky-600" />
+        <div className="h-1 bg-gradient-to-r from-steel-400 to-steel-600" />
         <div className="flex-1 overflow-y-auto p-6">
           <div className="flex items-center gap-2 mb-4">
-            <span className="text-xs px-2 py-0.5 rounded-md bg-sky-50 text-sky-600 font-medium border border-sky-100">音乐</span>
-            <span className="text-xs text-gray-400">{item.releaseDate}</span>
+            <span className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600 px-2 py-0.5 rounded-sm border border-steel-200/60 bg-steel-50/70">Music</span>
+            <span className="text-xs text-steel-500/70">{item.releaseDate}</span>
           </div>
 
-          <h2 className="text-xl font-bold text-gray-900 mb-2">{item.title}</h2>
-          <p className="text-sm text-gray-500 mb-4">{item.album} · {item.artist}</p>
+          <h2 className="text-xl font-bold text-steel-700 mb-2">{item.title}</h2>
+          <p className="text-sm text-steel-500/70 mb-4">{item.album} · {item.artist}</p>
 
           <div className="flex flex-wrap gap-1.5 mb-4">
-            <span className="text-xs px-2 py-1 rounded-md bg-gray-50 text-gray-500 font-medium">{item.type}</span>
+            <span className="text-xs px-2 py-1 rounded-sm bg-steel-50/70 text-steel-600 font-medium border border-steel-200/60">{item.type}</span>
             {item.roles.map((role) => (
-              <span key={role} className="text-xs px-2 py-1 rounded border border-sky-100 bg-sky-50 text-sky-600 font-medium">{role}</span>
+              <span key={role} className="text-xs px-2 py-1 rounded-sm border border-steel-200/60 bg-steel-50/70 text-steel-600 font-medium">{role}</span>
             ))}
           </div>
 
           {item.isSelfComposed && (
-            <div className="flex items-center gap-1.5 text-sm text-sky-500 mb-4">
+            <div className="flex items-center gap-1.5 text-sm text-steel-500 mb-4">
               <Sparkles className="w-4 h-4" />
               <span>自作曲</span>
             </div>
@@ -245,7 +275,7 @@ function MusicDetailModal({ item, onClose }: { item: MusicItem; onClose: () => v
               href={item.link}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-400 text-white text-sm font-medium hover:bg-sky-500 transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-sm bg-steel-500 text-white text-sm font-medium hover:bg-steel-600 transition-colors"
             >
               <ExternalLink className="w-4 h-4" />
               前往收听
@@ -275,16 +305,16 @@ function VideoDetailModal({ item, onClose }: { item: ShowItem; onClose: () => vo
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
         transition={{ duration: 0.25 }}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-lg max-h-[85vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+        className="relative w-full max-w-lg max-h-[85vh] bg-white/90 backdrop-blur-xl border border-steel-200/60 rounded-sm shadow-2xl overflow-hidden flex flex-col"
       >
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/40 transition-colors"
+          className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full bg-steel-500/20 backdrop-blur-sm flex items-center justify-center text-steel-700 hover:bg-steel-500/30 transition-colors"
         >
           <X className="w-4 h-4" />
         </button>
 
-        <div className="relative aspect-[16/10] overflow-hidden bg-gray-100">
+        <div className="relative aspect-[16/10] overflow-hidden bg-steel-50/30">
           {thumbUrl ? (
             <img
               src={getProxiedThumbnail(thumbUrl) || thumbUrl}
@@ -312,7 +342,7 @@ function VideoDetailModal({ item, onClose }: { item: ShowItem; onClose: () => vo
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl ${style.bg} ${style.text} text-sm font-medium hover:scale-105 transition-transform shadow-lg`}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-sm ${style.bg} ${style.text} text-sm font-medium hover:scale-105 transition-transform shadow-lg`}
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                   前往 {link.platform}
@@ -321,21 +351,21 @@ function VideoDetailModal({ item, onClose }: { item: ShowItem; onClose: () => vo
             })}
           </div>
 
-          <div className="absolute bottom-3 left-3 px-2 py-0.5 rounded-md bg-black/30 backdrop-blur-sm text-white text-xs font-medium">
+          <div className="absolute bottom-3 left-3 px-2 py-0.5 rounded-sm bg-black/30 backdrop-blur-sm text-white text-[10px] font-mono uppercase tracking-[0.15em]">
             {item.platform}
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-3">{item.title}</h2>
+          <h2 className="text-xl font-bold text-steel-700 mb-3">{item.title}</h2>
           <div className="flex flex-wrap gap-1.5 mb-4">
             {item.members.map((member) => (
-              <span key={member} className={`text-xs px-1.5 py-0.5 rounded border font-medium ${memberColors[member]}`}>
+              <span key={member} className={`text-xs px-1.5 py-0.5 rounded-sm border font-medium ${memberColors[member]}`}>
                 {member}
               </span>
             ))}
           </div>
-          <div className="flex items-center gap-4 text-sm text-gray-400">
+          <div className="flex items-center gap-4 text-sm text-steel-500/70">
             <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{getDisplayDate(item)}</span>
             <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{getDisplayDuration(item)}</span>
             <span className="flex items-center gap-1"><Eye className="w-3.5 h-3.5" />{getDisplayViews(item)}</span>
@@ -350,21 +380,21 @@ function SocialImageGrid({ images }: { images: string[] }) {
   if (images.length === 0) return null;
   if (images.length === 1) {
     return (
-      <div className="rounded-xl overflow-hidden bg-gray-50">
+      <div className="rounded-sm overflow-hidden bg-steel-50/40 border border-steel-200/60">
         <img src={getProxiedImageUrl(images[0])} alt="图片" loading="lazy" className="w-full h-auto max-h-[400px] object-contain" />
       </div>
     );
   }
   if (images.length === 2) {
     return (
-      <div className="grid grid-cols-2 gap-1 rounded-xl overflow-hidden">
+      <div className="grid grid-cols-2 gap-1 rounded-sm overflow-hidden">
         {images.map((img, i) => <img key={i} src={getProxiedImageUrl(img)} alt={`图片 ${i + 1}`} loading="lazy" className="w-full h-40 object-cover" />)}
       </div>
     );
   }
   if (images.length === 3) {
     return (
-      <div className="grid grid-cols-2 gap-1 rounded-xl overflow-hidden">
+      <div className="grid grid-cols-2 gap-1 rounded-sm overflow-hidden">
         <img src={getProxiedImageUrl(images[0])} alt="图片 1" loading="lazy" className="w-full h-40 object-cover" />
         <img src={getProxiedImageUrl(images[1])} alt="图片 2" loading="lazy" className="w-full h-40 object-cover" />
         <img src={getProxiedImageUrl(images[2])} alt="图片 3" loading="lazy" className="w-full h-40 object-cover col-span-2" />
@@ -372,7 +402,7 @@ function SocialImageGrid({ images }: { images: string[] }) {
     );
   }
   return (
-    <div className="grid grid-cols-2 gap-1 rounded-xl overflow-hidden">
+    <div className="grid grid-cols-2 gap-1 rounded-sm overflow-hidden">
       {images.slice(0, 4).map((img, i) => (
         <div key={i} className="relative">
           <img src={getProxiedImageUrl(img)} alt={`图片 ${i + 1}`} loading="lazy" className="w-full h-36 object-cover" />
@@ -398,26 +428,26 @@ function SocialDetailModal({ item, onClose }: { item: SocialPost; onClose: () =>
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
         transition={{ duration: 0.25 }}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-lg max-h-[85vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+        className="relative w-full max-w-lg max-h-[85vh] bg-white/90 backdrop-blur-xl border border-steel-200/60 rounded-sm shadow-2xl overflow-hidden flex flex-col"
       >
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/40 transition-colors"
+          className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full bg-steel-500/20 backdrop-blur-sm flex items-center justify-center text-steel-700 hover:bg-steel-500/30 transition-colors"
         >
           <X className="w-4 h-4" />
         </button>
 
-        <div className="h-2 bg-gradient-to-r from-rose-400 to-sky-500" />
+        <div className="h-1 bg-gradient-to-r from-steel-400 to-steel-600" />
         <div className="flex-1 overflow-y-auto p-6">
           <div className="flex items-center gap-2 mb-4">
-            <span className="text-xs px-2 py-0.5 rounded-md bg-rose-50 text-rose-600 font-medium border border-rose-100">社交</span>
-            <span className="text-xs text-gray-400">{item.postDate.split("T")[0]}</span>
+            <span className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600 px-2 py-0.5 rounded-sm border border-steel-200/60 bg-steel-50/70">Social</span>
+            <span className="text-xs text-steel-500/70">{item.postDate.split("T")[0]}</span>
           </div>
 
-          <h2 className="text-lg font-bold text-gray-900 mb-1">{item.author || "新动态"}</h2>
-          <p className="text-sm text-gray-500 mb-1">{item.platform} · {item.category}</p>
+          <h2 className="text-lg font-bold text-steel-700 mb-1">{item.author || "新动态"}</h2>
+          <p className="text-sm text-steel-500/70 mb-1">{item.platform} · {item.category}</p>
 
-          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap mb-4">{item.content}</p>
+          <p className="text-sm text-steel-600/90 leading-relaxed whitespace-pre-wrap mb-4">{item.content}</p>
 
           {item.images.length > 0 && (
             <div className="mb-4">
@@ -430,7 +460,7 @@ function SocialDetailModal({ item, onClose }: { item: SocialPost; onClose: () =>
               href={item.postUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gray-50 text-sm text-sky-600 hover:bg-sky-50 font-medium transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-sm bg-steel-50/70 text-sm text-steel-600 hover:bg-steel-100 transition-colors font-medium border border-steel-200/60"
             >
               <ExternalLink className="w-3.5 h-3.5" />
               查看原帖
@@ -443,13 +473,13 @@ function SocialDetailModal({ item, onClose }: { item: SocialPost; onClose: () =>
 }
 
 export default function HomePage() {
-  const { isAdmin, setAuthModalOpen } = useAuth();
-  const isAdminDomain = typeof window !== "undefined" && window.location.hostname === "siklog.work" || window.location.hostname === "www.siklog.work";
+  const { isAdmin } = useAuth();
   const navigate = useNavigate();
 
   const [musicData, setMusicData] = useState<MusicItem[]>([]);
   const [showData, setShowData] = useState<ShowItem[]>([]);
   const [socialData, setSocialData] = useState<SocialPost[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const [groupedUpdates, setGroupedUpdates] = useState<Record<TabKey, UpdateItem[]>>({
     music: [],
@@ -485,7 +515,7 @@ export default function HomePage() {
         source: "music",
         icon: Disc3,
         tag: "音乐",
-        tagColor: "bg-sky-50 text-sky-600",
+        tagColor: "bg-steel-50/70 text-steel-600 border-steel-200/60",
         title: m.title,
         desc: `${m.type} · ${m.album} · ${m.roles.join("/")}`,
         date: m.releaseDate,
@@ -497,7 +527,7 @@ export default function HomePage() {
         source: "show",
         icon: Film,
         tag: "视频",
-        tagColor: "bg-violet-50 text-violet-600",
+        tagColor: "bg-steel-50/70 text-steel-600 border-steel-200/60",
         title: s.title,
         desc: `${s.platform} · ${s.members.slice(0, 3).join("、")}${s.members.length > 3 ? "等" : ""} · ${s.duration}`,
         date: s.date,
@@ -509,7 +539,7 @@ export default function HomePage() {
         source: "social",
         icon: MessageCircle,
         tag: "社交",
-        tagColor: "bg-rose-50 text-rose-600",
+        tagColor: "bg-steel-50/70 text-steel-600 border-steel-200/60",
         title: p.author || "新动态",
         desc: p.content.length > 40 ? p.content.slice(0, 40) + "..." : p.content,
         date: p.postDate.split("T")[0],
@@ -519,24 +549,29 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    const music = loadMusicData();
-    const shows = loadShowData();
-    const socials = loadSocialData();
-    setMusicData(music);
-    setShowData(shows);
-    setSocialData(socials);
-    buildUpdates(music, shows, socials);
+    let mounted = true;
+    setIsLoading(true);
 
     Promise.all([
       syncMusicData(),
       syncShowData(),
       syncSocialData(),
-    ]).then(([musicSynced, showsSynced, socialsSynced]) => {
-      setMusicData(musicSynced);
-      setShowData(showsSynced);
-      setSocialData(socialsSynced);
-      buildUpdates(musicSynced, showsSynced, socialsSynced);
-    }).catch(() => {});
+    ])
+      .then(([musicSynced, showsSynced, socialsSynced]) => {
+        if (!mounted) return;
+        setMusicData(musicSynced);
+        setShowData(showsSynced);
+        setSocialData(socialsSynced);
+        buildUpdates(musicSynced, showsSynced, socialsSynced);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (mounted) setIsLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
   }, [buildUpdates]);
 
   const pickRandomShow = useCallback(() => {
@@ -593,62 +628,85 @@ export default function HomePage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
       {/* Hero */}
       <motion.section
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="relative overflow-hidden rounded-3xl border border-sky-100/50 mb-10 min-h-[420px] md:min-h-[480px] flex items-end"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.8 }}
+        className="relative min-h-screen flex flex-col items-center justify-center -mt-32 pt-32 mb-10"
       >
-        <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{
-            backgroundImage: "url('/IMG_1515%202.jpg')",
-          }}
-        />
-        <div
-          className="absolute bottom-0 left-0 right-0 h-56"
-          style={{
-            background: "linear-gradient(to bottom, transparent 0%, #F8F9FA 100%)",
-          }}
-        />
-        <div
-          className="absolute inset-0"
-          style={{
-            background: "linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.1) 50%, transparent 100%)",
-          }}
-        />
-
-        <div className="relative z-10 w-full p-10 md:p-16">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.2 }}
-            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-white text-xs font-medium mb-4 border border-white/20"
+        <div className="relative z-10 w-full max-w-6xl mx-auto px-6 text-center">
+          <motion.p
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2, duration: 0.6 }}
+            className="text-[10px] md:text-xs font-mono font-bold uppercase tracking-[0.3em] text-steel-500/70 mb-8"
           >
-            <Sparkles className="w-3.5 h-3.5" />
-            BTOB · 任炫植 个人数据站
-          </motion.div>
+            HYUNSIK ARCHIVE
+          </motion.p>
 
-          <div className="flex items-center gap-4 mb-3">
-            <img src="/logo.svg" alt="Logo" className="w-12 h-12 md:w-14 md:h-14 object-contain drop-shadow-lg shrink-0" />
-            <h1 className="text-5xl md:text-6xl font-light text-white drop-shadow-lg">
+          <div className="relative inline-block group cursor-default">
+            <motion.h1
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3, duration: 0.8 }}
+              className="text-[18vw] sm:text-[16vw] md:text-[14vw] font-serif italic text-steel-600 leading-none select-none drop-shadow-xl"
+            >
               sik.log
-            </h1>
+            </motion.h1>
+
+            {/* Top-left decorative label */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1, duration: 0.6 }}
+              className="absolute -top-4 md:-top-8 left-0 md:left-4 text-[10px] md:text-xs font-mono font-bold uppercase tracking-[0.2em] text-steel-600/80 animate-fade-in-up opacity-0"
+              style={{ animationDelay: "1s" }}
+            >
+              BTOB · MUSICIAN
+            </motion.div>
+
+            {/* Bottom-right decorative label */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1.5, duration: 0.6 }}
+              className="absolute -bottom-2 md:-bottom-4 right-0 md:right-4 text-[10px] md:text-xs font-mono font-bold uppercase tracking-[0.2em] text-steel-600/80 animate-fade-in-up opacity-0"
+              style={{ animationDelay: "1.5s" }}
+            >
+              BASED IN SEOUL
+            </motion.div>
           </div>
 
-          <p className="text-white/80 max-w-2xl leading-relaxed mb-8 drop-shadow-sm">
-            Made by 任炫植.log
-          </p>
-
-          {!isAdmin && isAdminDomain && (
-            <button
-              onClick={() => setAuthModalOpen(true)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-white/30 bg-white/15 backdrop-blur-md text-white text-sm font-medium hover:bg-white/25 transition-colors"
-            >
-              <Sparkles className="w-4 h-4" />
-              进入管理模式
-            </button>
-          )}
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.9, duration: 0.6 }}
+            className="text-xs md:text-sm font-mono text-steel-500/70 tracking-wider mt-10"
+          >
+            Archived since 2024
+          </motion.p>
         </div>
+
+        {/* Bottom info bar like reference */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.2, duration: 0.6 }}
+          className="absolute bottom-0 left-0 right-0 p-6 md:p-8 flex justify-between items-end z-30 text-[10px] md:text-xs font-mono font-bold uppercase tracking-[0.15em] text-steel-500/60"
+        >
+          <div className="flex flex-col gap-1 md:gap-2">
+            <span>Personal Archive</span>
+            <span>Est. 2024</span>
+          </div>
+
+          <div className="flex flex-col items-center gap-1 animate-bounce-subtle">
+            <span>↓ Scroll</span>
+          </div>
+
+          <div className="text-right flex flex-col gap-1 md:gap-2">
+            <span>sik.log</span>
+            <span>All rights reserved</span>
+          </div>
+        </motion.div>
       </motion.section>
 
       {/* 那年今日 */}
@@ -658,21 +716,26 @@ export default function HomePage() {
         transition={{ delay: 0.2, duration: 0.6 }}
         className="mb-10"
       >
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-amber-500" />
-              <h2 className="text-lg font-bold text-gray-900">那年今日</h2>
+        <div className="bg-white/40 rounded-sm border border-steel-200/60 shadow-sm p-5 sm:p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <Calendar className="w-5 h-5 text-steel-500" />
+              <div>
+                <p className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600 mb-0.5">On This Day</p>
+                <h2 className="font-serif italic text-2xl text-steel-600">那年今日</h2>
+              </div>
             </div>
-            <span className="text-sm text-gray-400 font-medium">{todayStr}</span>
+            <span className="text-xs font-mono uppercase tracking-[0.2em] text-steel-500/70">{todayStr}</span>
           </div>
 
-          {onThisDayItems.length === 0 ? (
+          {isLoading ? (
+            <PageLoader />
+          ) : onThisDayItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-center">
-              <div className="w-14 h-14 rounded-full bg-gray-50 flex items-center justify-center mb-3">
-                <Calendar className="w-7 h-7 text-gray-300" />
+              <div className="w-14 h-14 rounded-full bg-steel-50/70 border border-steel-200/60 flex items-center justify-center mb-3">
+                <Calendar className="w-7 h-7 text-steel-400" />
               </div>
-              <p className="text-sm text-gray-400">今天没有历史动态</p>
+              <p className="text-sm text-steel-500/70">今天没有历史动态</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -687,11 +750,11 @@ export default function HomePage() {
                     if (item.type === "视频") setSelectedVideo(item.data);
                     if (item.type === "社交") setSelectedSocial(item.data);
                   }}
-                  className="group relative bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+                  className="group relative bg-white/40 rounded-sm border border-steel-200/60 shadow-sm overflow-hidden hover:-translate-y-2 hover:border-steel-300/80 transition-all cursor-pointer"
                 >
-                  {item.type === "音乐" && <MusicOnThisDayCard item={item.data} year={item.year} />}
-                  {item.type === "视频" && <VideoOnThisDayCard item={item.data} year={item.year} />}
-                  {item.type === "社交" && <SocialOnThisDayCard item={item.data} year={item.year} />}
+                  {item.type === "音乐" && <MusicOnThisDayCard item={item.data} year={item.year} index={i} />}
+                  {item.type === "视频" && <VideoOnThisDayCard item={item.data} year={item.year} index={i} />}
+                  {item.type === "社交" && <SocialOnThisDayCard item={item.data} year={item.year} index={i} />}
                 </motion.div>
               ))}
             </div>
@@ -706,28 +769,33 @@ export default function HomePage() {
         transition={{ delay: 0.25, duration: 0.6 }}
         className="mb-10"
       >
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Film className="w-5 h-5 text-violet-500" />
-            <h2 className="text-lg font-bold text-gray-900">随机品熊</h2>
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-3">
+            <Film className="w-5 h-5 text-steel-500" />
+            <div>
+              <p className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600 mb-0.5">Random Pick</p>
+              <h2 className="font-serif italic text-2xl text-steel-600">随机品熊</h2>
+            </div>
           </div>
           <button
             onClick={pickRandomShow}
             disabled={showData.length === 0}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 text-sm font-medium hover:bg-gray-50 hover:text-violet-500 transition-colors disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-steel-200/60 text-[10px] font-mono uppercase tracking-[0.15em] text-steel-600 hover:bg-white/50 hover:border-steel-300/80 transition-all disabled:opacity-40"
           >
             <Shuffle className="w-3.5 h-3.5" />
             换一换
           </button>
         </div>
 
-        {randomShow ? (
+        {isLoading ? (
+          <PageLoader />
+        ) : randomShow ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             <div
-              className="group relative bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-xl transition-shadow cursor-pointer"
+              className="group relative bg-white/40 rounded-sm border border-steel-200/60 shadow-sm overflow-hidden hover:-translate-y-2 hover:border-steel-300/80 transition-all cursor-pointer"
               onClick={() => setSelectedVideo(randomShow)}
             >
-              <div className="relative aspect-[16/10] overflow-hidden">
+              <div className="relative aspect-[16/10] overflow-hidden bg-steel-50/30">
                 {(() => {
                   const thumbUrl = getPreferredThumbnail(randomShow);
                   return thumbUrl ? (
@@ -739,8 +807,8 @@ export default function HomePage() {
                       onError={(e) => {
                         const target = e.currentTarget as HTMLImageElement;
                         target.style.display = "none";
-                                                if (target.parentElement) {
-                          const fromColor = /^https?:\/\//.test(randomShow.thumbnailFrom) ? "#42B4E6" : randomShow.thumbnailFrom;
+                        if (target.parentElement) {
+                          const fromColor = /^https?:\/\//.test(randomShow.thumbnailFrom) ? "#4682B4" : randomShow.thumbnailFrom;
                           target.parentElement.style.background = `linear-gradient(135deg, ${fromColor}, ${randomShow.thumbnailTo})`;
                         }
                       }}
@@ -755,12 +823,12 @@ export default function HomePage() {
                   );
                 })()}
 
-                <div className="absolute bottom-3 left-3 px-2 py-0.5 rounded-md bg-black/30 backdrop-blur-sm text-white text-xs font-medium">
+                <div className="absolute bottom-3 left-3 px-2 py-0.5 rounded-sm bg-black/30 backdrop-blur-sm text-white text-[10px] font-mono uppercase tracking-[0.15em]">
                   {randomShow.platform}
                 </div>
 
                 {randomShow.links.length > 1 && (
-                  <div className="absolute bottom-3 right-3 px-2 py-0.5 rounded-md bg-black/40 backdrop-blur-sm text-white text-[10px] font-medium flex items-center gap-1">
+                  <div className="absolute bottom-3 right-3 px-2 py-0.5 rounded-sm bg-black/40 backdrop-blur-sm text-white text-[10px] font-medium flex items-center gap-1">
                     <ExternalLink className="w-2.5 h-2.5" />
                     {randomShow.links.length} 个平台
                   </div>
@@ -768,20 +836,20 @@ export default function HomePage() {
               </div>
 
               <div className="p-4">
-                <h3 className="font-bold text-gray-900 text-sm leading-snug line-clamp-2 mb-2 min-h-[2.5rem]">
+                <h3 className="font-bold text-steel-700 text-sm leading-snug line-clamp-2 mb-2 min-h-[2.5rem]">
                   {randomShow.title}
                 </h3>
                 <div className="flex flex-wrap gap-1 mb-3">
                   {randomShow.members.map((member) => (
                     <span
                       key={member}
-                      className={`text-xs px-1.5 py-0.5 rounded border font-medium ${memberColors[member]}`}
+                      className={`text-xs px-1.5 py-0.5 rounded-sm border font-medium ${memberColors[member]}`}
                     >
                       {member}
                     </span>
                   ))}
                 </div>
-                <div className="flex items-center gap-3 text-xs text-gray-400">
+                <div className="flex items-center gap-3 text-xs text-steel-500/70">
                   <span className="flex items-center gap-1">
                     <Calendar className="w-3 h-3" />
                     {getDisplayDate(randomShow)}
@@ -799,11 +867,11 @@ export default function HomePage() {
             </div>
           </div>
         ) : (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center">
-            <div className="w-14 h-14 rounded-full bg-gray-50 flex items-center justify-center mb-3 mx-auto">
-              <Film className="w-7 h-7 text-gray-300" />
+          <div className="bg-white/40 rounded-sm border border-steel-200/60 shadow-sm p-10 text-center">
+            <div className="w-14 h-14 rounded-full bg-steel-50/70 border border-steel-200/60 flex items-center justify-center mb-3 mx-auto">
+              <Film className="w-7 h-7 text-steel-400" />
             </div>
-            <p className="text-sm text-gray-400">暂无品熊视频</p>
+            <p className="text-sm text-steel-500/70">暂无品熊视频</p>
           </div>
         )}
       </motion.section>
@@ -815,13 +883,16 @@ export default function HomePage() {
         transition={{ delay: 0.3, duration: 0.6 }}
       >
         <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-sky-500" />
-            <h2 className="text-lg font-bold text-gray-900">最新动态</h2>
+          <div className="flex items-center gap-3">
+            <TrendingUp className="w-5 h-5 text-steel-500" />
+            <div>
+              <p className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600 mb-0.5">Latest Updates</p>
+              <h2 className="font-serif italic text-2xl text-steel-600">最新动态</h2>
+            </div>
           </div>
         </div>
 
-        <div className="flex gap-2 mb-4">
+        <div className="flex gap-4 mb-4 border-b border-steel-200/40 pb-1">
           {TAB_CONFIG.map((tab) => {
             const active = activeTab === tab.key;
             const count = groupedUpdates[tab.key].length;
@@ -829,13 +900,15 @@ export default function HomePage() {
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all duration-200 ${
-                  active ? tab.activeColor : `${tab.color} hover:border-gray-300`
+                className={`inline-flex items-center gap-2 pb-2 text-[10px] font-mono uppercase tracking-[0.2em] transition-all ${
+                  active
+                    ? "text-steel-600 border-b border-steel-500 opacity-100"
+                    : "text-steel-500/60 hover:text-steel-600 opacity-70"
                 }`}
               >
-                <tab.icon className="w-4 h-4" />
+                <tab.icon className="w-3.5 h-3.5" />
                 {tab.label}
-                <span className={`text-xs ${active ? "opacity-70" : "opacity-50"}`}>
+                <span className={`text-[10px] ${active ? "opacity-100" : "opacity-60"}`}>
                   {count}
                 </span>
               </button>
@@ -844,8 +917,10 @@ export default function HomePage() {
         </div>
 
         <div className="space-y-3">
-          {groupedUpdates[activeTab].length === 0 ? (
-            <p className="text-sm text-gray-400 py-6 text-center">
+          {isLoading ? (
+            <PageLoader />
+          ) : groupedUpdates[activeTab].length === 0 ? (
+            <p className="text-sm text-steel-500/70 py-6 text-center">
               暂无{activeTab === "music" ? "音乐" : activeTab === "show" ? "视频" : "社交"}动态
             </p>
           ) : (
@@ -858,30 +933,30 @@ export default function HomePage() {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.08 }}
                   onClick={() => navigate(item.link)}
-                  className="flex items-start gap-4 p-4 rounded-xl bg-white border border-gray-100 hover:border-sky-200 transition-colors group cursor-pointer"
+                  className="flex items-start gap-4 p-4 rounded-sm bg-white/40 border border-steel-200/60 shadow-sm hover:-translate-y-1 hover:border-steel-300/80 transition-all group cursor-pointer"
                 >
-                  <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center shrink-0 group-hover:bg-sky-50 transition-colors">
-                    <item.icon className="w-5 h-5 text-gray-400 group-hover:text-sky-500 transition-colors" />
+                  <div className="w-10 h-10 rounded-sm bg-steel-50/70 border border-steel-200/60 flex items-center justify-center shrink-0 group-hover:bg-white/70 transition-colors">
+                    <item.icon className="w-5 h-5 text-steel-500 group-hover:text-steel-600 transition-colors" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-xs px-2 py-0.5 rounded-md font-medium ${item.tagColor}`}>
+                      <span className={`text-[10px] font-mono uppercase tracking-[0.15em] px-2 py-0.5 rounded-sm border ${item.tagColor}`}>
                         {item.tag}
                       </span>
-                      <span className="flex items-center gap-1 text-xs text-gray-400">
+                      <span className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-[0.15em] text-steel-500/60">
                         <Calendar className="w-3 h-3" />
                         {item.date}
                       </span>
                     </div>
-                    <h3 className="font-medium text-gray-900 text-sm mb-0.5">{item.title}</h3>
-                    <p className="text-xs text-gray-500">{item.desc}</p>
+                    <h3 className="font-medium text-steel-700 text-sm mb-0.5">{item.title}</h3>
+                    <p className="text-xs text-steel-500/70">{item.desc}</p>
                   </div>
                 </motion.div>
               ))}
 
               <Link
                 to={TAB_CONFIG.find((t) => t.key === activeTab)!.link}
-                className="flex items-center justify-center gap-1 py-2 text-xs text-gray-400 hover:text-sky-500 transition-colors"
+                className="flex items-center justify-center gap-1 py-2 text-xs font-mono uppercase tracking-[0.15em] text-steel-500/70 hover:text-steel-600 transition-colors"
               >
                 查看全部
                 <ArrowRight className="w-3 h-3" />

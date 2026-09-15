@@ -71,6 +71,7 @@ import { useAuth } from "@/context/AuthContext";
 import SocialFormModal from "@/components/SocialFormModal";
 import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
 import ScrollToTop from "@/components/ScrollToTop";
+import PageLoader from "@/components/PageLoader";
 
 /** 将视频 URL 转为嵌入链接（YouTube / Bilibili），非视频 URL 返回 null */
 function getVideoEmbedUrl(url: string): { src: string; platform: "youtube" | "bilibili" } | null {
@@ -103,7 +104,7 @@ function linkifyText(text: string): React.ReactNode[] {
         href={url}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-sky-500 hover:text-sky-600 hover:underline break-all"
+        className="text-steel-500 hover:text-steel-600 hover:underline break-all"
         onClick={(e) => e.stopPropagation()}
       >
         {url}
@@ -327,19 +328,19 @@ function BatchEditSocialModal({ open, onClose, items, onSave }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-lg font-bold text-gray-900">📝 批量编辑 ({items.length}条)</h2>
-          <button onClick={handleClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-            <X className="w-5 h-5 text-gray-500" />
+      <div className="bg-white/40 rounded-sm shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-steel-200/60">
+          <h2 className="text-lg font-bold text-steel-700">📝 批量编辑 ({items.length}条)</h2>
+          <button onClick={handleClose} className="p-1.5 rounded-sm hover:bg-white/60 transition-colors">
+            <X className="w-5 h-5 text-steel-500/70" />
           </button>
         </div>
 
-        <div className="flex p-1 mx-6 mt-4 bg-gray-100 rounded-xl">
-          <button onClick={() => { setActiveTab("content"); setPreview(null); }} className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === "content" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}>
+        <div className="flex p-1 mx-6 mt-4 bg-white/40 rounded-sm">
+          <button onClick={() => { setActiveTab("content"); setPreview(null); }} className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-sm text-sm font-medium transition-all ${activeTab === "content" ? "bg-white text-steel-700 shadow-sm" : "text-steel-500/70"}`}>
             <AlignLeft className="w-4 h-4" />文案
           </button>
-          <button onClick={() => { setActiveTab("translate"); setPreview(null); }} className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === "translate" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}>
+          <button onClick={() => { setActiveTab("translate"); setPreview(null); }} className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-sm text-sm font-medium transition-all ${activeTab === "translate" ? "bg-white text-steel-700 shadow-sm" : "text-steel-500/70"}`}>
             <Loader2 className="w-4 h-4" />AI翻译
           </button>
         </div>
@@ -347,24 +348,24 @@ function BatchEditSocialModal({ open, onClose, items, onSave }: {
         <div className="flex-1 overflow-auto px-6 py-4 space-y-4">
           {activeTab === "content" && (
             <div className="space-y-3">
-              <div className="p-3 rounded-xl bg-sky-50 border border-sky-100">
+              <div className="p-3 rounded-sm bg-steel-50/70 border border-steel-200/60">
                 <div className="flex items-center gap-2 mb-2">
-                  <Replace className="w-4 h-4 text-sky-500" />
-                  <span className="text-sm font-medium text-gray-700">查找替换</span>
+                  <Replace className="w-4 h-4 text-steel-500" />
+                  <span className="text-sm font-medium text-steel-700">查找替换</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <input type="text" value={findText} onChange={(e) => setFindText(e.target.value)} placeholder="查找内容" className="px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:border-sky-400" />
-                  <input type="text" value={replaceText} onChange={(e) => setReplaceText(e.target.value)} placeholder="替换为" className="px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:border-sky-400" />
+                  <input type="text" value={findText} onChange={(e) => setFindText(e.target.value)} placeholder="查找内容" className="px-3 py-2 rounded-sm border border-steel-200/60 text-sm outline-none focus:border-steel-500" />
+                  <input type="text" value={replaceText} onChange={(e) => setReplaceText(e.target.value)} placeholder="替换为" className="px-3 py-2 rounded-sm border border-steel-200/60 text-sm outline-none focus:border-steel-500" />
                 </div>
               </div>
-              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100">
+              <div className="p-3 rounded-sm bg-steel-50/70 border border-steel-200/60">
                 <div className="flex items-center gap-2 mb-2">
-                  <AlignLeft className="w-4 h-4 text-emerald-500" />
-                  <span className="text-sm font-medium text-gray-700">添加前后缀</span>
+                  <AlignLeft className="w-4 h-4 text-steel-500" />
+                  <span className="text-sm font-medium text-steel-700">添加前后缀</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <input type="text" value={prefixText} onChange={(e) => setPrefixText(e.target.value)} placeholder="前缀（如 [中字]）" className="px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:border-emerald-400" />
-                  <input type="text" value={suffixText} onChange={(e) => setSuffixText(e.target.value)} placeholder="后缀（如 (精效中字)）" className="px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:border-emerald-400" />
+                  <input type="text" value={prefixText} onChange={(e) => setPrefixText(e.target.value)} placeholder="前缀（如 [中字]）" className="px-3 py-2 rounded-sm border border-steel-200/60 text-sm outline-none focus:border-steel-500" />
+                  <input type="text" value={suffixText} onChange={(e) => setSuffixText(e.target.value)} placeholder="后缀（如 (精效中字)）" className="px-3 py-2 rounded-sm border border-steel-200/60 text-sm outline-none focus:border-steel-500" />
                 </div>
               </div>
             </div>
@@ -372,10 +373,10 @@ function BatchEditSocialModal({ open, onClose, items, onSave }: {
 
           {activeTab === "translate" && (
             <div className="space-y-3">
-              <div className="p-3 rounded-xl bg-violet-50 border border-violet-100">
+              <div className="p-3 rounded-sm bg-steel-50/70 border border-steel-200/60">
                 <div className="flex items-center gap-2 mb-3">
-                  <Loader2 className="w-4 h-4 text-violet-500" />
-                  <span className="text-sm font-medium text-gray-700">DeepSeek API 设置</span>
+                  <Loader2 className="w-4 h-4 text-steel-500" />
+                  <span className="text-sm font-medium text-steel-700">DeepSeek API 设置</span>
                 </div>
                 <div className="space-y-2">
                                     <input
@@ -385,14 +386,14 @@ function BatchEditSocialModal({ open, onClose, items, onSave }: {
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
                     placeholder="输入 DeepSeek API Key（sk-...）"
-                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:border-violet-400"
+                    className="w-full px-3 py-2 rounded-sm border border-steel-200/60 text-sm outline-none focus:border-steel-500"
                   />
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500">目标语言：</span>
+                    <span className="text-xs text-steel-500/70">目标语言：</span>
                     <select
                       value={targetLang}
                       onChange={(e) => setTargetLang(e.target.value)}
-                      className="px-2 py-1 rounded-lg border border-gray-200 text-sm outline-none focus:border-violet-400 bg-white"
+                      className="px-2 py-1 rounded-sm border border-steel-200/60 text-sm outline-none focus:border-steel-500 bg-white"
                     >
                       <option value="中文">中文</option>
                       <option value="英文">英文</option>
@@ -403,7 +404,7 @@ function BatchEditSocialModal({ open, onClose, items, onSave }: {
                   <button
                     onClick={handleTranslate}
                     disabled={isTranslating || items.length === 0}
-                    className="w-full py-2 rounded-lg bg-violet-400 text-white text-sm font-medium hover:bg-violet-500 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    className="w-full py-2 rounded-sm bg-steel-600 text-white text-sm font-medium hover:bg-steel-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     {isTranslating ? (
                       <>
@@ -422,19 +423,19 @@ function BatchEditSocialModal({ open, onClose, items, onSave }: {
 
               {Object.keys(translations).length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-sm font-bold text-gray-900">翻译结果（可手动修改）：</p>
-                  <div className="border border-gray-100 rounded-xl overflow-hidden max-h-64 overflow-y-auto">
+                  <p className="text-sm font-bold text-steel-700">翻译结果（可手动修改）：</p>
+                  <div className="border border-steel-200/60 rounded-sm overflow-hidden max-h-64 overflow-y-auto">
                     <table className="w-full text-sm">
-                      <thead className="bg-gray-50 sticky top-0">
+                      <thead className="bg-steel-50/70 sticky top-0">
                         <tr>
-                          <th className="px-3 py-2 text-left font-medium text-gray-600">原文</th>
-                          <th className="px-3 py-2 text-left font-medium text-gray-600">译文</th>
+                          <th className="px-3 py-2 text-left font-medium text-steel-600">原文</th>
+                          <th className="px-3 py-2 text-left font-medium text-steel-600">译文</th>
                         </tr>
                       </thead>
-                                            <tbody className="divide-y divide-gray-50">
+                                            <tbody className="divide-y divide-steel-100/60">
                         {items.map((item) => (
                           <tr key={item.id}>
-                            <td className="px-3 py-2 text-gray-500 align-top">
+                            <td className="px-3 py-2 text-steel-500/70 align-top">
                               <div className="max-w-[280px] whitespace-pre-wrap break-words text-sm">{item.content}</div>
                             </td>
                             <td className="px-3 py-2 align-top">
@@ -442,7 +443,7 @@ function BatchEditSocialModal({ open, onClose, items, onSave }: {
                                 value={translations[item.id] || item.content}
                                 onChange={(e) => updateTranslation(item.id, e.target.value)}
                                 rows={Math.min(Math.max(Math.ceil(item.content.length / 30), 3), 8)}
-                                className="w-full px-2 py-1.5 rounded border border-gray-200 text-sm outline-none focus:border-violet-400 resize-y min-h-[60px]"
+                                className="w-full px-2 py-1.5 rounded border border-steel-200/60 text-sm outline-none focus:border-steel-500 resize-y min-h-[60px]"
                               />
                             </td>
                           </tr>
@@ -455,26 +456,26 @@ function BatchEditSocialModal({ open, onClose, items, onSave }: {
             </div>
           )}
 
-          <button onClick={generatePreview} className="w-full py-2 rounded-xl bg-sky-400 text-white text-sm font-medium hover:bg-sky-500 transition-colors">生成预览</button>
+          <button onClick={generatePreview} className="w-full py-2 rounded-sm bg-steel-500 text-white text-sm font-medium hover:bg-steel-700 transition-colors">生成预览</button>
 
           {preview && (
             <div className="space-y-2">
-              <p className="text-sm font-bold text-gray-900">预览变更：</p>
-              <div className="border border-gray-100 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
+              <p className="text-sm font-bold text-steel-700">预览变更：</p>
+              <div className="border border-steel-200/60 rounded-sm overflow-hidden max-h-48 overflow-y-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-50 sticky top-0">
+                  <thead className="bg-steel-50/70 sticky top-0">
                     <tr>
-                      <th className="px-3 py-2 text-left font-medium text-gray-600">原文案</th>
-                      <th className="px-3 py-2 text-left font-medium text-gray-600">→</th>
-                      <th className="px-3 py-2 text-left font-medium text-gray-600">新文案</th>
+                      <th className="px-3 py-2 text-left font-medium text-steel-600">原文案</th>
+                      <th className="px-3 py-2 text-left font-medium text-steel-600">→</th>
+                      <th className="px-3 py-2 text-left font-medium text-steel-600">新文案</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-50">
+                  <tbody className="divide-y divide-steel-100/60">
                     {preview.map((item, idx) => (
                       <tr key={item.id}>
-                        <td className="px-3 py-1.5 text-gray-500 line-through">{items[idx].content}</td>
-                        <td className="px-3 py-1.5 text-gray-300">→</td>
-                        <td className="px-3 py-1.5 font-medium text-gray-900">{item.content}</td>
+                        <td className="px-3 py-1.5 text-steel-500/70 line-through">{items[idx].content}</td>
+                        <td className="px-3 py-1.5 text-steel-400">→</td>
+                        <td className="px-3 py-1.5 font-medium text-steel-700">{item.content}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -484,9 +485,9 @@ function BatchEditSocialModal({ open, onClose, items, onSave }: {
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
-          <button onClick={handleClose} className="px-4 py-2 rounded-xl text-sm font-medium text-gray-500 hover:bg-gray-100 transition-colors">取消</button>
-          <button onClick={handleSave} disabled={!preview} className="px-5 py-2 rounded-xl bg-sky-400 text-white text-sm font-medium hover:bg-sky-500 transition-colors disabled:opacity-50">
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-steel-200/60">
+          <button onClick={handleClose} className="px-4 py-2 rounded-sm text-sm font-medium text-steel-500/70 hover:bg-white/60 transition-colors">取消</button>
+          <button onClick={handleSave} disabled={!preview} className="px-5 py-2 rounded-sm bg-steel-500 text-white text-sm font-medium hover:bg-steel-700 transition-colors disabled:opacity-50">
             确认保存 {preview ? `(${items.length}条)` : ""}
           </button>
         </div>
@@ -620,18 +621,18 @@ function BatchImportSocialModal({ open, onClose, onImport }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-lg font-bold text-gray-900">批量导入社交动态</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-            <X className="w-5 h-5 text-gray-500" />
+      <div className="bg-white/40 rounded-sm shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-steel-200/60">
+          <h2 className="text-lg font-bold text-steel-700">批量导入社交动态</h2>
+          <button onClick={onClose} className="p-1.5 rounded-sm hover:bg-white/60 transition-colors">
+            <X className="w-5 h-5 text-steel-500/70" />
           </button>
         </div>
 
         <div className="flex-1 overflow-auto px-6 py-4 space-y-4">
           {/* 分类选择 */}
           <div>
-            <label className="text-sm font-medium text-gray-700 mb-2 block">默认分类</label>
+            <label className="text-sm font-medium text-steel-700 mb-2 block">默认分类</label>
             <div className="flex gap-2">
               {socialCategories.map((cat) => {
                 const style = categoryStyles[cat.key];
@@ -654,8 +655,8 @@ function BatchImportSocialModal({ open, onClose, onImport }: {
 
           {/* 链接输入 */}
           <div>
-            <label className="text-sm font-medium text-gray-700 mb-1.5 block">
-              链接列表 <span className="text-xs text-gray-400 font-normal">(每行一个)</span>
+            <label className="text-sm font-medium text-steel-700 mb-1.5 block">
+              链接列表 <span className="text-xs text-steel-500/60 font-normal">(每行一个)</span>
             </label>
             <textarea
               value={linksText}
@@ -663,7 +664,7 @@ function BatchImportSocialModal({ open, onClose, onImport }: {
               placeholder={`https://x.com/xxx/status/123\nhttps://x.com/xxx/status/456\nhttps://www.instagram.com/p/xxx/`}
               rows={6}
               disabled={isFetching}
-              className="w-full px-3.5 py-2.5 rounded-xl border-2 border-gray-100 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none transition-all resize-none text-sm"
+              className="w-full px-3.5 py-2.5 rounded-sm border-2 border-steel-200/60 focus:border-steel-500 focus:ring-2 focus:ring-steel-200/30 outline-none transition-all resize-none text-sm"
             />
           </div>
 
@@ -671,7 +672,7 @@ function BatchImportSocialModal({ open, onClose, onImport }: {
           <button
             onClick={handleFetch}
             disabled={isFetching || !linksText.trim()}
-            className="w-full py-2.5 rounded-xl bg-sky-400 text-white text-sm font-medium hover:bg-sky-500 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full py-2.5 rounded-sm bg-steel-500 text-white text-sm font-medium hover:bg-steel-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isFetching ? (
               <>
@@ -689,15 +690,15 @@ function BatchImportSocialModal({ open, onClose, onImport }: {
           {/* 结果预览 */}
           {results.length > 0 && (
             <div className="space-y-2">
-              <p className="text-sm font-bold text-gray-900">
+              <p className="text-sm font-bold text-steel-700">
                 抓取结果 ({results.filter((r) => r.success).length}/{results.length} 成功)
               </p>
-              <div className="border border-gray-100 rounded-xl overflow-hidden max-h-64 overflow-y-auto">
+              <div className="border border-steel-200/60 rounded-sm overflow-hidden max-h-64 overflow-y-auto">
                 {results.map((r, i) => (
-                  <div key={i} className={`flex items-start gap-3 p-3 ${i > 0 ? "border-t border-gray-50" : ""} ${r.success ? "bg-white" : "bg-red-50/50"}`}>
+                  <div key={i} className={`flex items-start gap-3 p-3 ${i > 0 ? "border-t border-steel-100/60" : ""} ${r.success ? "bg-white" : "bg-red-50/50"}`}>
                     <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5">
                       {r.success ? (
-                        <Check className="w-4 h-4 text-emerald-500" />
+                        <Check className="w-4 h-4 text-steel-500" />
                       ) : (
                         <X className="w-4 h-4 text-red-400" />
                       )}
@@ -705,20 +706,20 @@ function BatchImportSocialModal({ open, onClose, onImport }: {
                     <div className="flex-1 min-w-0">
                       {r.success && r.preview ? (
                         <>
-                          <p className="text-sm font-medium text-gray-900 line-clamp-1">{r.preview.author || "未知作者"} · {r.preview.platform}</p>
-                          <p className="text-xs text-gray-500 line-clamp-2 mt-0.5">{r.preview.description || "无内容"}</p>
+                          <p className="text-sm font-medium text-steel-700 line-clamp-1">{r.preview.author || "未知作者"} · {r.preview.platform}</p>
+                          <p className="text-xs text-steel-500/70 line-clamp-2 mt-0.5">{r.preview.description || "无内容"}</p>
                           {r.preview.images.length > 0 && (
-                            <p className="text-[10px] text-gray-400 mt-1">{r.preview.images.length} 张图片</p>
+                            <p className="text-[10px] text-steel-500/60 mt-1">{r.preview.images.length} 张图片</p>
                           )}
                         </>
                       ) : (
                         <p className="text-xs text-red-500">{r.error}</p>
                       )}
-                      <p className="text-[10px] text-gray-400 mt-1 truncate">{r.url}</p>
+                      <p className="text-[10px] text-steel-500/60 mt-1 truncate">{r.url}</p>
                     </div>
                     <button
                       onClick={() => removeResult(i)}
-                      className="p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                      className="p-1 rounded-md text-steel-500/60 hover:text-red-500 hover:bg-red-50 transition-colors"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -729,14 +730,14 @@ function BatchImportSocialModal({ open, onClose, onImport }: {
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium text-gray-500 hover:bg-gray-100 transition-colors">
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-steel-200/60">
+          <button onClick={onClose} className="px-4 py-2 rounded-sm text-sm font-medium text-steel-500/70 hover:bg-white/60 transition-colors">
             取消
           </button>
           <button
             onClick={handleImport}
             disabled={results.filter((r) => r.success).length === 0}
-            className="px-5 py-2 rounded-xl bg-sky-400 text-white text-sm font-medium hover:bg-sky-500 transition-colors disabled:opacity-50"
+            className="px-5 py-2 rounded-sm bg-steel-500 text-white text-sm font-medium hover:bg-steel-700 transition-colors disabled:opacity-50"
           >
             确认导入 ({results.filter((r) => r.success).length} 条)
           </button>
@@ -786,14 +787,18 @@ export default function SocialPage() {
 
   const initialLoadRef = useRef(true);
   const userModifiedRef = useRef(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    setSocialData(loadSocialData());
-    syncSocialData().then((data) => {
-      if (!userModifiedRef.current) {
-        setSocialData(data);
-      }
-    }).catch(() => {});
+    setIsLoading(true);
+    syncSocialData()
+      .then((data) => {
+        if (!userModifiedRef.current) {
+          setSocialData(data);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setIsLoading(false));
   }, []);
 
   // 初始加载完成后标记，不再自动监听 socialData 变化保存
@@ -1018,18 +1023,16 @@ export default function SocialPage() {
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
       {/* Page toolbar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div className="flex items-center gap-3">
-          <div className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-rose-400 to-sky-500 text-white text-sm font-bold">
-            BTOB · 任炫植
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900">社交平台动态</h1>
+        <div>
+          <p className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600 mb-1">Social Feed</p>
+          <h1 className="text-3xl font-serif italic text-steel-600">社交平台动态</h1>
         </div>
 
         {isAdmin && (
           <div className="flex gap-2 flex-wrap">
             <button
               onClick={handleAdd}
-              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-rose-400 to-sky-500 text-white text-sm font-medium hover:opacity-90 transition-opacity shadow-md shadow-sky-200 whitespace-nowrap"
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-sm bg-gradient-to-r from-steel-400 to-steel-600 text-white text-sm font-medium hover:opacity-90 transition-opacity shadow-md shadow-steel-500/20 whitespace-nowrap"
             >
               <Plus className="w-4 h-4" />
               添加动态
@@ -1037,7 +1040,7 @@ export default function SocialPage() {
                        
                         <button
               onClick={() => setBatchImportOpen(true)}
-              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-400 text-white text-sm font-medium hover:bg-emerald-500 transition-colors shadow-md shadow-emerald-200 whitespace-nowrap"
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-sm bg-steel-600 text-white text-sm font-medium hover:bg-steel-700 transition-colors shadow-md shadow-steel-500/20 whitespace-nowrap"
             >
               <Link2 className="w-4 h-4" />
               批量导入
@@ -1055,7 +1058,7 @@ export default function SocialPage() {
                   toast.info("批量编辑模式", { description: "点击卡片选择要编辑的动态" });
                 }
               }}
-              className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors shadow-md whitespace-nowrap ${batchEditMode ? "bg-amber-400 text-white hover:bg-amber-500 shadow-amber-200" : "bg-violet-400 text-white hover:bg-violet-500 shadow-violet-200"}`}
+              className={`flex items-center gap-1.5 px-4 py-2.5 rounded-sm text-sm font-medium transition-colors shadow-md whitespace-nowrap ${batchEditMode ? "bg-amber-400 text-white hover:bg-amber-500 shadow-amber-200" : "bg-steel-600 text-white hover:bg-steel-700 shadow-steel-500/20"}`}
             >
               {batchEditMode ? `批量编辑 (${batchSelectedIds.size})` : "批量编辑"}
             </button>
@@ -1063,13 +1066,13 @@ export default function SocialPage() {
               <>
                 <button
                   onClick={() => setBatchSelectedIds(new Set(sortedAndFilteredData.map((p) => p.id)))}
-                  className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-sky-200 text-sky-600 text-sm font-medium hover:bg-sky-50 transition-colors whitespace-nowrap"
+                  className="flex items-center gap-1.5 px-3 py-2.5 rounded-sm border border-steel-200/60 text-steel-600 text-sm font-medium hover:bg-steel-50/70 transition-colors whitespace-nowrap"
                 >
                   全选当前结果
                 </button>
                 <button
                   onClick={() => { setBatchEditMode(false); setBatchSelectedIds(new Set()); }}
-                  className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-gray-200 text-gray-500 text-sm font-medium hover:bg-gray-50 transition-colors whitespace-nowrap"
+                  className="flex items-center gap-1.5 px-3 py-2.5 rounded-sm border border-steel-200/60 text-steel-500/70 text-sm font-medium hover:bg-steel-50/70 transition-colors whitespace-nowrap"
                 >
                   取消
                 </button>
@@ -1079,6 +1082,9 @@ export default function SocialPage() {
         )}
       </div>
 
+      {isLoading ? (
+        <PageLoader />
+      ) : (
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Left sidebar - Timeline filter */}
         <motion.aside
@@ -1086,16 +1092,16 @@ export default function SocialPage() {
           animate={{ opacity: 1, x: 0 }}
           className="w-full lg:w-56 shrink-0"
         >
-          <div className="lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
+          <div className="lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto bg-white/40 rounded-sm border border-steel-200/60 shadow-sm p-4 sm:p-5">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-sky-500" />
-                <h3 className="font-bold text-gray-900 text-sm">时间轴</h3>
+                <Clock className="w-4 h-4 text-steel-500" />
+                <h3 className="font-bold text-steel-700 text-sm">时间轴</h3>
               </div>
               {hasTimeFilter && (
                 <button
                   onClick={clearTimeFilter}
-                  className="text-xs text-gray-400 hover:text-red-500 flex items-center gap-0.5 transition-colors"
+                  className="text-xs text-steel-500/60 hover:text-red-500 flex items-center gap-0.5 transition-colors"
                 >
                   <X className="w-3 h-3" />
                   清除
@@ -1105,14 +1111,14 @@ export default function SocialPage() {
 
             <button
               onClick={clearTimeFilter}
-              className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all mb-2 ${
+              className={`w-full text-left px-3 py-2 rounded-sm text-sm font-medium transition-all mb-2 ${
                 !hasTimeFilter
-                  ? "bg-sky-50 text-sky-600"
-                  : "text-gray-600 hover:bg-gray-50"
+                  ? "bg-steel-50/70 text-steel-600"
+                  : "text-steel-600 hover:bg-steel-50/70"
               }`}
             >
               全部时间
-              <span className="ml-1.5 text-xs text-gray-400 font-normal">
+              <span className="ml-1.5 text-xs text-steel-500/60 font-normal">
                 ({socialData.length})
               </span>
             </button>
@@ -1122,46 +1128,46 @@ export default function SocialPage() {
                 <div key={node.year}>
                   <button
                     onClick={() => handleSelectYear(node.year)}
-                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-sm text-sm font-semibold transition-all ${
                       selectedYear === node.year && selectedMonth === null
-                        ? "bg-sky-50 text-sky-600"
-                        : "text-gray-700 hover:bg-gray-50"
+                        ? "bg-steel-50/70 text-steel-600"
+                        : "text-steel-700 hover:bg-steel-50/70"
                     }`}
                   >
                     <span
                       className={`w-2 h-2 rounded-full ${
                         selectedYear === node.year && selectedMonth === null
-                          ? "bg-sky-400"
-                          : "bg-gray-300"
+                          ? "bg-steel-500"
+                          : "bg-steel-300"
                       }`}
                     />
                     {node.year}年
-                    <span className="ml-auto text-xs text-gray-400 font-normal">
+                    <span className="ml-auto text-xs text-steel-500/60 font-normal">
                       {node.months.reduce((sum, m) => sum + m.count, 0)}
                     </span>
                   </button>
 
                   {selectedYear === node.year && (
-                    <div className="ml-4 mt-1 space-y-0.5 border-l-2 border-gray-100 pl-3">
+                    <div className="ml-4 mt-1 space-y-0.5 border-l-2 border-steel-200/60 pl-3">
                       {node.months.map((m) => (
                         <button
                           key={m.month}
                           onClick={() => handleSelectMonth(node.year, m.month)}
-                          className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-all ${
+                          className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-sm text-xs transition-all ${
                             selectedMonth === m.month
-                              ? "bg-sky-50 text-sky-600 font-medium"
-                              : "text-gray-500 hover:bg-gray-50"
+                              ? "bg-steel-50/70 text-steel-600 font-medium"
+                              : "text-steel-500/70 hover:bg-steel-50/70"
                           }`}
                         >
                           <span
                             className={`w-1.5 h-1.5 rounded-full ${
                               selectedMonth === m.month
-                                ? "bg-sky-400"
-                                : "bg-gray-200"
+                                ? "bg-steel-500"
+                                : "bg-steel-200"
                             }`}
                           />
                           {m.month}月
-                          <span className="ml-auto text-[10px] text-gray-400">
+                          <span className="ml-auto text-[10px] text-steel-500/60">
                             {m.count}
                           </span>
                         </button>
@@ -1177,21 +1183,21 @@ export default function SocialPage() {
         {/* Right content */}
         <div className="flex-1 min-w-0">
              {/* Filter tags */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-6 space-y-4">
+          <div className="bg-white/40 rounded-sm border border-steel-200/60 shadow-sm p-4 mb-6 space-y-4">
             {/* 关键词搜索 */}
             <div className="relative">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-steel-500/60" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="搜索帖子内容、分类、平台..."
-                className="w-full pl-10 pr-9 py-2.5 rounded-xl border border-gray-200 bg-white text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 transition-all"
+                className="w-full pl-10 pr-9 py-2.5 rounded-sm border border-steel-200/60 bg-white text-sm outline-none focus:border-steel-500 focus:ring-2 focus:ring-steel-200/30 transition-all"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-steel-500/60 hover:text-steel-600"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -1199,7 +1205,7 @@ export default function SocialPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs text-gray-400 mr-1">分类：</span>
+              <span className="text-xs text-steel-500/60 mr-1">分类：</span>
               {socialCategories.map((cat) => {
                 const isActive = selectedCategories.has(cat.key);
                 const style = categoryStyles[cat.key];
@@ -1220,7 +1226,7 @@ export default function SocialPage() {
               {selectedCategories.size > 0 && (
                 <button
                   onClick={() => setSelectedCategories(new Set())}
-                  className="px-3 py-1.5 rounded-full text-xs text-gray-400 hover:text-red-500 transition-colors ml-1"
+                  className="px-3 py-1.5 rounded-full text-xs text-steel-500/60 hover:text-red-500 transition-colors ml-1"
                 >
                   清除分类
                 </button>
@@ -1228,7 +1234,7 @@ export default function SocialPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs text-gray-400 mr-1">平台：</span>
+              <span className="text-xs text-steel-500/60 mr-1">平台：</span>
               {allPlatforms.map((plat) => {
                 const isActive = selectedPlatforms.has(plat);
                 const style = platformVisualStyles[plat];
@@ -1239,7 +1245,7 @@ export default function SocialPage() {
                     className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
                       isActive
                         ? style.bg + " " + style.text + " shadow-sm"
-                        : "bg-white text-gray-500 border border-gray-200 hover:border-gray-300"
+                        : "bg-white text-steel-500/70 border border-steel-200/60 hover:border-steel-300"
                     }`}
                   >
                     {style.label}
@@ -1249,12 +1255,12 @@ export default function SocialPage() {
               {selectedPlatforms.size > 0 && (
                 <button
                   onClick={() => setSelectedPlatforms(new Set())}
-                  className="px-3 py-1.5 rounded-full text-xs text-gray-400 hover:text-red-500 transition-colors ml-1"
+                  className="px-3 py-1.5 rounded-full text-xs text-steel-500/60 hover:text-red-500 transition-colors ml-1"
                 >
                   清除平台
                 </button>
               )}
-              <span className="ml-auto text-xs text-gray-400">
+              <span className="ml-auto text-xs text-steel-500/60">
                 {selectedCategories.size > 0 || selectedPlatforms.size > 0 || hasTimeFilter || searchQuery.trim()
                   ? `分类 ${selectedCategories.size} 个 · 平台 ${selectedPlatforms.size} 个 · ${sortedAndFilteredData.length} 条动态`
                   : `全部 · ${sortedAndFilteredData.length} 条动态`}
@@ -1278,7 +1284,7 @@ export default function SocialPage() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.3 }}
-                    className={`group relative bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow cursor-pointer ${isSelected ? "ring-2 ring-sky-400 ring-offset-2" : ""} ${flashId === post.id ? "flash-highlight" : ""}`}
+                    className={`group relative bg-white/40 rounded-sm border border-steel-200/60 shadow-sm overflow-hidden hover:-translate-y-2 hover:border-steel-300/80 transition-all cursor-pointer ${isSelected ? "ring-2 ring-steel-500 ring-offset-2" : ""} ${flashId === post.id ? "flash-highlight" : ""}`}
                     onClick={() => {
                       if (batchEditMode) {
                         toggleBatchSelect(post.id);
@@ -1290,7 +1296,7 @@ export default function SocialPage() {
                   >
                     {batchEditMode && (
                       <div className="absolute top-3 left-3 z-20">
-                        <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${isSelected ? "bg-sky-400 border-sky-400" : "bg-white/80 border-gray-300"}`}>
+                        <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${isSelected ? "bg-steel-500 border-steel-500" : "bg-white/80 border-steel-300"}`}>
                           {isSelected && <Check className="w-4 h-4 text-white" />}
                         </div>
                       </div>
@@ -1299,12 +1305,12 @@ export default function SocialPage() {
                     <div className="p-4 pb-2">
                       <div className="flex items-center justify-between gap-2 mb-2">
                         <div className="flex items-center gap-2 min-w-0" style={batchEditMode ? { marginLeft: "2rem" } : undefined}>
-                          <div className={`shrink-0 w-7 h-7 rounded-lg ${platformStyle.bg} ${platformStyle.text} flex items-center justify-center text-xs font-bold`}>
+                          <div className={`shrink-0 w-7 h-7 rounded-sm ${platformStyle.bg} ${platformStyle.text} flex items-center justify-center text-xs font-bold`}>
                             {platformStyle.label.charAt(0)}
                           </div>
                           <div className="min-w-0">
-                            <p className="text-sm font-semibold text-gray-900 truncate">{post.author}</p>
-                            <p className="text-[10px] text-gray-400">{platformStyle.label} · {formatRelativeTime(post.postDate)}</p>
+                            <p className="text-sm font-semibold text-steel-700 truncate">{post.author}</p>
+                            <p className="text-[10px] text-steel-500/60">{platformStyle.label} · {formatRelativeTime(post.postDate)}</p>
                           </div>
                         </div>
 
@@ -1316,13 +1322,13 @@ export default function SocialPage() {
                           )}
                           {isAdmin && !batchEditMode && (
                             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button onClick={(e) => { e.stopPropagation(); handleEdit(post); }} className="w-6 h-6 rounded-md bg-gray-50 flex items-center justify-center text-gray-500 hover:text-sky-500 hover:bg-sky-50 transition-colors">
+                              <button onClick={(e) => { e.stopPropagation(); handleEdit(post); }} className="w-6 h-6 rounded-md bg-steel-50/70 flex items-center justify-center text-steel-500/70 hover:text-steel-500 hover:bg-steel-50/70 transition-colors">
                                 <Pencil className="w-3 h-3" />
                               </button>
-                              <button onClick={(e) => { e.stopPropagation(); togglePin(post); }} className="w-6 h-6 rounded-md bg-gray-50 flex items-center justify-center text-gray-500 hover:text-amber-500 hover:bg-amber-50 transition-colors" title={post.pinned ? "取消置顶" : "置顶"}>
+                              <button onClick={(e) => { e.stopPropagation(); togglePin(post); }} className="w-6 h-6 rounded-md bg-steel-50/70 flex items-center justify-center text-steel-500/70 hover:text-amber-500 hover:bg-amber-50 transition-colors" title={post.pinned ? "取消置顶" : "置顶"}>
                                 <Pin className="w-3 h-3" />
                               </button>
-                              <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(post); }} className="w-6 h-6 rounded-md bg-gray-50 flex items-center justify-center text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors">
+                              <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(post); }} className="w-6 h-6 rounded-md bg-steel-50/70 flex items-center justify-center text-steel-500/70 hover:text-red-500 hover:bg-red-50 transition-colors">
                                 <Trash2 className="w-3 h-3" />
                               </button>
                             </div>
@@ -1338,7 +1344,7 @@ export default function SocialPage() {
 
                     {post.content && (
                       <div className="px-4 pb-2" style={batchEditMode ? { marginLeft: "2rem" } : undefined}>
-                        <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap line-clamp-6">{linkifyText(post.content)}</p>
+                        <p className="text-sm text-steel-700 leading-relaxed whitespace-pre-wrap line-clamp-6">{linkifyText(post.content)}</p>
                       </div>
                     )}
 
@@ -1354,7 +1360,7 @@ export default function SocialPage() {
                           const embed = getVideoEmbedUrl(videoUrl);
                           if (!embed) return null;
                           return (
-                            <div key={vi} className="relative w-full rounded-xl overflow-hidden bg-black" style={{ aspectRatio: "16/9" }} onClick={(e) => e.stopPropagation()}>
+                            <div key={vi} className="relative w-full rounded-sm overflow-hidden bg-black" style={{ aspectRatio: "16/9" }} onClick={(e) => e.stopPropagation()}>
                               <iframe src={embed.src} className="absolute inset-0 w-full h-full" allowFullScreen title={`视频 ${vi + 1}`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" />
                             </div>
                           );
@@ -1362,12 +1368,12 @@ export default function SocialPage() {
                       </div>
                     )}
 
-                    <div className="px-4 py-3 border-t border-gray-50 flex items-center justify-between gap-2" style={batchEditMode ? { marginLeft: "2rem" } : undefined}>
-                      <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                    <div className="px-4 py-3 border-t border-steel-100/60 flex items-center justify-between gap-2" style={batchEditMode ? { marginLeft: "2rem" } : undefined}>
+                      <div className="flex items-center gap-2 text-[10px] text-steel-500/60">
                         <span className="flex items-center gap-1"><Calendar className="w-2.5 h-2.5" />{formatAbsoluteTime(post.postDate)}</span>
                       </div>
                       {post.postUrl && (
-                        <a href={post.postUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="flex items-center gap-1 text-[10px] text-sky-500 hover:text-sky-600 font-medium transition-colors">
+                        <a href={post.postUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="flex items-center gap-1 text-[10px] text-steel-500 hover:text-steel-600 font-medium transition-colors">
                           <ExternalLink className="w-2.5 h-2.5" />查看原帖
                         </a>
                       )}
@@ -1380,11 +1386,11 @@ export default function SocialPage() {
 
    {sortedAndFilteredData.length === 0 && (
   <div className="flex flex-col items-center justify-center py-16 text-center">
-    <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mb-3">
-      <MessageSquare className="w-8 h-8 text-gray-300" />
+    <div className="w-16 h-16 rounded-full bg-steel-50/70 flex items-center justify-center mb-3">
+      <MessageSquare className="w-8 h-8 text-steel-400" />
     </div>
-    <p className="text-sm text-gray-500 mb-1">没有找到匹配的帖子，尝试其他关键词</p>
-    <p className="text-xs text-gray-400">
+    <p className="text-sm text-steel-500/70 mb-1">没有找到匹配的帖子，尝试其他关键词</p>
+    <p className="text-xs text-steel-500/60">
       {selectedCategories.size > 0 || selectedPlatforms.size > 0 || hasTimeFilter || searchQuery.trim()
         ? "尝试调整筛选条件、搜索关键词或清除筛选"
         : "管理员可点击「添加动态」创建内容"}
@@ -1394,6 +1400,7 @@ export default function SocialPage() {
 
         </div>
       </div>
+      )}
 
       <AnimatePresence>
         {selectedPost && (
@@ -1436,14 +1443,14 @@ function DetailModal({ post, imageIdx, onImageIdxChange, onClose }: {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
-      <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} transition={{ duration: 0.25 }} onClick={(e) => e.stopPropagation()} className="relative w-full max-w-2xl max-h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+      <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} transition={{ duration: 0.25 }} onClick={(e) => e.stopPropagation()} className="relative w-full max-w-2xl max-h-[90vh] bg-white/40 rounded-sm shadow-2xl overflow-hidden flex flex-col">
         <button onClick={onClose} className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/40 transition-colors">
           <X className="w-4 h-4" />
         </button>
 
         <div className="flex-1 overflow-y-auto">
           {post.images.length > 0 && (
-            <div className="relative bg-gray-100">
+            <div className="relative bg-white/40">
               <div className="relative" style={{ aspectRatio: post.images.length === 1 ? "auto" : "16/10" }}>
                 <img src={getProxiedImageUrl(post.images[imageIdx])} alt={`图片 ${imageIdx + 1}`} className="w-full h-full object-contain max-h-[50vh]" />
                 {post.images.length > 1 && (
@@ -1470,17 +1477,17 @@ function DetailModal({ post, imageIdx, onImageIdxChange, onClose }: {
               {post.videos.map((videoUrl, vi) => {
                 const embed = getVideoEmbedUrl(videoUrl);
                 if (!embed) return null;
-                return <div key={vi} className="relative w-full rounded-xl overflow-hidden bg-black" style={{ aspectRatio: "16/9" }}><iframe src={embed.src} className="absolute inset-0 w-full h-full" allowFullScreen title={`视频 ${vi + 1}`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" /></div>;
+                return <div key={vi} className="relative w-full rounded-sm overflow-hidden bg-black" style={{ aspectRatio: "16/9" }}><iframe src={embed.src} className="absolute inset-0 w-full h-full" allowFullScreen title={`视频 ${vi + 1}`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" /></div>;
               })}
             </div>
           )}
 
           <div className="p-6 pt-5">
             <div className="flex items-center gap-3 mb-4">
-              <div className={`shrink-0 w-10 h-10 rounded-xl ${platformStyle.bg} ${platformStyle.text} flex items-center justify-center text-sm font-bold`}>{platformStyle.label.charAt(0)}</div>
+              <div className={`shrink-0 w-10 h-10 rounded-sm ${platformStyle.bg} ${platformStyle.text} flex items-center justify-center text-sm font-bold`}>{platformStyle.label.charAt(0)}</div>
               <div className="min-w-0">
-                <p className="text-base font-bold text-gray-900">{post.author}</p>
-                <p className="text-xs text-gray-400">{platformStyle.label} · {formatAbsoluteTime(post.postDate)}{post.pinned && <span className="ml-2 inline-flex items-center gap-0.5 text-amber-600"><Pin className="w-2.5 h-2.5" />置顶</span>}</p>
+                <p className="text-base font-bold text-steel-700">{post.author}</p>
+                <p className="text-xs text-steel-500/60">{platformStyle.label} · {formatAbsoluteTime(post.postDate)}{post.pinned && <span className="ml-2 inline-flex items-center gap-0.5 text-amber-600"><Pin className="w-2.5 h-2.5" />置顶</span>}</p>
               </div>
             </div>
 
@@ -1489,20 +1496,20 @@ function DetailModal({ post, imageIdx, onImageIdxChange, onClose }: {
               {post.member && <span className={`text-xs px-2 py-0.5 rounded border font-medium ${memberColors[post.member as ShowMember]}`}>{post.member}</span>}
             </div>
 
-            {post.content && <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap mb-4">{linkifyText(post.content)}</p>}
+            {post.content && <p className="text-sm text-steel-700 leading-relaxed whitespace-pre-wrap mb-4">{linkifyText(post.content)}</p>}
 
             {post.videos && post.videos.length > 0 && post.images.length > 0 && (
               <div className="space-y-2 mb-4">
                 {post.videos.map((videoUrl, vi) => {
                   const embed = getVideoEmbedUrl(videoUrl);
                   if (!embed) return null;
-                  return <div key={vi} className="relative w-full rounded-xl overflow-hidden bg-black" style={{ aspectRatio: "16/9" }}><iframe src={embed.src} className="absolute inset-0 w-full h-full" allowFullScreen title={`视频 ${vi + 1}`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" /></div>;
+                  return <div key={vi} className="relative w-full rounded-sm overflow-hidden bg-black" style={{ aspectRatio: "16/9" }}><iframe src={embed.src} className="absolute inset-0 w-full h-full" allowFullScreen title={`视频 ${vi + 1}`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" /></div>;
                 })}
               </div>
             )}
 
             {post.postUrl && (
-              <a href={post.postUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-50 text-sm text-sky-600 hover:bg-sky-50 font-medium transition-colors">
+              <a href={post.postUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-sm bg-steel-50/70 text-sm text-steel-600 hover:bg-steel-50/70 font-medium transition-colors">
                 <ExternalLink className="w-3.5 h-3.5" />查看原帖
               </a>
             )}
@@ -1518,15 +1525,15 @@ function ImageGrid({ images }: { images: string[] }) {
 
   if (images.length === 1) {
     return (
-      <div className="rounded-xl overflow-hidden bg-gray-50">
-        <img src={getProxiedImageUrl(images[0])} alt="动态图片" loading="lazy" className="w-full h-auto max-h-[500px] object-contain" onError={(e) => { const target = e.currentTarget; target.parentElement!.innerHTML = `<div class="w-full h-40 flex items-center justify-center bg-gray-50 text-gray-300"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21,15 16,10 5,21"/></svg></div>`; }} />
+      <div className="rounded-sm overflow-hidden bg-steel-50/70">
+        <img src={getProxiedImageUrl(images[0])} alt="动态图片" loading="lazy" className="w-full h-auto max-h-[500px] object-contain" onError={(e) => { const target = e.currentTarget; target.parentElement!.innerHTML = `<div class="w-full h-40 flex items-center justify-center bg-steel-50/70 text-steel-400"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21,15 16,10 5,21"/></svg></div>`; }} />
       </div>
     );
   }
 
   if (images.length === 2) {
     return (
-      <div className="grid grid-cols-2 gap-1 rounded-xl overflow-hidden">
+      <div className="grid grid-cols-2 gap-1 rounded-sm overflow-hidden">
         {images.map((img, i) => <img key={i} src={getProxiedImageUrl(img)} alt={`动态图片 ${i + 1}`} loading="lazy" className="w-full h-48 object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />)}
       </div>
     );
@@ -1534,7 +1541,7 @@ function ImageGrid({ images }: { images: string[] }) {
 
   if (images.length === 3) {
     return (
-      <div className="grid grid-cols-2 gap-1 rounded-xl overflow-hidden">
+      <div className="grid grid-cols-2 gap-1 rounded-sm overflow-hidden">
         <img src={getProxiedImageUrl(images[0])} alt="动态图片 1" loading="lazy" className="w-full h-48 object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
         <img src={getProxiedImageUrl(images[1])} alt="动态图片 2" loading="lazy" className="w-full h-48 object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
         <img src={getProxiedImageUrl(images[2])} alt="动态图片 3" loading="lazy" className="w-full h-48 object-cover col-span-2" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
@@ -1543,7 +1550,7 @@ function ImageGrid({ images }: { images: string[] }) {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-1 rounded-xl overflow-hidden">
+    <div className="grid grid-cols-2 gap-1 rounded-sm overflow-hidden">
       {images.slice(0, 4).map((img, i) => (
         <div key={i} className="relative">
           <img src={getProxiedImageUrl(img)} alt={`动态图片 ${i + 1}`} loading="lazy" className="w-full h-40 object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />

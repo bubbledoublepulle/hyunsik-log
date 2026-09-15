@@ -16,6 +16,7 @@ import {
   Music,
   Calendar,
   Link2,
+  List,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -37,10 +38,42 @@ import BatchImportModal from "@/components/BatchImportModal";
 import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
 import ScrollToTop from "@/components/ScrollToTop";
 import { StatCard } from "@/components/StatCard";
+import PageLoader from "@/components/PageLoader";
 import { useRealtimeData } from "@/hooks/useRealtimeData";
 
 type SortBy = "date-desc" | "date-asc" | "title-asc";
-type ViewMode = "table" | "album";
+type ViewMode = "cards" | "table" | "album";
+
+const SPAN_PATTERN = [
+  "md:col-span-7",
+  "md:col-span-5",
+  "md:col-span-4",
+  "md:col-span-4",
+  "md:col-span-4",
+];
+
+function getCardSpan(index: number) {
+  return SPAN_PATTERN[index % SPAN_PATTERN.length];
+}
+
+function getCardAspect(spanClass: string) {
+  if (spanClass.includes("col-span-7")) return "aspect-[16/10]";
+  if (spanClass.includes("col-span-5")) return "aspect-square";
+  return "aspect-[4/3]";
+}
+
+function CardLogoDecoration() {
+  return (
+    <div className="absolute top-3 right-3 w-8 h-8 opacity-0 scale-50 -rotate-12 group-hover:opacity-100 group-hover:scale-100 group-hover:rotate-0 transition-all duration-300 pointer-events-none">
+      <img
+        src="/logo.svg"
+        alt=""
+        className="w-full h-full object-contain"
+        style={{ filter: 'brightness(1.1) hue-rotate(10deg) saturate(1.2)' }}
+      />
+    </div>
+  );
+}
 
 export default function MusicPage() {
   const { isAdmin } = useAuth();
@@ -49,14 +82,15 @@ export default function MusicPage() {
   const [musicData, setMusicData] = useState<MusicItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortBy>("date-desc");
-  const [viewMode, setViewMode] = useState<ViewMode>("table");
+  const [viewMode, setViewMode] = useState<ViewMode>("cards");
 
   const [selectedTypes, setSelectedTypes] = useState<Set<MusicType>>(new Set());
   const [selectedYears, setSelectedYears] = useState<Set<number>>(new Set());
   const [selectedRoles, setSelectedRoles] = useState<Set<MusicRole>>(new Set());
   const [onlySelfComposed, setOnlySelfComposed] = useState(false);
 
-    const [flashId, setFlashId] = useState<string | null>(null);
+  const [flashId, setFlashId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const hash = window.location.hash.slice(1);
@@ -72,6 +106,7 @@ export default function MusicPage() {
       return () => { clearTimeout(t1); clearTimeout(t2); };
     }
   }, []);
+
   const [formOpen, setFormOpen] = useState(false);
   const [batchImportOpen, setBatchImportOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MusicItem | null>(null);
@@ -99,10 +134,13 @@ export default function MusicPage() {
   }, [rtMusicData, isAdmin]);
 
   useEffect(() => {
-    setMusicData(loadMusicData());
-    syncMusicData().then((data) => {
-      if (!userModifiedRef.current) setMusicData(data);
-    }).catch(() => {});
+    setIsLoading(true);
+    syncMusicData()
+      .then((data) => {
+        if (!userModifiedRef.current) setMusicData(data);
+      })
+      .catch(() => {})
+      .finally(() => setIsLoading(false));
   }, []);
 
   useEffect(() => {
@@ -248,7 +286,6 @@ export default function MusicPage() {
     setBatchImportOpen(false);
   };
 
-  // ========== 修复：删除时同步保存到 localStorage + Supabase ==========
   const handleDelete = async (item: MusicItem) => {
     userModifiedRef.current = true;
     const newData = musicData.filter((m) => m.id !== item.id);
@@ -275,46 +312,51 @@ export default function MusicPage() {
         className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6"
       >
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs px-2 py-0.5 rounded-md bg-sky-100 text-sky-600 font-medium">
-              MUSIC ARCHIVE
-            </span>
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900">音乐档案</h1>
+          <p className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600 mb-1">
+            Music Archive
+          </p>
+          <h1 className="text-3xl font-serif italic text-steel-600">音乐档案</h1>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
           {isAdmin && (
             <>
-              <button onClick={handleReset} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-gray-500 text-sm font-medium hover:bg-gray-50 transition-colors">
+              <button onClick={handleReset} className="flex items-center gap-1.5 px-3 py-2 rounded-sm border border-steel-200/60 text-steel-600 text-sm font-medium hover:bg-white/50 transition-colors">
                 <RotateCcw className="w-4 h-4" />重置数据
               </button>
-              <button onClick={handleAdd} className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-sky-400 text-white text-sm font-medium hover:bg-sky-500 transition-colors shadow-md shadow-sky-200">
+              <button onClick={handleAdd} className="flex items-center gap-1.5 px-4 py-2 rounded-sm bg-steel-500 text-white text-sm font-medium hover:bg-steel-600 transition-colors shadow-sm shadow-steel-500/20">
                 <Plus className="w-4 h-4" />添加歌曲
               </button>
-              <button onClick={() => setBatchImportOpen(true)} className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-400 text-white text-sm font-medium hover:bg-emerald-500 transition-colors shadow-md shadow-emerald-200">
+              <button onClick={() => setBatchImportOpen(true)} className="flex items-center gap-1.5 px-4 py-2 rounded-sm bg-steel-600 text-white text-sm font-medium hover:bg-steel-700 transition-colors shadow-sm shadow-steel-600/20">
                 <Link2 className="w-4 h-4" />批量导入
               </button>
             </>
           )}
-          <div className="flex p-1 bg-gray-100 rounded-xl">
-            <button onClick={() => setViewMode("table")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${viewMode === "table" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}>
-              <LayoutGrid className="w-3.5 h-3.5" />表格
+          <div className="flex p-1 bg-white/40 border border-steel-200/60 rounded-sm">
+            <button onClick={() => setViewMode("cards")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-sm font-medium transition-all ${viewMode === "cards" ? "bg-white text-steel-600 shadow-sm" : "text-steel-500/70 hover:text-steel-600"}`}>
+              <LayoutGrid className="w-3.5 h-3.5" />卡片
             </button>
-            <button onClick={() => setViewMode("album")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${viewMode === "album" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}>
+            <button onClick={() => setViewMode("table")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-sm font-medium transition-all ${viewMode === "table" ? "bg-white text-steel-600 shadow-sm" : "text-steel-500/70 hover:text-steel-600"}`}>
+              <List className="w-3.5 h-3.5" />表格
+            </button>
+            <button onClick={() => setViewMode("album")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-sm font-medium transition-all ${viewMode === "album" ? "bg-white text-steel-600 shadow-sm" : "text-steel-500/70 hover:text-steel-600"}`}>
               <Album className="w-3.5 h-3.5" />专辑
             </button>
           </div>
         </div>
       </motion.div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <StatCard label="作品总数" value={stats.total} icon={ListMusic} color="text-sky-500" bg="bg-sky-50" delay={0} />
-        <StatCard label="自作曲" value={stats.selfComposed} icon={Sparkles} color="text-violet-500" bg="bg-violet-50" delay={0.05} />
-        <StatCard label="作品类型" value={stats.types} icon={Disc3} color="text-emerald-500" bg="bg-emerald-50" delay={0.1} />
-      </div>
+      {isLoading ? (
+        <PageLoader />
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+            <StatCard label="作品总数" value={stats.total} icon={ListMusic} color="text-steel-500" bg="bg-steel-50/70" delay={0} />
+            <StatCard label="自作曲" value={stats.selfComposed} icon={Sparkles} color="text-steel-500" bg="bg-steel-50/70" delay={0.05} />
+            <StatCard label="作品类型" value={stats.types} icon={Disc3} color="text-steel-500" bg="bg-steel-50/70" delay={0.1} />
+          </div>
 
-      <div className="flex flex-col lg:flex-row gap-6">
+          <div className="flex flex-col lg:flex-row gap-6">
         <FilterSidebar
           types={allTypes}
           selectedTypes={selectedTypes}
@@ -333,12 +375,12 @@ export default function MusicPage() {
         <div className="flex-1 min-w-0">
           <div className="flex flex-col sm:flex-row gap-3 mb-4">
             <div className="relative flex-1">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="搜索歌曲、歌手或专辑..." className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 transition-all" />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-steel-400" />
+              <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="搜索歌曲、歌手或专辑..." className="w-full pl-10 pr-4 py-2.5 rounded-sm border border-steel-200/60 bg-white/40 text-sm text-steel-700 outline-none focus:border-steel-500 focus:ring-2 focus:ring-steel-200/30 placeholder:text-steel-400/60 transition-all" />
             </div>
             <div className="relative">
-              <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortBy)} className="pl-9 pr-8 py-2.5 rounded-xl border border-gray-200 bg-white text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 transition-all cursor-pointer appearance-none">
+              <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-steel-400 pointer-events-none" />
+              <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortBy)} className="pl-9 pr-8 py-2.5 rounded-sm border border-steel-200/60 bg-white/40 text-sm text-steel-700 outline-none focus:border-steel-500 focus:ring-2 focus:ring-steel-200/30 transition-all cursor-pointer appearance-none">
                 <option value="date-desc">最新发行</option>
                 <option value="date-asc">最早发行</option>
                 <option value="title-asc">名称排序</option>
@@ -347,66 +389,66 @@ export default function MusicPage() {
           </div>
 
           {viewMode === "table" ? (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="bg-white/40 rounded-sm border border-steel-200/60 shadow-sm overflow-hidden">
               <div className="overflow-x-auto scrollbar-thin">
                 <table className="w-full">
                   <thead>
-                    <tr className="bg-gray-50/50 border-b border-gray-100">
-                      <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wide px-4 py-3">歌曲</th>
-                      <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wide px-4 py-3 hidden md:table-cell">歌手</th>
-                      <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wide px-4 py-3 hidden md:table-cell">专辑</th>
-                      <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wide px-4 py-3 hidden lg:table-cell">类型</th>
-                      <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wide px-4 py-3">角色</th>
-                      <th className="text-right text-xs font-medium text-gray-400 uppercase tracking-wide px-4 py-3">操作</th>
+                    <tr className="bg-steel-50/40 border-b border-steel-200/60">
+                      <th className="text-left text-[10px] font-mono uppercase tracking-[0.15em] opacity-60 text-steel-600 px-4 py-3">歌曲</th>
+                      <th className="text-left text-[10px] font-mono uppercase tracking-[0.15em] opacity-60 text-steel-600 px-4 py-3 hidden md:table-cell">歌手</th>
+                      <th className="text-left text-[10px] font-mono uppercase tracking-[0.15em] opacity-60 text-steel-600 px-4 py-3 hidden md:table-cell">专辑</th>
+                      <th className="text-left text-[10px] font-mono uppercase tracking-[0.15em] opacity-60 text-steel-600 px-4 py-3 hidden lg:table-cell">类型</th>
+                      <th className="text-left text-[10px] font-mono uppercase tracking-[0.15em] opacity-60 text-steel-600 px-4 py-3">角色</th>
+                      <th className="text-right text-[10px] font-mono uppercase tracking-[0.15em] opacity-60 text-steel-600 px-4 py-3">操作</th>
                     </tr>
                   </thead>
                   <tbody>
                     <AnimatePresence mode="popLayout">
                       {filteredData.map((item, index) => (
-                                              <motion.tr key={item.id} id={item.id} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.2 }}
-                          className={`group relative border-b border-gray-50 last:border-0 hover:bg-sky-50/30 transition-colors ${index % 2 === 1 ? "bg-gray-50/30" : ""} ${item.isSelfComposed ? "shadow-[inset_3px_0_0_0_#42B4E6]" : ""} ${flashId === item.id ? "flash-highlight" : ""}`}>
+                        <motion.tr key={item.id} id={item.id} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.2 }}
+                          className={`group relative border-b border-steel-100/60 last:border-0 hover:bg-steel-50/30 transition-colors ${index % 2 === 1 ? "bg-white/30" : ""} ${item.isSelfComposed ? "shadow-[inset_3px_0_0_0_#4682B4]" : ""} ${flashId === item.id ? "flash-highlight" : ""}`}>
                           <td className="px-4 py-3.5">
                             <div className="flex items-center gap-2.5">
                               <div>
                                 <div className="flex items-center gap-1.5">
-                                  <span className="font-medium text-gray-900 text-sm">{item.title}</span>
-                                  {item.isSelfComposed && <Sparkles className="w-3.5 h-3.5 text-sky-400" />}
+                                  <span className="font-medium text-steel-700 text-sm">{item.title}</span>
+                                  {item.isSelfComposed && <Sparkles className="w-3.5 h-3.5 text-steel-400" />}
                                 </div>
-                                <span className="text-xs text-gray-400">{item.releaseDate}</span>
+                                <span className="text-xs text-steel-500/60">{item.releaseDate}</span>
                               </div>
                             </div>
                           </td>
                           <td className="px-4 py-3.5 hidden md:table-cell max-w-[100px]">
-                            <span className="text-sm text-gray-600 block truncate whitespace-nowrap" title={item.artist || "—"}>
+                            <span className="text-sm text-steel-600 block truncate whitespace-nowrap" title={item.artist || "—"}>
                               {item.artist || "—"}
                             </span>
                           </td>
                           <td className="px-4 py-3.5 hidden md:table-cell">
-                            <span className="text-sm text-gray-600">{item.album}</span>
+                            <span className="text-sm text-steel-600">{item.album}</span>
                           </td>
                           <td className="px-4 py-3.5 hidden lg:table-cell">
-                            <span className="text-xs px-2 py-1 rounded-md bg-gray-50 text-gray-500 font-medium whitespace-nowrap">{item.type}</span>
+                            <span className="text-xs px-2 py-1 rounded-sm bg-steel-50/70 text-steel-600 font-medium whitespace-nowrap border border-steel-200/60">{item.type}</span>
                           </td>
                           <td className="px-4 py-3.5">
                             <div className="flex flex-wrap gap-1">
                               {item.roles.map((role) => (
-                                <span key={role} className="text-xs px-1.5 py-0.5 rounded border border-sky-100 bg-sky-50 text-sky-600 font-medium">{role}</span>
+                                <span key={role} className="text-xs px-1.5 py-0.5 rounded-sm border border-steel-200/60 bg-steel-50/70 text-steel-600 font-medium">{role}</span>
                               ))}
                             </div>
                           </td>
-                         <td className="px-4 py-3.5">
-  <div className="flex items-center justify-end gap-1">
-    {item.link && item.link !== "https://music.apple.com" && (
-      <a href={item.link} target="_blank" rel="noopener noreferrer" className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-sky-50 hover:text-sky-500 transition-colors">
-        <ExternalLink className="w-3.5 h-3.5" />
-      </a>
-    )}
-    {isAdmin && (
+                          <td className="px-4 py-3.5">
+                            <div className="flex items-center justify-end gap-1">
+                              {item.link && item.link !== "https://music.apple.com" && (
+                                <a href={item.link} target="_blank" rel="noopener noreferrer" className="w-7 h-7 rounded-sm flex items-center justify-center text-steel-400 hover:bg-steel-50/70 hover:text-steel-600 transition-colors">
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                              )}
+                              {isAdmin && (
                                 <>
-                                  <button onClick={() => handleEdit(item)} className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-sky-50 hover:text-sky-500 transition-colors">
+                                  <button onClick={() => handleEdit(item)} className="w-7 h-7 rounded-sm flex items-center justify-center text-steel-400 hover:bg-steel-50/70 hover:text-steel-600 transition-colors">
                                     <Pencil className="w-3.5 h-3.5" />
                                   </button>
-                                  <button onClick={() => setDeleteTarget(item)} className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors">
+                                  <button onClick={() => setDeleteTarget(item)} className="w-7 h-7 rounded-sm flex items-center justify-center text-steel-400 hover:bg-red-50 hover:text-red-500 transition-colors">
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
                                 </>
@@ -421,15 +463,15 @@ export default function MusicPage() {
               </div>
               {filteredData.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mb-3">
-                    <ListMusic className="w-8 h-8 text-gray-300" />
+                  <div className="w-16 h-16 rounded-full bg-steel-50/70 border border-steel-200/60 flex items-center justify-center mb-3">
+                    <ListMusic className="w-8 h-8 text-steel-400" />
                   </div>
-                  <p className="text-sm text-gray-500 mb-1">没有找到匹配的作品</p>
-                  <p className="text-xs text-gray-400">尝试调整筛选条件或清除所有筛选</p>
+                  <p className="text-sm text-steel-500/70 mb-1">没有找到匹配的作品</p>
+                  <p className="text-xs text-steel-500/50">尝试调整筛选条件或清除所有筛选</p>
                 </div>
               )}
             </div>
-          ) : (
+          ) : viewMode === "album" ? (
             <div className="space-y-4">
               <AnimatePresence mode="popLayout">
                 {albumGroups.map((group, gi) => {
@@ -438,54 +480,54 @@ export default function MusicPage() {
                   const albumDate = group.songs.map((s) => s.releaseDate).sort()[0] || "";
                   return (
                     <motion.div key={group.album} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ delay: gi * 0.06 }}
-                      className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                      <div className="px-3 sm:px-5 py-4 bg-gradient-to-r from-gray-50 to-white border-b border-gray-50 flex items-center justify-between">
+                      className="bg-white/40 rounded-sm border border-steel-200/60 shadow-sm overflow-hidden">
+                      <div className="px-3 sm:px-5 py-4 bg-steel-50/40 border-b border-steel-200/60 flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center">
-                            <Album className="w-5 h-5 text-sky-500" />
+                          <div className="w-10 h-10 rounded-sm bg-steel-100 flex items-center justify-center">
+                            <Album className="w-5 h-5 text-steel-500" />
                           </div>
                           <div>
-                            <h3 className="font-bold text-gray-900">{group.album}</h3>
-                            <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
+                            <h3 className="font-bold text-steel-700">{group.album}</h3>
+                            <div className="flex items-center gap-3 text-xs text-steel-500/70 mt-0.5">
                               <span className="flex items-center gap-1"><Music className="w-3 h-3" />{albumSongCount} 首歌</span>
-                              {albumSelfCount > 0 && <span className="flex items-center gap-1"><Sparkles className="w-3 h-3 text-sky-400" />{albumSelfCount} 首自作曲</span>}
+                              {albumSelfCount > 0 && <span className="flex items-center gap-1"><Sparkles className="w-3 h-3 text-steel-400" />{albumSelfCount} 首自作曲</span>}
                               <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{albumDate}</span>
                             </div>
                           </div>
                         </div>
                       </div>
-                      <div className="divide-y divide-gray-50">
+                      <div className="divide-y divide-steel-100/60">
                         {group.songs.map((item) => (
-                          <div key={item.id} className={`flex items-center px-3 sm:px-5 py-3 hover:bg-sky-50/30 transition-colors ${item.isSelfComposed ? "shadow-[inset_3px_0_0_0_#42B4E6]" : ""}`}>
+                          <div key={item.id} className={`flex items-center px-3 sm:px-5 py-3 hover:bg-steel-50/30 transition-colors ${item.isSelfComposed ? "shadow-[inset_3px_0_0_0_#4682B4]" : ""}`}>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
-                                <span className="font-medium text-gray-900 text-sm truncate">{item.title}</span>
-                                {item.isSelfComposed && <Sparkles className="w-3.5 h-3.5 text-sky-400 shrink-0" />}
-                                <span className="text-xs px-1.5 py-0.5 rounded-md bg-gray-50 text-gray-400 font-medium shrink-0 whitespace-nowrap">{item.type}</span>
+                                <span className="font-medium text-steel-700 text-sm truncate">{item.title}</span>
+                                {item.isSelfComposed && <Sparkles className="w-3.5 h-3.5 text-steel-400 shrink-0" />}
+                                <span className="text-xs px-1.5 py-0.5 rounded-sm bg-steel-50/70 text-steel-500 font-medium shrink-0 whitespace-nowrap border border-steel-200/60">{item.type}</span>
                               </div>
-                              <div className="flex items-center gap-2 mt-1 text-xs text-gray-400">
-                                <span className="text-sky-600 font-medium">{item.artist || "—"}</span>
+                              <div className="flex items-center gap-2 mt-1 text-xs text-steel-500/70">
+                                <span className="text-steel-600 font-medium">{item.artist || "—"}</span>
                                 <span>·</span>
                                 <span>{item.releaseDate}</span>
                                 <span className="flex flex-wrap gap-1">
                                   {item.roles.map((role) => (
-                                    <span key={role} className="text-[10px] px-1 py-0.5 rounded border border-sky-100 bg-sky-50 text-sky-600 font-medium">{role}</span>
+                                    <span key={role} className="text-[10px] px-1 py-0.5 rounded-sm border border-steel-200/60 bg-steel-50/70 text-steel-600 font-medium">{role}</span>
                                   ))}
                                 </span>
                               </div>
                             </div>
-                           <div className="flex items-center gap-0.5">
-  {item.link && item.link !== "https://music.apple.com" && (
-    <a href={item.link} target="_blank" rel="noopener noreferrer" className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-sky-50 hover:text-sky-500 transition-colors">
-      <ExternalLink className="w-3.5 h-3.5" />
-    </a>
-  )}
-  {isAdmin && (
+                            <div className="flex items-center gap-0.5">
+                              {item.link && item.link !== "https://music.apple.com" && (
+                                <a href={item.link} target="_blank" rel="noopener noreferrer" className="w-7 h-7 rounded-sm flex items-center justify-center text-steel-400 hover:bg-steel-50/70 hover:text-steel-600 transition-colors">
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                              )}
+                              {isAdmin && (
                                 <>
-                                  <button onClick={() => handleEdit(item)} className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-sky-50 hover:text-sky-500 transition-colors">
+                                  <button onClick={() => handleEdit(item)} className="w-7 h-7 rounded-sm flex items-center justify-center text-steel-400 hover:bg-steel-50/70 hover:text-steel-600 transition-colors">
                                     <Pencil className="w-3.5 h-3.5" />
                                   </button>
-                                  <button onClick={() => setDeleteTarget(item)} className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors">
+                                  <button onClick={() => setDeleteTarget(item)} className="w-7 h-7 rounded-sm flex items-center justify-center text-steel-400 hover:bg-red-50 hover:text-red-500 transition-colors">
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
                                 </>
@@ -499,19 +541,93 @@ export default function MusicPage() {
                 })}
               </AnimatePresence>
               {albumGroups.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-16 text-center bg-white rounded-2xl border border-gray-100 shadow-sm">
-                  <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mb-3">
-                    <Album className="w-8 h-8 text-gray-300" />
+                <div className="flex flex-col items-center justify-center py-16 text-center bg-white/40 rounded-sm border border-steel-200/60 shadow-sm">
+                  <div className="w-16 h-16 rounded-full bg-steel-50/70 border border-steel-200/60 flex items-center justify-center mb-3">
+                    <Album className="w-8 h-8 text-steel-400" />
                   </div>
-                  <p className="text-sm text-gray-500 mb-1">没有找到匹配的专辑</p>
-                  <p className="text-xs text-gray-400">尝试调整筛选条件或清除所有筛选</p>
+                  <p className="text-sm text-steel-500/70 mb-1">没有找到匹配的专辑</p>
+                  <p className="text-xs text-steel-500/50">尝试调整筛选条件或清除筛选</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-12 gap-4">
+              <AnimatePresence mode="popLayout">
+                {filteredData.map((item, index) => {
+                  const span = getCardSpan(index);
+                  const aspect = getCardAspect(span);
+                  const no = String(index + 1).padStart(2, '0');
+                  const year = new Date(item.releaseDate).getFullYear();
+                  return (
+                    <motion.div
+                      key={item.id}
+                      id={item.id}
+                      layout
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ delay: Math.min(index * 0.03, 0.3) }}
+                      className={`col-span-12 ${span} group relative bg-white/40 rounded-sm border border-steel-200/60 shadow-sm overflow-hidden hover:-translate-y-2 hover:border-steel-300/80 transition-all ${flashId === item.id ? "flash-highlight" : ""}`}
+                    >
+                      <div className={`relative ${aspect} bg-steel-50/30 flex items-center justify-center overflow-hidden`}>
+                        <span className="font-serif italic text-3xl sm:text-4xl text-steel-400/40">Music N°{no}</span>
+                        <CardLogoDecoration />
+                        {isAdmin && (
+                          <div className="absolute top-3 left-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                            <button onClick={(e) => { e.stopPropagation(); handleEdit(item); }} className="w-7 h-7 rounded-sm bg-white/90 backdrop-blur-sm flex items-center justify-center text-steel-600 hover:bg-white hover:text-steel-800 transition-colors border border-steel-200/60">
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(item); }} className="w-7 h-7 rounded-sm bg-white/90 backdrop-blur-sm flex items-center justify-center text-steel-600 hover:bg-white hover:text-red-500 transition-colors border border-steel-200/60">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600">Music</span>
+                          <span className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600">{isNaN(year) ? item.releaseDate : year}</span>
+                        </div>
+                        <h3 className="font-bold text-lg text-steel-600 mb-1 line-clamp-1">{item.title}</h3>
+                        <p className="text-xs text-steel-500/70 mb-3">{item.album} · {item.artist}</p>
+                        <div className="flex flex-wrap gap-1 mb-3">
+                          {item.roles.map((role) => (
+                            <span key={role} className="text-[10px] px-1.5 py-0.5 rounded-sm border border-steel-200/60 bg-steel-50/70 text-steel-600 font-medium">{role}</span>
+                          ))}
+                        </div>
+                        <div className="flex items-center justify-between">
+                          {item.isSelfComposed && (
+                            <span className="text-[10px] text-steel-500 flex items-center gap-1">
+                              <Sparkles className="w-3 h-3" />自作曲
+                            </span>
+                          )}
+                          {item.link && item.link !== "https://music.apple.com" && (
+                            <a href={item.link} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="ml-auto text-[10px] font-mono uppercase tracking-[0.15em] text-steel-500 hover:text-steel-600 flex items-center gap-1 transition-colors">
+                              → View
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
+              {filteredData.length === 0 && (
+                <div className="col-span-12 flex flex-col items-center justify-center py-16 text-center">
+                  <div className="w-16 h-16 rounded-full bg-steel-50/70 border border-steel-200/60 flex items-center justify-center mb-3">
+                    <Disc3 className="w-8 h-8 text-steel-400" />
+                  </div>
+                  <p className="text-sm text-steel-500/70 mb-1">没有找到匹配的作品</p>
+                  <p className="text-xs text-steel-500/50">尝试调整筛选条件或清除筛选</p>
                 </div>
               )}
             </div>
           )}
-          <p className="text-xs text-gray-400 mt-3">共 {filteredData.length} 条结果{filteredData.length !== musicData.length && ` (总计 ${musicData.length} 条)`}</p>
+          <p className="text-xs font-mono uppercase tracking-[0.15em] text-steel-500/60 mt-3">共 {filteredData.length} 条结果{filteredData.length !== musicData.length && ` (总计 ${musicData.length} 条)`}</p>
         </div>
       </div>
+      </>
+      )}
 
       <MusicFormModal open={formOpen} onClose={() => { setFormOpen(false); setEditingItem(null); }} onSave={handleSave} editingItem={editingItem} />
       <BatchImportModal open={batchImportOpen} onClose={() => setBatchImportOpen(false)} onSave={handleBatchSave} />

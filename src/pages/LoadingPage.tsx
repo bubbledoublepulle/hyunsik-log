@@ -28,32 +28,19 @@ export default function LoadingPage() {
   }, [navigate]);
 
   return (
-    <div className="fixed inset-0 bg-[#F8F9FA] flex flex-col items-center justify-center overflow-hidden">
-      {/* Pulse background */}
-      <motion.div
-        animate={{
-          scale: [1, 1.2, 1],
-          opacity: [0.3, 0.15, 0.3],
+    <div className="fixed inset-0 bg-steel-100 flex flex-col items-center justify-center overflow-hidden">
+      {/* Grid overlay */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundSize: '60px 60px',
+          backgroundImage: `
+            linear-gradient(to right, var(--grid-color) 1px, transparent 1px),
+            linear-gradient(to bottom, var(--grid-color) 1px, transparent 1px)
+          `,
+          maskImage: 'radial-gradient(circle at center, black 80%, transparent 100%)',
+          WebkitMaskImage: 'radial-gradient(circle at center, black 80%, transparent 100%)',
         }}
-        transition={{
-          duration: 3,
-          repeat: Infinity,
-          ease: "easeInOut",
-        }}
-        className="absolute w-[600px] h-[600px] rounded-full bg-sky-200/30 blur-3xl"
-      />
-      <motion.div
-        animate={{
-          scale: [1, 1.1, 1],
-          opacity: [0.2, 0.1, 0.2],
-        }}
-        transition={{
-          duration: 3,
-          repeat: Infinity,
-          ease: "easeInOut",
-          delay: 0.5,
-        }}
-        className="absolute w-[400px] h-[400px] rounded-full bg-sky-300/20 blur-2xl"
       />
 
       {/* Center content */}
@@ -62,9 +49,9 @@ export default function LoadingPage() {
         <motion.p
           animate={{ opacity: [0.3, 1, 0.3] }}
           transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-          className="text-sky-500/60 text-sm font-mono tracking-[0.3em] mb-6"
+          className="text-steel-500/60 text-xs font-mono tracking-[0.3em] mb-6 uppercase"
         >
-          CONNECTING...
+          Connecting...
         </motion.p>
 
         {/* Brand name */}
@@ -72,16 +59,15 @@ export default function LoadingPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, ease: "easeOut" }}
-          className="text-6xl md:text-7xl font-black tracking-tighter mb-12"
-          style={{ color: "#42B4E6" }}
+          className="text-6xl md:text-7xl font-serif italic text-steel-600 mb-12"
         >
-          Hyunsik.log
+          sik.log
         </motion.h1>
 
         {/* Progress bar */}
-        <div className="w-64 h-[3px] bg-gray-200 rounded-full overflow-hidden">
+        <div className="w-64 h-[3px] bg-steel-200 rounded-full overflow-hidden">
           <motion.div
-            className="h-full bg-gradient-to-r from-sky-400 to-sky-600 rounded-full"
+            className="h-full bg-steel-500 rounded-full"
             style={{ width: `${progress}%` }}
           />
         </div>
@@ -89,7 +75,7 @@ export default function LoadingPage() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
-          className="text-gray-300 text-xs font-mono mt-3"
+          className="text-steel-300 text-xs font-mono mt-3"
         >
           {Math.round(progress)}%
         </motion.p>
@@ -100,8 +86,7 @@ export default function LoadingPage() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 1, duration: 0.8 }}
-        className="absolute bottom-12 text-center px-8"
-        style={{ color: "#9CA3AF", fontSize: 14, letterSpacing: 2 }}
+        className="absolute bottom-12 text-center px-8 text-steel-400 text-sm tracking-[0.2em] font-mono uppercase"
       >
         所思皆成真
       </motion.p>

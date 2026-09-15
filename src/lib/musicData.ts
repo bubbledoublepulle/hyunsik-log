@@ -239,7 +239,7 @@ export function loadMusicData(): MusicItem[] {
   } catch {
     // ignore parse errors
   }
-  return [...initialMusicData];
+  return [];
 }
 
 function saveLocalMusicData(data: MusicItem[]): void {
