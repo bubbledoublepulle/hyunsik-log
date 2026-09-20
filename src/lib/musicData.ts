@@ -2,6 +2,11 @@ import { supabase, isSupabaseConfigured } from "./supabase";
 
 let saveMusicDataPromise: Promise<{ error: string | null }> | null = null;
 
+// sync 短期内存缓存：5 分钟内再次切换页面不再重复请求 Supabase
+let musicSyncCache: { data: MusicItem[]; at: number } | null = null;
+let musicSyncPromise: Promise<MusicItem[]> | null = null;
+const SYNC_CACHE_TTL = 5 * 60 * 1000;
+
 export type MusicRole = "演唱" | "作曲" | "作词" | "编曲";
 export type MusicType = "录音室" | "live" | "OST" | "合作" | "仅制作";
 
@@ -16,6 +21,9 @@ export interface MusicItem {
   plays: string;
   link: string;
   isSelfComposed: boolean;
+  coverImageUrl?: string;
+  albumNo?: number;
+  isTitleTrack?: boolean;
 }
 
 export const allTypes: MusicType[] = ["录音室", "live", "OST", "合作", "仅制作"];
@@ -255,35 +263,53 @@ export async function syncMusicData(): Promise<MusicItem[]> {
     return loadMusicData();
   }
 
-  const PAGE_SIZE = 100;
-  let allRows: any[] = [];
-  let from = 0;
-  let hasMore = true;
-
-  while (hasMore) {
-    const { data, error } = await supabase
-      .from("music")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .range(from, from + PAGE_SIZE - 1);
-
-    if (error) {
-      console.warn("[music] sync failed:", error.message);
-      return loadMusicData();
-    }
-
-    if (data && data.length > 0) {
-      allRows = allRows.concat(data);
-      hasMore = data.length === PAGE_SIZE;
-      from += PAGE_SIZE;
-    } else {
-      hasMore = false;
-    }
+  const now = Date.now();
+  if (musicSyncCache && now - musicSyncCache.at < SYNC_CACHE_TTL) {
+    return musicSyncCache.data;
   }
 
-  const items = allRows.map(fromDbRow);
-  saveLocalMusicData(items);
-  return items;
+  if (musicSyncPromise) {
+    return musicSyncPromise;
+  }
+
+  musicSyncPromise = (async () => {
+    try {
+      const PAGE_SIZE = 100;
+      let allRows: any[] = [];
+      let from = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from("music")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .range(from, from + PAGE_SIZE - 1);
+
+        if (error) {
+          console.warn("[music] sync failed:", error.message);
+          return loadMusicData();
+        }
+
+        if (data && data.length > 0) {
+          allRows = allRows.concat(data);
+          hasMore = data.length === PAGE_SIZE;
+          from += PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      const items = allRows.map(fromDbRow);
+      saveLocalMusicData(items);
+      musicSyncCache = { data: items, at: Date.now() };
+      return items;
+    } finally {
+      musicSyncPromise = null;
+    }
+  })();
+
+  return musicSyncPromise;
 }
 
 export async function saveMusicData(data: MusicItem[]): Promise<{ error: string | null }> {
@@ -326,6 +352,7 @@ export async function saveMusicData(data: MusicItem[]): Promise<{ error: string 
       }
     }
 
+    musicSyncCache = null; // 保存后清空缓存，下次 sync 拉取最新数据
     return { error: null };
   })();
 

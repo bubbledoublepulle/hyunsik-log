@@ -3,6 +3,11 @@ import { supabase, isSupabaseConfigured } from "./supabase";
 // 全局锁，防止 saveShowData 并发执行导致数据竞态
 let saveShowDataPromise: Promise<ShowSaveResult> | null = null;
 
+// sync 短期内存缓存：5 分钟内再次切换页面不再重复请求 Supabase
+let showSyncCache: { data: ShowItem[]; at: number } | null = null;
+let showSyncPromise: Promise<ShowItem[]> | null = null;
+const SYNC_CACHE_TTL = 5 * 60 * 1000;
+
 export type ShowMember =
   | "任炫植"
   | "徐恩光"
@@ -168,44 +173,64 @@ export async function syncShowData(): Promise<ShowItem[]> {
     return loadShowData();
   }
 
-  const PAGE_SIZE = 100;
-  let allRows: any[] = [];
-  let from = 0;
-  let hasMore = true;
-
-  while (hasMore) {
-    const { data, error } = await supabase
-      .from("shows")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .range(from, from + PAGE_SIZE - 1);
-
-    if (error) {
-      if (import.meta.env.DEV) console.warn("[shows] sync failed:", error.message);
-      return loadShowData();
-    }
-
-    if (data && data.length > 0) {
-      allRows = allRows.concat(data);
-      hasMore = data.length === PAGE_SIZE;
-      from += PAGE_SIZE;
-    } else {
-      hasMore = false;
-    }
+  // 命中内存缓存直接返回
+  const now = Date.now();
+  if (showSyncCache && now - showSyncCache.at < SYNC_CACHE_TTL) {
+    return showSyncCache.data;
   }
 
-  const items = allRows.map(fromDbRow);
-  // 自愈：剔除旧版示例数据（s01-s08），避免污染真实档案
-  const localData = loadShowData().filter((i) => !LEGACY_SAMPLE_IDS.has(i.id));
+  // 多个页面同时触发 sync，复用同一个请求
+  if (showSyncPromise) {
+    return showSyncPromise;
+  }
 
-  // 合并：保留云端数据 + 本地独有的数据（防止未上传成功的数据被覆盖）
-  const remoteIds = new Set(items.map((i) => i.id));
-  const merged = [...items, ...localData.filter((i) => !remoteIds.has(i.id))];
+  showSyncPromise = (async () => {
+    try {
+      const PAGE_SIZE = 100;
+      let allRows: any[] = [];
+      let from = 0;
+      let hasMore = true;
 
-  saveLocalShowData(merged);
-  recordSyncTime();
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from("shows")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .range(from, from + PAGE_SIZE - 1);
 
-  return merged;
+        if (error) {
+          if (import.meta.env.DEV) console.warn("[shows] sync failed:", error.message);
+          return loadShowData();
+        }
+
+        if (data && data.length > 0) {
+          allRows = allRows.concat(data);
+          hasMore = data.length === PAGE_SIZE;
+          from += PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      const items = allRows.map(fromDbRow);
+      // 自愈：剔除旧版示例数据（s01-s08），避免污染真实档案
+      const localData = loadShowData().filter((i) => !LEGACY_SAMPLE_IDS.has(i.id));
+
+      // 合并：保留云端数据 + 本地独有的数据（防止未上传成功的数据被覆盖）
+      const remoteIds = new Set(items.map((i) => i.id));
+      const merged = [...items, ...localData.filter((i) => !remoteIds.has(i.id))];
+
+      saveLocalShowData(merged);
+      recordSyncTime();
+
+      showSyncCache = { data: merged, at: Date.now() };
+      return merged;
+    } finally {
+      showSyncPromise = null;
+    }
+  })();
+
+  return showSyncPromise;
 }
 
 export interface ShowSaveResult {
@@ -257,6 +282,7 @@ export async function saveShowData(data: ShowItem[]): Promise<ShowSaveResult> {
     }
 
     recordSyncTime();
+    showSyncCache = null; // 保存后清空缓存，下次 sync 拉取最新数据
 
     // 删除云端多余行
     if (uniqueData.length === 0) {
@@ -320,6 +346,7 @@ export async function deleteShowItem(id: string): Promise<{ error: string | null
     saveLocalShowData(current);
     return { error: error.message };
   }
+  showSyncCache = null; // 删除后清空缓存
   return { error: null };
 }
 

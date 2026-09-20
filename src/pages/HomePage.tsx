@@ -18,8 +18,10 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { syncMusicData, type MusicItem } from "@/lib/musicData";
+import { toast } from "sonner";
+import { loadMusicData, syncMusicData, type MusicItem } from "@/lib/musicData";
 import {
+  loadShowData,
   syncShowData,
   getPreferredThumbnail,
   getDisplayDuration,
@@ -28,7 +30,7 @@ import {
   memberColors,
   type ShowItem,
 } from "@/lib/showData";
-import { syncSocialData, type SocialPost } from "@/lib/socialData";
+import { loadSocialData, syncSocialData, type SocialPost } from "@/lib/socialData";
 import DataManager from "@/components/DataManager";
 import PageLoader from "@/components/PageLoader";
 
@@ -102,7 +104,11 @@ function MusicOnThisDayCard({ item, year, index }: { item: MusicItem; year: numb
   return (
     <>
       <div className="relative aspect-[4/3] bg-steel-50/30 flex items-center justify-center overflow-hidden">
-        <span className="font-serif italic text-3xl sm:text-4xl text-steel-400/40">Music N°{no}</span>
+        {item.coverImageUrl ? (
+          <img src={item.coverImageUrl} alt={item.title} className="absolute inset-0 w-full h-full object-cover" />
+        ) : (
+          <span className="font-serif italic text-3xl sm:text-4xl text-steel-400/40">Music N°{no}</span>
+        )}
         <CardLogoDecoration />
       </div>
       <div className="p-4">
@@ -148,7 +154,7 @@ function VideoOnThisDayCard({ item, year, index }: { item: ShowItem; year: numbe
         )}
         {!thumbUrl && (
           <span className="absolute inset-0 flex items-center justify-center font-serif italic text-3xl sm:text-4xl text-steel-400/40">
-            Show N°{no}
+            Video N°{no}
           </span>
         )}
         <CardLogoDecoration />
@@ -158,7 +164,7 @@ function VideoOnThisDayCard({ item, year, index }: { item: ShowItem; year: numbe
       </div>
       <div className="p-4">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600">Show</span>
+          <span className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600">Video</span>
           <span className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600">{year}</span>
         </div>
         <h3 className="font-bold text-steel-700 text-sm mb-1 line-clamp-2 min-h-[2.5rem]">{item.title}</h3>
@@ -247,6 +253,11 @@ function MusicDetailModal({ item, onClose }: { item: MusicItem; onClose: () => v
 
         <div className="h-1 bg-gradient-to-r from-steel-400 to-steel-600" />
         <div className="flex-1 overflow-y-auto p-6">
+          {item.coverImageUrl && (
+            <div className="relative aspect-[16/10] rounded-sm overflow-hidden bg-steel-50/30 border border-steel-200/60 mb-5">
+              <img src={item.coverImageUrl} alt={item.title} className="w-full h-full object-cover" />
+            </div>
+          )}
           <div className="flex items-center gap-2 mb-4">
             <span className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600 px-2 py-0.5 rounded-sm border border-steel-200/60 bg-steel-50/70">Music</span>
             <span className="text-xs text-steel-500/70">{item.releaseDate}</span>
@@ -472,13 +483,21 @@ function SocialDetailModal({ item, onClose }: { item: SocialPost; onClose: () =>
 }
 
 export default function HomePage() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, setAuthModalOpen, logout } = useAuth();
   const navigate = useNavigate();
+
+  const handleLogoClick = () => {
+    if (isAdmin) {
+      logout();
+      toast.success("已退出管理模式", { description: "已恢复访客身份" });
+    } else {
+      setAuthModalOpen(true);
+    }
+  };
 
   const [musicData, setMusicData] = useState<MusicItem[]>([]);
   const [showData, setShowData] = useState<ShowItem[]>([]);
   const [socialData, setSocialData] = useState<SocialPost[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
   const [groupedUpdates, setGroupedUpdates] = useState<Record<TabKey, UpdateItem[]>>({
     music: [],
@@ -492,6 +511,7 @@ export default function HomePage() {
   const [selectedMusic, setSelectedMusic] = useState<MusicItem | null>(null);
   const [selectedVideo, setSelectedVideo] = useState<ShowItem | null>(null);
   const [selectedSocial, setSelectedSocial] = useState<SocialPost | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const buildUpdates = useCallback((
     music: MusicItem[],
@@ -548,29 +568,31 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    let mounted = true;
-    setIsLoading(true);
+    const music = loadMusicData();
+    const shows = loadShowData();
+    const socials = loadSocialData();
+    setMusicData(music);
+    setShowData(shows);
+    setSocialData(socials);
+    buildUpdates(music, shows, socials);
+
+    const hasLocalData = music.length > 0 || shows.length > 0 || socials.length > 0;
+    if (hasLocalData) {
+      setIsLoading(false);
+    }
 
     Promise.all([
       syncMusicData(),
       syncShowData(),
       syncSocialData(),
-    ])
-      .then(([musicSynced, showsSynced, socialsSynced]) => {
-        if (!mounted) return;
-        setMusicData(musicSynced);
-        setShowData(showsSynced);
-        setSocialData(socialsSynced);
-        buildUpdates(musicSynced, showsSynced, socialsSynced);
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (mounted) setIsLoading(false);
-      });
-
-    return () => {
-      mounted = false;
-    };
+    ]).then(([musicSynced, showsSynced, socialsSynced]) => {
+      setMusicData(musicSynced);
+      setShowData(showsSynced);
+      setSocialData(socialsSynced);
+      buildUpdates(musicSynced, showsSynced, socialsSynced);
+    }).catch(() => {}).finally(() => {
+      setIsLoading(false);
+    });
   }, [buildUpdates]);
 
   const pickRandomShow = useCallback(() => {
@@ -630,71 +652,119 @@ export default function HomePage() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.8 }}
-        className="relative min-h-screen flex flex-col items-center justify-center -mt-32 pt-32 mb-10"
+        className="relative min-h-[70vh] md:min-h-screen flex flex-col items-center justify-start -mt-32 pt-32 pb-6 md:pb-24 mb-3 md:mb-10"
       >
-        <div className="relative z-10 w-full max-w-6xl mx-auto px-6 text-center">
-          <motion.p
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 0.6 }}
-            className="text-[10px] md:text-xs font-mono font-bold uppercase tracking-[0.3em] text-steel-500/70 mb-8"
-          >
-            HYUNSIK ARCHIVE
-          </motion.p>
+        {/* Top-left portfolio label */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.6, duration: 0.6 }}
+          className="absolute top-4 md:top-5 left-6 md:left-8 z-20 text-xs font-mono uppercase tracking-[0.2em] text-[#4682b4]/60"
+        >
+          Portfolio 2026
+        </motion.div>
 
+        {/* Top-right social links */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.6, duration: 0.6 }}
+          className="absolute top-4 md:top-5 right-6 md:right-8 z-[50] flex items-center gap-4 md:gap-6"
+        >
+          <a
+            href="https://www.instagram.com/imhyunsik"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs font-mono uppercase tracking-[0.2em] text-[#4682b4] hover:text-blue-900 transition-colors"
+          >
+            IG
+          </a>
+          <a
+            href="https://x.com/btob_imhyunsik"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs font-mono uppercase tracking-[0.2em] text-[#4682b4] hover:text-blue-900 transition-colors"
+          >
+            TW
+          </a>
+        </motion.div>
+
+        <div className="relative z-10 w-full max-w-6xl mx-auto px-6 text-center pt-10 md:pt-36">
           <div className="relative inline-block group cursor-default">
+            {/* Top-left decorative label */}
+            <motion.span
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1, duration: 0.6 }}
+              className="absolute -top-8 left-4 md:left-12 text-xs md:text-sm font-mono font-bold uppercase tracking-widest text-[#809bb2]"
+            >
+              LIM HYUNSIK
+            </motion.span>
+
             <motion.h1
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3, duration: 0.8 }}
-              className="text-[18vw] sm:text-[16vw] md:text-[14vw] font-serif italic text-steel-600 leading-none select-none drop-shadow-xl"
+              className="text-[18vw] md:text-[16vw] font-serif italic leading-none tracking-tighter flex items-end select-none drop-shadow-xl"
+              style={{
+                color: "#4682b4",
+                textShadow: `
+                  0 1px 0 rgba(52, 91, 121, 0.45),
+                  0 3px 0 rgba(52, 91, 121, 0.30),
+                  0 5px 0 rgba(52, 91, 121, 0.15),
+                  0 8px 20px rgba(70, 130, 180, 0.35),
+                  0 16px 40px rgba(70, 130, 180, 0.18)
+                `,
+              }}
             >
-              sik.log
+              <span className="inline-flex items-baseline">
+                <span>sik.l</span>
+                <span
+                  className="relative inline-block z-10 cursor-pointer hover:opacity-80 transition-opacity"
+                  onClick={handleLogoClick}
+                  style={{
+                    width: "0.9em",
+                    height: "0.9em",
+                    marginLeft: "-0.02em",
+                    marginRight: "-0.02em",
+                    verticalAlign: "baseline",
+                    WebkitMaskImage: "url(/logo.svg)",
+                    maskImage: "url(/logo.svg)",
+                    WebkitMaskSize: "contain",
+                    maskSize: "contain",
+                    WebkitMaskRepeat: "no-repeat",
+                    maskRepeat: "no-repeat",
+                    WebkitMaskPosition: "center bottom",
+                    maskPosition: "center bottom",
+                    backgroundColor: "#8daabf",
+                  }}
+                  title={isAdmin ? "点击退出管理模式" : "点击进入管理模式"}
+                />
+                <span>g</span>
+              </span>
             </motion.h1>
 
-            {/* Top-left decorative label */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 1, duration: 0.6 }}
-              className="absolute -top-4 md:-top-8 left-0 md:left-4 text-[10px] md:text-xs font-mono font-bold uppercase tracking-[0.2em] text-steel-600/80 animate-fade-in-up opacity-0"
-              style={{ animationDelay: "1s" }}
-            >
-              BTOB · MUSICIAN
-            </motion.div>
-
             {/* Bottom-right decorative label */}
-            <motion.div
+            <motion.span
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 1.5, duration: 0.6 }}
-              className="absolute -bottom-2 md:-bottom-4 right-0 md:right-4 text-[10px] md:text-xs font-mono font-bold uppercase tracking-[0.2em] text-steel-600/80 animate-fade-in-up opacity-0"
-              style={{ animationDelay: "1.5s" }}
+              transition={{ delay: 1.2, duration: 0.6 }}
+              className="absolute -bottom-14 md:-bottom-20 right-4 md:right-12 text-xs md:text-sm font-mono font-bold uppercase tracking-widest text-[#809bb2]"
             >
-              BASED IN SEOUL
-            </motion.div>
+              BTOB
+            </motion.span>
           </div>
-
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.9, duration: 0.6 }}
-            className="text-xs md:text-sm font-mono text-steel-500/70 tracking-wider mt-10"
-          >
-            Archived since 2024
-          </motion.p>
         </div>
 
         {/* Bottom info bar like reference */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 1.2, duration: 0.6 }}
-          className="absolute bottom-0 left-0 right-0 p-6 md:p-8 flex justify-between items-end z-30 text-[10px] md:text-xs font-mono font-bold uppercase tracking-[0.15em] text-steel-500/60"
+          transition={{ delay: 0.8, duration: 0.6 }}
+          className="absolute bottom-2 md:bottom-8 left-0 right-0 p-3 md:p-8 flex justify-between items-end z-30 text-[10px] md:text-xs font-mono font-bold uppercase tracking-[0.15em] text-steel-500/60"
         >
           <div className="flex flex-col gap-1 md:gap-2">
             <span>Personal Archive</span>
-            <span>Est. 2024</span>
           </div>
 
           <div className="flex flex-col items-center gap-1 animate-bounce-subtle">
@@ -708,15 +778,19 @@ export default function HomePage() {
         </motion.div>
       </motion.section>
 
+      {isLoading && musicData.length === 0 && showData.length === 0 && socialData.length === 0 ? (
+        <PageLoader />
+      ) : (
+      <>
       {/* 那年今日 */}
       <motion.section
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2, duration: 0.6 }}
-        className="mb-10"
+        className="-mt-8 md:mt-0 mb-5 md:mb-10"
       >
-        <div className="bg-white/40 rounded-sm border border-steel-200/60 shadow-sm p-5 sm:p-6">
-          <div className="flex items-center justify-between mb-6">
+        <div className="bg-white/40 rounded-sm border border-steel-200/60 shadow-sm p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <Calendar className="w-5 h-5 text-steel-500" />
               <div>
@@ -727,9 +801,7 @@ export default function HomePage() {
             <span className="text-xs font-mono uppercase tracking-[0.2em] text-steel-500/70">{todayStr}</span>
           </div>
 
-          {isLoading ? (
-            <PageLoader />
-          ) : onThisDayItems.length === 0 ? (
+          {onThisDayItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-center">
               <div className="w-14 h-14 rounded-full bg-steel-50/70 border border-steel-200/60 flex items-center justify-center mb-3">
                 <Calendar className="w-7 h-7 text-steel-400" />
@@ -766,9 +838,9 @@ export default function HomePage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.25, duration: 0.6 }}
-        className="mb-10"
+        className="mb-5 md:mb-10"
       >
-        <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <Film className="w-5 h-5 text-steel-500" />
             <div>
@@ -786,9 +858,7 @@ export default function HomePage() {
           </button>
         </div>
 
-        {isLoading ? (
-          <PageLoader />
-        ) : randomShow ? (
+        {randomShow ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             <div
               className="group relative bg-white/40 rounded-sm border border-steel-200/60 shadow-sm overflow-hidden hover:-translate-y-2 hover:border-steel-300/80 transition-all cursor-pointer"
@@ -881,7 +951,7 @@ export default function HomePage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3, duration: 0.6 }}
       >
-        <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <TrendingUp className="w-5 h-5 text-steel-500" />
             <div>
@@ -891,7 +961,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="flex gap-4 mb-4 border-b border-steel-200/40 pb-1">
+        <div className="flex gap-4 mb-3 border-b border-steel-200/40 pb-1">
           {TAB_CONFIG.map((tab) => {
             const active = activeTab === tab.key;
             const count = groupedUpdates[tab.key].length;
@@ -916,9 +986,7 @@ export default function HomePage() {
         </div>
 
         <div className="space-y-3">
-          {isLoading ? (
-            <PageLoader />
-          ) : groupedUpdates[activeTab].length === 0 ? (
+          {groupedUpdates[activeTab].length === 0 ? (
             <p className="text-sm text-steel-500/70 py-6 text-center">
               暂无{activeTab === "music" ? "音乐" : activeTab === "show" ? "视频" : "社交"}动态
             </p>
@@ -987,6 +1055,8 @@ export default function HomePage() {
           <SocialDetailModal item={selectedSocial} onClose={() => setSelectedSocial(null)} />
         )}
       </AnimatePresence>
+      </>
+      )}
     </div>
   );
 }

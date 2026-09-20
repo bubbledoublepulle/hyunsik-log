@@ -1,6 +1,11 @@
 import type { ShowMember } from "./showData";
 import { supabase, isSupabaseConfigured } from "./supabase";
 
+// sync 短期内存缓存：5 分钟内再次切换页面不再重复请求 Supabase
+let socialSyncCache: { data: SocialPost[]; at: number } | null = null;
+let socialSyncPromise: Promise<SocialPost[]> | null = null;
+const SYNC_CACHE_TTL = 5 * 60 * 1000;
+
 /** 社交动态分类标签（二选一） */
 export type SocialCategory = "个人动态" | "官方动态";
 
@@ -362,35 +367,53 @@ export async function syncSocialData(): Promise<SocialPost[]> {
     return loadSocialData();
   }
 
-  const PAGE_SIZE = 100;
-  let allRows: any[] = [];
-  let from = 0;
-  let hasMore = true;
-
-  while (hasMore) {
-    const { data, error } = await supabase
-      .from("social_posts")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .range(from, from + PAGE_SIZE - 1);
-
-    if (error) {
-      console.warn("[social] sync failed:", error.message);
-      return loadSocialData();
-    }
-
-    if (data && data.length > 0) {
-      allRows = allRows.concat(data);
-      hasMore = data.length === PAGE_SIZE;
-      from += PAGE_SIZE;
-    } else {
-      hasMore = false;
-    }
+  const now = Date.now();
+  if (socialSyncCache && now - socialSyncCache.at < SYNC_CACHE_TTL) {
+    return socialSyncCache.data;
   }
 
-  const items = allRows.map(fromDbRow);
-  saveLocalSocialData(items);
-  return items;
+  if (socialSyncPromise) {
+    return socialSyncPromise;
+  }
+
+  socialSyncPromise = (async () => {
+    try {
+      const PAGE_SIZE = 100;
+      let allRows: any[] = [];
+      let from = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from("social_posts")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .range(from, from + PAGE_SIZE - 1);
+
+        if (error) {
+          console.warn("[social] sync failed:", error.message);
+          return loadSocialData();
+        }
+
+        if (data && data.length > 0) {
+          allRows = allRows.concat(data);
+          hasMore = data.length === PAGE_SIZE;
+          from += PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      const items = allRows.map(fromDbRow);
+      saveLocalSocialData(items);
+      socialSyncCache = { data: items, at: Date.now() };
+      return items;
+    } finally {
+      socialSyncPromise = null;
+    }
+  })();
+
+  return socialSyncPromise;
 }
 
 export async function saveSocialData(data: SocialPost[]): Promise<{ error: string | null }> {
@@ -423,6 +446,7 @@ export async function saveSocialData(data: SocialPost[]): Promise<{ error: strin
     }
   }
 
+  socialSyncCache = null; // 保存后清空缓存，下次 sync 拉取最新数据
   return { error: null };
 }
 
