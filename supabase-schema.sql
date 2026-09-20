@@ -2,7 +2,11 @@
 CREATE TABLE IF NOT EXISTS music (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
+  artist TEXT,
   album TEXT NOT NULL,
+  album_no INTEGER,
+  is_title_track BOOLEAN NOT NULL DEFAULT false,
+  cover_image_url TEXT,
   release_date TEXT NOT NULL,
   type TEXT NOT NULL,
   roles TEXT[] NOT NULL DEFAULT '{}',
@@ -11,6 +15,13 @@ CREATE TABLE IF NOT EXISTS music (
   is_self_composed BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
+
+-- 迁移：为已存在的 music 表补充 artist / album_no / is_title_track / cover_image_url 列
+ALTER TABLE music
+  ADD COLUMN IF NOT EXISTS artist TEXT,
+  ADD COLUMN IF NOT EXISTS album_no INTEGER,
+  ADD COLUMN IF NOT EXISTS is_title_track BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS cover_image_url TEXT;
 
 -- 创建 shows 表
 CREATE TABLE IF NOT EXISTS shows (

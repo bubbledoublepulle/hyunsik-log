@@ -184,6 +184,9 @@ function toDbRow(item: MusicItem) {
     title: item.title,
     artist: item.artist,
     album: item.album,
+    album_no: item.albumNo ?? null,
+    is_title_track: item.isTitleTrack ?? false,
+    cover_image_url: item.coverImageUrl || null,
     release_date: item.releaseDate,
     type: item.type,
     roles: item.roles,
@@ -217,12 +220,20 @@ function normalizeType(type: unknown): MusicType {
   return "录音室";
 }
 
+function normalizeAlbumNo(value: unknown): number {
+  const n = typeof value === "number" ? value : parseInt(String(value), 10);
+  return Number.isNaN(n) ? 1 : Math.max(1, n);
+}
+
 export function fromDbRow(row: Record<string, unknown>): MusicItem {
   return {
     id: String(row.id),
     title: String(row.title),
     artist: String(row.artist ?? ""),
     album: String(row.album),
+    albumNo: normalizeAlbumNo(row.album_no),
+    isTitleTrack: Boolean(row.is_title_track),
+    coverImageUrl: row.cover_image_url ? String(row.cover_image_url) : undefined,
     releaseDate: String(row.release_date),
     type: normalizeType(row.type),
     roles: normalizeRoles(row.roles),
@@ -240,6 +251,9 @@ export function loadMusicData(): MusicItem[] {
       return data.map((item: any) => ({
         ...item,
         artist: item.artist ?? "",
+        albumNo: normalizeAlbumNo(item.albumNo),
+        isTitleTrack: Boolean(item.isTitleTrack),
+        coverImageUrl: item.coverImageUrl ? String(item.coverImageUrl) : undefined,
         roles: normalizeRoles(item.roles),
         type: normalizeType(item.type),
       }));

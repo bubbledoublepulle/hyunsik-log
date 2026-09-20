@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Music, Save, ExternalLink } from "lucide-react";
+import { X, Music, Save, ExternalLink, Crown, Image as ImageIcon } from "lucide-react";
 import type { MusicItem, MusicType, MusicRole } from "@/lib/musicData";
 
 interface MusicFormModalProps {
@@ -17,10 +17,13 @@ export default function MusicFormModal({ open, onClose, onSave, editingItem }: M
   const [title, setTitle] = useState("");
   const [artist, setArtist] = useState("");
   const [album, setAlbum] = useState("");
+  const [albumNo, setAlbumNo] = useState(1);
+  const [isTitleTrack, setIsTitleTrack] = useState(false);
   const [releaseDate, setReleaseDate] = useState("");
   const [type, setType] = useState<MusicType>("录音室");
   const [roles, setRoles] = useState<Set<MusicRole>>(new Set());
   const [link, setLink] = useState("");
+  const [coverImageUrl, setCoverImageUrl] = useState("");
   const [isSelfComposed, setIsSelfComposed] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -29,19 +32,25 @@ export default function MusicFormModal({ open, onClose, onSave, editingItem }: M
       setTitle(editingItem.title);
       setArtist(editingItem.artist || "");
       setAlbum(editingItem.album);
+      setAlbumNo(editingItem.albumNo ?? 1);
+      setIsTitleTrack(editingItem.isTitleTrack ?? false);
       setReleaseDate(editingItem.releaseDate);
       setType(editingItem.type);
       setRoles(new Set(editingItem.roles));
       setLink(editingItem.link);
+      setCoverImageUrl(editingItem.coverImageUrl || "");
       setIsSelfComposed(editingItem.isSelfComposed);
     } else {
       setTitle("");
       setArtist("");
       setAlbum("");
+      setAlbumNo(1);
+      setIsTitleTrack(false);
       setReleaseDate("");
       setType("录音室");
       setRoles(new Set());
       setLink("");
+      setCoverImageUrl("");
       setIsSelfComposed(false);
     }
     setErrors({});
@@ -60,6 +69,7 @@ export default function MusicFormModal({ open, onClose, onSave, editingItem }: M
     if (!album.trim()) e.album = "请输入专辑名称";
     if (!releaseDate) e.releaseDate = "请选择发行日期";
     if (roles.size === 0) e.roles = "请至少选择一个角色";
+    if (Number.isNaN(albumNo) || albumNo < 1) e.albumNo = "专辑编号需为正整数";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -72,6 +82,9 @@ export default function MusicFormModal({ open, onClose, onSave, editingItem }: M
       title: title.trim(),
       artist: artist.trim(),
       album: album.trim(),
+      albumNo: Math.max(1, albumNo),
+      isTitleTrack,
+      coverImageUrl: coverImageUrl.trim() || undefined,
       releaseDate,
       type,
       roles: Array.from(roles),
@@ -116,6 +129,12 @@ export default function MusicFormModal({ open, onClose, onSave, editingItem }: M
                   {errors.album && <p className="text-xs text-red-500 mt-1">{errors.album}</p>}
                 </div>
                 <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1.5 block">专辑编号 <span className="text-red-400">*</span></label>
+                  <input type="number" min={1} value={albumNo} onChange={(e) => setAlbumNo(parseInt(e.target.value || "0", 10))}
+                    className={`w-full px-3.5 py-2.5 rounded-xl border-2 transition-all outline-none ${errors.albumNo ? "border-red-300 bg-red-50" : "border-gray-100 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"}`} />
+                  {errors.albumNo && <p className="text-xs text-red-500 mt-1">{errors.albumNo}</p>}
+                </div>
+                <div>
                   <label className="text-sm font-medium text-gray-700 mb-1.5 block">发行日期 <span className="text-red-400">*</span></label>
                   <input type="date" value={releaseDate} onChange={(e) => setReleaseDate(e.target.value)}
                     className={`w-full px-3.5 py-2.5 rounded-xl border-2 transition-all outline-none ${errors.releaseDate ? "border-red-300 bg-red-50" : "border-gray-100 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"}`} />
@@ -147,6 +166,34 @@ export default function MusicFormModal({ open, onClose, onSave, editingItem }: M
                   <input type="url" value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://music.apple.com/..."
                     className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border-2 border-gray-100 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none transition-all" />
                 </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1.5 block">专辑封面图片地址</label>
+                <div className="relative">
+                  <ImageIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input type="url" value={coverImageUrl} onChange={(e) => setCoverImageUrl(e.target.value)} placeholder="https://..."
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border-2 border-gray-100 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none transition-all" />
+                </div>
+                {coverImageUrl && (
+                  <div className="mt-2 h-24 rounded-xl border border-gray-100 bg-gray-50 overflow-hidden">
+                    <img src={coverImageUrl} alt="封面预览" className="w-full h-full object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center justify-between p-3.5 rounded-xl bg-gray-50 border border-gray-100">
+                <div className="flex items-center gap-2">
+                  <Crown className="w-4 h-4 text-amber-400" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">专辑主打</p>
+                    <p className="text-xs text-gray-400">标记为该专辑的主打曲</p>
+                  </div>
+                </div>
+                <label className="cursor-pointer">
+                  <input type="checkbox" checked={isTitleTrack} onChange={(e) => setIsTitleTrack(e.target.checked)} className="peer sr-only" />
+                  <div className="w-11 h-6 bg-gray-200 rounded-full peer-checked:bg-sky-400 transition-colors relative">
+                    <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${isTitleTrack ? "translate-x-5" : ""}`} />
+                  </div>
+                </label>
               </div>
               <div className="flex items-center justify-between p-3.5 rounded-xl bg-gray-50 border border-gray-100">
                 <div>

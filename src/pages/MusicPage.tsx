@@ -17,6 +17,7 @@ import {
   Calendar,
   Link2,
   List,
+  Crown,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -178,10 +179,18 @@ export default function MusicPage() {
     }
     switch (sortBy) {
       case "date-desc":
-        result.sort((a, b) => new Date(b.releaseDate).getTime() - new Date(a.releaseDate).getTime());
+        result.sort((a, b) => {
+          const dateDiff = new Date(b.releaseDate).getTime() - new Date(a.releaseDate).getTime();
+          if (dateDiff !== 0) return dateDiff;
+          return (a.albumNo ?? 1) - (b.albumNo ?? 1);
+        });
         break;
       case "date-asc":
-        result.sort((a, b) => new Date(a.releaseDate).getTime() - new Date(b.releaseDate).getTime());
+        result.sort((a, b) => {
+          const dateDiff = new Date(a.releaseDate).getTime() - new Date(b.releaseDate).getTime();
+          if (dateDiff !== 0) return dateDiff;
+          return (a.albumNo ?? 1) - (b.albumNo ?? 1);
+        });
         break;
       case "title-asc":
         result.sort((a, b) => a.title.localeCompare(b.title));
@@ -193,25 +202,55 @@ export default function MusicPage() {
   const stats = useMemo(() => {
     const total = musicData.length;
     const selfComposed = musicData.filter((m) => m.isSelfComposed).length;
+    const titleTracks = musicData.filter((m) => m.isTitleTrack).length;
     const types = new Set(musicData.map((m) => m.type)).size;
-    return { total, selfComposed, types };
+    return { total, selfComposed, titleTracks, types };
   }, [musicData]);
 
   const albumGroups = useMemo(() => {
     const groups = new Map<string, MusicItem[]>();
     filteredData.forEach((item) => {
-      const key = item.album;
+      const key = item.album || "未知专辑";
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(item);
     });
     return Array.from(groups.entries())
-      .map(([album, songs]) => ({ album, songs }))
+      .map(([album, songs]) => {
+        const sortedSongs = [...songs];
+        if (sortBy === "title-asc") {
+          sortedSongs.sort((a, b) => a.title.localeCompare(b.title, "zh-CN"));
+        } else {
+          sortedSongs.sort((a, b) => {
+            const dateDiff = new Date(a.releaseDate).getTime() - new Date(b.releaseDate).getTime();
+            if (dateDiff !== 0) return dateDiff;
+            return (a.albumNo ?? 1) - (b.albumNo ?? 1);
+          });
+        }
+        return { album, songs: sortedSongs };
+      })
+      .filter((group) => group.songs.length > 0)
       .sort((a, b) => {
-        const aLatest = Math.max(...a.songs.map((s) => new Date(s.releaseDate).getTime()));
-        const bLatest = Math.max(...b.songs.map((s) => new Date(s.releaseDate).getTime()));
-        return bLatest - aLatest;
+        switch (sortBy) {
+          case "title-asc":
+            return a.album.localeCompare(b.album, "zh-CN");
+          case "date-asc": {
+            const aTimes = a.songs.map((s) => new Date(s.releaseDate).getTime()).filter((t) => !Number.isNaN(t));
+            const bTimes = b.songs.map((s) => new Date(s.releaseDate).getTime()).filter((t) => !Number.isNaN(t));
+            const aEarliest = aTimes.length > 0 ? Math.min(...aTimes) : 0;
+            const bEarliest = bTimes.length > 0 ? Math.min(...bTimes) : 0;
+            return aEarliest - bEarliest;
+          }
+          case "date-desc":
+          default: {
+            const aTimes = a.songs.map((s) => new Date(s.releaseDate).getTime()).filter((t) => !Number.isNaN(t));
+            const bTimes = b.songs.map((s) => new Date(s.releaseDate).getTime()).filter((t) => !Number.isNaN(t));
+            const aLatest = aTimes.length > 0 ? Math.max(...aTimes) : 0;
+            const bLatest = bTimes.length > 0 ? Math.max(...bTimes) : 0;
+            return bLatest - aLatest;
+          }
+        }
       });
-  }, [filteredData]);
+  }, [filteredData, sortBy]);
 
   const toggleType = (type: MusicType) => {
     const next = new Set(selectedTypes);
@@ -252,12 +291,27 @@ export default function MusicPage() {
   };
 
   const handleSave = (item: MusicItem) => {
+    const finalItem = { ...item, coverImageUrl: item.coverImageUrl?.trim() };
+    const coverToSync = finalItem.coverImageUrl;
+
+    setMusicData((prev) => {
+      let next = prev;
+      if (editingItem) {
+        next = prev.map((m) => (m.id === finalItem.id ? finalItem : m));
+      } else {
+        next = [...prev, finalItem];
+      }
+      // 同步同专辑封面：只要当前歌曲有封面 URL，就把同专辑所有歌曲封面统一
+      if (coverToSync) {
+        next = next.map((m) => (m.album === finalItem.album ? { ...m, coverImageUrl: coverToSync } : m));
+      }
+      return next;
+    });
+
     if (editingItem) {
-      setMusicData((prev) => prev.map((m) => (m.id === item.id ? item : m)));
-      toast.success("修改已保存", { description: item.title });
+      toast.success("修改已保存", { description: finalItem.title });
     } else {
-      setMusicData((prev) => [...prev, item]);
-      toast.success("歌曲已添加", { description: item.title });
+      toast.success("歌曲已添加", { description: finalItem.title });
     }
     setFormOpen(false);
     setEditingItem(null);
@@ -336,7 +390,7 @@ export default function MusicPage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
             <StatCard label="作品总数" value={stats.total} icon={ListMusic} color="text-steel-500" bg="bg-steel-50/70" delay={0} />
             <StatCard label="自作曲" value={stats.selfComposed} icon={Sparkles} color="text-steel-500" bg="bg-steel-50/70" delay={0.05} />
-            <StatCard label="作品类型" value={stats.types} icon={Disc3} color="text-steel-500" bg="bg-steel-50/70" delay={0.1} />
+            <StatCard label="主打曲" value={stats.titleTracks} icon={Crown} color="text-amber-500" bg="bg-steel-50/70" delay={0.1} />
           </div>
 
           <div className="flex flex-col lg:flex-row gap-6">
@@ -377,6 +431,7 @@ export default function MusicPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="bg-steel-50/40 border-b border-steel-200/60">
+                      <th className="text-left text-[10px] font-mono uppercase tracking-[0.15em] opacity-60 text-steel-600 px-4 py-3 w-12">#</th>
                       <th className="text-left text-[10px] font-mono uppercase tracking-[0.15em] opacity-60 text-steel-600 px-4 py-3">歌曲</th>
                       <th className="text-left text-[10px] font-mono uppercase tracking-[0.15em] opacity-60 text-steel-600 px-4 py-3 hidden md:table-cell">歌手</th>
                       <th className="text-left text-[10px] font-mono uppercase tracking-[0.15em] opacity-60 text-steel-600 px-4 py-3 hidden md:table-cell">专辑</th>
@@ -391,10 +446,18 @@ export default function MusicPage() {
                         <motion.tr key={item.id} id={item.id} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.2 }}
                           className={`group relative border-b border-steel-100/60 last:border-0 hover:bg-steel-50/30 transition-colors ${index % 2 === 1 ? "bg-white/30" : ""} ${item.isSelfComposed ? "shadow-[inset_3px_0_0_0_#4682B4]" : ""} ${flashId === item.id ? "flash-highlight" : ""}`}>
                           <td className="px-4 py-3.5">
+                            {item.isTitleTrack ? (
+                              <span title="主打曲"><Crown className="w-4 h-4 text-amber-400" /></span>
+                            ) : (
+                              <span className="text-xs font-mono text-steel-500">{String(item.albumNo ?? 1).padStart(2, "0")}</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3.5">
                             <div className="flex items-center gap-2.5">
                               <div>
                                 <div className="flex items-center gap-1.5">
                                   <span className="font-medium text-steel-700 text-sm">{item.title}</span>
+                                  {item.isTitleTrack && <span title="主打曲"><Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" /></span>}
                                   {item.isSelfComposed && <Sparkles className="w-3.5 h-3.5 text-steel-400" />}
                                 </div>
                                 <span className="text-xs text-steel-500/60">{item.releaseDate}</span>
@@ -460,21 +523,29 @@ export default function MusicPage() {
                 {albumGroups.map((group, gi) => {
                   const albumSongCount = group.songs.length;
                   const albumSelfCount = group.songs.filter((s) => s.isSelfComposed).length;
+                  const albumTitleCount = group.songs.filter((s) => s.isTitleTrack).length;
                   const albumDate = group.songs.map((s) => s.releaseDate).sort()[0] || "";
+                  const albumYear = albumDate ? new Date(albumDate).getFullYear() : "";
+                  const albumCover = group.songs.find((s) => s.coverImageUrl)?.coverImageUrl;
                   return (
                     <motion.div key={group.album} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ delay: gi * 0.06 }}
                       className="bg-white/40 rounded-sm border border-steel-200/60 shadow-sm overflow-hidden">
                       <div className="px-3 sm:px-5 py-4 bg-steel-50/40 border-b border-steel-200/60 flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-sm bg-steel-100 flex items-center justify-center">
-                            <Album className="w-5 h-5 text-steel-500" />
-                          </div>
+                          {albumCover ? (
+                            <img src={albumCover} alt={group.album} className="w-12 h-12 rounded-sm object-cover border border-steel-200/60 bg-steel-50/30" />
+                          ) : (
+                            <div className="w-10 h-10 rounded-sm bg-steel-100 flex items-center justify-center">
+                              <Album className="w-5 h-5 text-steel-500" />
+                            </div>
+                          )}
                           <div>
                             <h3 className="font-bold text-steel-700">{group.album}</h3>
-                            <div className="flex items-center gap-3 text-xs text-steel-500/70 mt-0.5">
+                            <div className="flex items-center gap-3 text-xs text-steel-500/70 mt-0.5 flex-wrap">
                               <span className="flex items-center gap-1"><Music className="w-3 h-3" />{albumSongCount} 首歌</span>
                               {albumSelfCount > 0 && <span className="flex items-center gap-1"><Sparkles className="w-3 h-3 text-steel-400" />{albumSelfCount} 首自作曲</span>}
-                              <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{albumDate}</span>
+                              {albumTitleCount > 0 && <span className="flex items-center gap-1"><Crown className="w-3 h-3 text-amber-400" />{albumTitleCount} 首主打</span>}
+                              <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{albumDate}{albumYear ? ` · ${albumYear}` : ""}</span>
                             </div>
                           </div>
                         </div>
@@ -482,6 +553,13 @@ export default function MusicPage() {
                       <div className="divide-y divide-steel-100/60">
                         {group.songs.map((item) => (
                           <div key={item.id} className={`flex items-center px-3 sm:px-5 py-3 hover:bg-steel-50/30 transition-colors ${item.isSelfComposed ? "shadow-[inset_3px_0_0_0_#4682B4]" : ""}`}>
+                            <div className="flex items-center gap-2 w-8 shrink-0">
+                              {item.isTitleTrack ? (
+                                <span title="主打曲"><Crown className="w-4 h-4 text-amber-400" /></span>
+                              ) : (
+                                <span className="text-xs font-mono text-steel-400 w-4 text-center">{String(item.albumNo ?? 1).padStart(2, "0")}</span>
+                              )}
+                            </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
                                 <span className="font-medium text-steel-700 text-sm truncate">{item.title}</span>
@@ -537,7 +615,6 @@ export default function MusicPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               <AnimatePresence mode="popLayout">
                 {filteredData.map((item, index) => {
-                  const no = String(index + 1).padStart(2, '0');
                   const year = new Date(item.releaseDate).getFullYear();
                   return (
                     <motion.div
@@ -551,10 +628,19 @@ export default function MusicPage() {
                       className={`group relative bg-white/40 rounded-sm border border-steel-200/60 shadow-sm overflow-hidden hover:-translate-y-2 hover:border-steel-300/80 transition-all ${flashId === item.id ? "flash-highlight" : ""}`}
                     >
                       <div className={`relative ${CARD_ASPECT} bg-steel-50/30 flex items-center justify-center overflow-hidden`}>
-                        <span className="font-serif italic text-3xl sm:text-4xl text-steel-400/40">Music N°{no}</span>
+                        {item.coverImageUrl ? (
+                          <img src={item.coverImageUrl} alt={item.title} className="absolute inset-0 w-full h-full object-cover" />
+                        ) : (
+                          <span className="font-serif italic text-3xl sm:text-4xl text-steel-400/40">No.{String(item.albumNo ?? 1).padStart(2, "0")}</span>
+                        )}
                         <CardLogoDecoration />
+                        {item.isTitleTrack && (
+                          <div className="absolute top-3 left-3 px-1.5 py-0.5 rounded-sm bg-amber-100/90 border border-amber-200/60 text-amber-700 text-[10px] font-mono uppercase tracking-wider flex items-center gap-1 z-10" title="主打曲">
+                            <Crown className="w-3 h-3" />TITLE
+                          </div>
+                        )}
                         {isAdmin && (
-                          <div className="absolute top-3 left-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                          <div className="absolute bottom-3 left-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                             <button onClick={(e) => { e.stopPropagation(); handleEdit(item); }} className="w-7 h-7 rounded-sm bg-white/90 backdrop-blur-sm flex items-center justify-center text-steel-600 hover:bg-white hover:text-steel-800 transition-colors border border-steel-200/60">
                               <Pencil className="w-3.5 h-3.5" />
                             </button>
@@ -569,7 +655,10 @@ export default function MusicPage() {
                           <span className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600">Music</span>
                           <span className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600">{isNaN(year) ? item.releaseDate : year}</span>
                         </div>
-                        <h3 className="font-bold text-lg text-steel-600 mb-1 line-clamp-1">{item.title}</h3>
+                        <h3 className="font-bold text-lg text-steel-600 mb-1 line-clamp-1 flex items-center gap-1.5">
+                          {item.title}
+                          {item.isTitleTrack && <span title="主打曲"><Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" /></span>}
+                        </h3>
                         <p className="text-xs text-steel-500/70 mb-3">{item.album} · {item.artist}</p>
                         <div className="flex flex-wrap gap-1 mb-3">
                           {item.roles.map((role) => (
