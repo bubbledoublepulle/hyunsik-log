@@ -2,11 +2,10 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X, Tv, Save, Plus, Trash2, Link2, Search, Loader2, CheckCircle2,
-  Image as ImageIcon, AlertTriangle,
+  Image as ImageIcon, AlertTriangle, ListPlus, FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { ShowItem, ShowMember, VideoLink } from "@/lib/showData";
-import { makeManualShowId } from "@/lib/idFactory";
 import { detectPlatform, fetchVideoInfo, type VideoInfo, type FetchError } from "@/lib/videoFetcher";
 
 
@@ -15,6 +14,7 @@ interface ShowFormModalProps {
   open: boolean;
   onClose: () => void;
   onSave: (item: ShowItem) => void | Promise<void>;
+  onSaveBatch?: (items: ShowItem[]) => void | Promise<void>;
   editingItem: ShowItem | null;
 }
 
@@ -39,7 +39,7 @@ const gradientPresets = [
 type FetchState = "idle" | "fetching" | "done" | "error";
 
 export default function ShowFormModal({
-  open, onClose, onSave, editingItem,
+  open, onClose, onSave, onSaveBatch, editingItem,
 }: ShowFormModalProps) {
   const [title, setTitle] = useState("");
   const [platform, setPlatform] = useState("Mnet");
@@ -51,6 +51,12 @@ export default function ShowFormModal({
   const [links, setLinks] = useState<VideoLink[]>([{ platform: "YouTube", url: "" }]);
   const [gradientIdx, setGradientIdx] = useState(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // 批量导入模式
+  const [batchMode, setBatchMode] = useState(false);
+  const [batchUrls, setBatchUrls] = useState("");
+  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0, success: 0, failed: 0 });
+  const [batchResults, setBatchResults] = useState<ShowItem[]>([]);
 
   // 自动抓取状态
   const [fetchState, setFetchState] = useState<FetchState>("idle");
@@ -269,6 +275,146 @@ export default function ShowFormModal({
     }
   }
 
+  // ========== 批量导入（核心修改在这里）==========
+
+  async function handleBatchImport() {
+    const lines = batchUrls.split("\n").map((l) => l.trim()).filter(Boolean);
+    if (lines.length === 0) {
+      toast.error("请先粘贴视频链接");
+      return;
+    }
+
+    // ===== 自动规避已存在的视频链接 =====
+    let existingUrls: Set<string> = new Set();
+    try {
+      const stored = localStorage.getItem("hsik_shows_data");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((item: any) => {
+            if (item.links && Array.isArray(item.links)) {
+              item.links.forEach((link: any) => {
+                if (link.url) existingUrls.add(link.url.trim());
+              });
+            }
+            if (item.link) existingUrls.add(item.link.trim());
+          });
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    const newLines = lines.filter((url) => {
+      const trimmed = url.trim();
+      if (!trimmed) return false;
+      if (existingUrls.has(trimmed)) {
+        toast.info(`已跳过重复链接: ${trimmed.slice(0, 50)}...`);
+        return false;
+      }
+      return true;
+    });
+
+    if (newLines.length === 0) {
+      toast.warning("所有链接都已存在，没有新视频需要导入");
+      setFetchState("idle");
+      return;
+    }
+
+    if (newLines.length < lines.length) {
+      toast.info(`已过滤 ${lines.length - newLines.length} 个重复链接，将导入 ${newLines.length} 个新视频`);
+    }
+
+    setBatchProgress({ current: 0, total: newLines.length, success: 0, failed: 0 });
+    setFetchState("fetching");
+    const results: ShowItem[] = [];
+    let successCount = 0;
+    let failedCount = 0;
+
+    for (let i = 0; i < newLines.length; i++) {
+      const url = newLines[i];
+      setBatchProgress({ current: i + 1, total: newLines.length, success: successCount, failed: failedCount });
+
+      try {
+        const detected = detectPlatform(url);
+        const info: VideoInfo = await fetchVideoInfo(url);
+
+        const linkPlatform = detected === "youtube" ? "YouTube" : detected === "bilibili" ? "Bilibili" : "其他";
+        const grad = gradientPresets[Math.floor(Math.random() * gradientPresets.length)];
+
+        const urlHash = url.split('').reduce((a, b) => {
+          a = ((a << 5) - a) + b.charCodeAt(0);
+          return a & a;
+        }, 0).toString(36).replace('-', 'n');
+
+        const item: ShowItem = {
+          id: `s${urlHash}`,
+          title: info.title || "未识别标题",
+          platform: linkPlatform,
+          date: info.publishedAt || "",
+          duration: info.durationFormatted || info.duration || "",
+          views: info.viewCountFormatted || "",
+          members: ["BTOB"],
+          status: "待补档",
+          thumbnailFrom: grad.from,
+          thumbnailTo: grad.to,
+          description: "",
+          links: [{ platform: linkPlatform, url }],
+        };
+
+        results.push(item);
+        successCount++;
+        setBatchProgress({ current: i + 1, total: newLines.length, success: successCount, failed: failedCount });
+      } catch (e: unknown) {
+        failedCount++;
+        setBatchProgress({ current: i + 1, total: newLines.length, success: successCount, failed: failedCount });
+        toast.error(`解析失败: ${url.slice(0, 50)}...`, {
+          description: (e as FetchError)?.message || (e as Error)?.message || "无法识别该链接",
+        });
+      }
+
+      if (i < newLines.length - 1) {
+        await new Promise((r) => setTimeout(r, 600));
+      }
+    }
+
+    setBatchResults(results);
+    setFetchState(results.length > 0 ? "done" : "error");
+
+    if (results.length > 0) {
+      const emptyDateCount = results.filter(r => !r.date).length;
+      const emptyViewsCount = results.filter(r => !r.views).length;
+      let desc = "";
+      if (emptyDateCount > 0) desc += `${emptyDateCount} 条缺少发布日期`;
+      if (emptyViewsCount > 0) desc += `${emptyDateCount > 0 && emptyViewsCount > 0 ? "，" : ""}${emptyViewsCount} 条缺少播放量`;
+      if (!desc) desc = "所有数据已完整抓取";
+      
+      const skippedCount = lines.length - newLines.length;
+      toast.success(`成功导入 ${results.length} 条视频${skippedCount > 0 ? `，跳过 ${skippedCount} 条重复` : ""}`, {
+        description: failedCount > 0 ? `${failedCount} 条解析失败。${desc}` : desc,
+      });
+    } else {
+      toast.error("没有成功解析任何视频，请检查链接格式");
+    }
+  }
+
+  async function saveAllBatch() {
+    if (onSaveBatch) {
+      await Promise.resolve(onSaveBatch(batchResults));
+    } else {
+      // 向后兼容：逐个保存（存在并发竞态风险）
+      for (const item of batchResults) {
+        await Promise.resolve(onSave(item));
+        await new Promise((r) => setTimeout(r, 100));
+      }
+    }
+    setBatchMode(false);
+    setBatchUrls("");
+    setBatchResults([]);
+    setFetchState("idle");
+    toast.success(`已保存 ${batchResults.length} 条综艺档案`);
+  }
+
   // ========== 表单验证 ==========
 
   const validate = () => {
@@ -284,8 +430,12 @@ export default function ShowFormModal({
     return Object.keys(e).length === 0;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (batchMode && batchResults.length > 0) {
+      saveAllBatch();
+      return;
+    }
     if (!validate()) return;
 
     const grad = gradientPresets[gradientIdx];
@@ -293,8 +443,8 @@ export default function ShowFormModal({
       .filter((l) => l.url.trim())
       .map((l) => ({ platform: l.platform, url: l.url.trim() }));
 
-    const item: ShowItem = {
-      id: editingItem?.id ?? makeManualShowId(),
+        onSave({
+      id: editingItem?.id || `s${Date.now()}`,
       title: title.trim(),
       platform,
       date,
@@ -306,9 +456,7 @@ export default function ShowFormModal({
       thumbnailTo: grad.to,
       description: description.trim(),
       links: validLinks,
-    };
-
-    await Promise.resolve(onSave(item));
+    });
   };
 
   // 抓取到的字段显示绿色标记
@@ -358,6 +506,126 @@ export default function ShowFormModal({
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              {/* ====== 模式切换 ====== */}
+              {!editingItem && (
+                <div className="flex p-1 bg-gray-100 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => { setBatchMode(false); setFetchState("idle"); }}
+                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                      !batchMode ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"
+                    }`}
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    单条添加
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setBatchMode(true); setFetchState("idle"); }}
+                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                      batchMode ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"
+                    }`}
+                  >
+                    <ListPlus className="w-3.5 h-3.5" />
+                    批量导入
+                  </button>
+                </div>
+              )}
+
+              {/* ====== 批量导入模式 ====== */}
+              {batchMode && !editingItem && (
+                <div className="bg-gray-50/50 rounded-2xl p-4 border border-gray-100 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+                      <FileText className="w-4 h-4" />
+                      批量粘贴链接
+                    </label>
+                    <span className="text-xs text-gray-400">每行一个链接</span>
+                  </div>
+                  <textarea
+                    value={batchUrls}
+                    onChange={(e) => setBatchUrls(e.target.value)}
+                    placeholder={"https://youtu.be/VIDEO_ID1\nhttps://www.youtube.com/live/VIDEO_ID2\nhttps://www.bilibili.com/video/BV1xx411c7mD"}
+                    rows={6}
+                    disabled={fetchState === "fetching"}
+                    className="w-full px-3.5 py-2.5 rounded-xl border-2 border-gray-100 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none transition-all resize-none text-sm font-mono"
+                  />
+
+                  {fetchState === "fetching" && batchProgress.total > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-gray-500">
+                          正在解析 {batchProgress.current} / {batchProgress.total}
+                        </span>
+                        <span className="text-emerald-600">
+                          成功 {batchProgress.success} · 失败 {batchProgress.failed}
+                        </span>
+                      </div>
+                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-sky-400 to-violet-400 transition-all"
+                          style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  )}
+
+                  {batchResults.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-gray-700">解析结果预览：</p>
+                      <div className="max-h-40 overflow-y-auto space-y-1.5">
+                        {batchResults.map((item, i) => (
+                          <div key={item.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-gray-100 text-xs">
+                            <span className="text-gray-400 w-5 shrink-0">{i + 1}</span>
+                            <span className="truncate flex-1 font-medium text-gray-700">{item.title}</span>
+                            <span className="text-gray-400 shrink-0">{item.platform}</span>
+                            {item.date ? (
+                              <span className="text-blue-500 shrink-0">{item.date}</span>
+                            ) : (
+                              <span className="text-amber-500 shrink-0">⚠️ 缺日期</span>
+                            )}
+                            {item.views ? (
+                              <span className="text-emerald-600 shrink-0">{item.views}</span>
+                            ) : (
+                              <span className="text-amber-500 shrink-0">⚠️ 缺播放量</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleBatchImport}
+                    disabled={fetchState === "fetching" || !batchUrls.trim()}
+                    className={`w-full py-2.5 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-1.5 ${
+                      fetchState === "fetching"
+                        ? "bg-gray-100 text-gray-400 cursor-wait"
+                        : batchResults.length > 0
+                        ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
+                        : "bg-gradient-to-r from-sky-400 to-violet-400 text-white hover:opacity-90 shadow-sm"
+                    }`}
+                  >
+                    {fetchState === "fetching" ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : batchResults.length > 0 ? (
+                      <CheckCircle2 className="w-4 h-4" />
+                    ) : (
+                      <Search className="w-4 h-4" />
+                    )}
+                    {fetchState === "fetching"
+                      ? "解析中..."
+                      : batchResults.length > 0
+                      ? "重新解析"
+                      : "开始批量解析"}
+                  </button>
+                </div>
+              )}
+
+              {/* ====== 单条添加模式 ====== */}
+              {!batchMode && (
+              <div>
               {/* ====== 平台链接（核心输入区） ====== */}
               <div className="bg-gray-50/50 rounded-2xl p-4 border border-gray-100">
                 <div className="flex items-center justify-between mb-2">
@@ -706,6 +974,9 @@ export default function ShowFormModal({
                 />
               </div>
 
+              </div>
+              )}
+
               {/* Actions */}
               <div className="flex gap-3 pt-2">
                 <button
@@ -717,11 +988,11 @@ export default function ShowFormModal({
                 </button>
                 <button
                   type="submit"
-                  disabled={fetchState === "fetching"}
+                  disabled={fetchState === "fetching" || (batchMode && batchResults.length === 0)}
                   className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-violet-400 to-sky-500 text-white font-medium text-sm hover:opacity-90 transition-opacity shadow-md shadow-sky-200 flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Save className="w-4 h-4" />
-                  {editingItem ? "保存修改" : "添加综艺"}
+                  {editingItem ? "保存修改" : batchMode ? `保存全部 (${batchResults.length})` : "添加综艺"}
                 </button>
               </div>
             </form>

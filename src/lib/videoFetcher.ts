@@ -9,12 +9,7 @@
  */
 import videoPreFetchRaw from "@/data/video-meta.json";
 const videoPreFetch = videoPreFetchRaw as Record<string, import("./showData").VideoMetadata>;
-import {
-  detectPlatform as normalizeDetectPlatform,
-  extractYouTubeId as normalizeExtractYouTubeId,
-  extractBilibiliId as normalizeExtractBilibiliId,
-  normalizeVideoUrl,
-} from "./urlNormalize";
+// URL 解析辅助函数（原 urlNormalize.ts 功能内联，避免多文件依赖）
 
 // ==================== 类型定义 ====================
 
@@ -85,11 +80,12 @@ function saveCache(cache: Record<string, CacheEntry>): void {
 }
 
 function getCacheKey(url: string): string {
-  // 优先使用规范化后的去重键，与导入去重保持一致并提高缓存命中率
-  const normalized = normalizeVideoUrl(url);
-  if (normalized) {
-    return normalized.dedupeKey;
-  }
+  // 按平台规范化后作为缓存键，提高命中率
+  const clean = url.trim();
+  const ytId = extractYouTubeId(clean);
+  if (ytId) return `yt:${ytId}`;
+  const bvid = extractBilibiliId(clean);
+  if (bvid) return `bl:${bvid}`;
 
   // 其他链接用 URL hash
   let hash = 0;
@@ -102,13 +98,21 @@ function getCacheKey(url: string): string {
 // ==================== 平台识别 ====================
 
 export function detectPlatform(url: string): "youtube" | "bilibili" | "unknown" {
-  return normalizeDetectPlatform(url);
+  if (/youtube\.com|youtu\.be/.test(url)) return "youtube";
+  if (/bilibili\.com|b23\.tv/.test(url)) return "bilibili";
+  return "unknown";
 }
 
 // ==================== URL 解析 ====================
 
 export function extractYouTubeId(url: string): string | null {
-  return normalizeExtractYouTubeId(url);
+  if (!url) return null;
+  const clean = url.trim();
+  if (/^[a-zA-Z0-9_-]{11}$/.test(clean)) return clean;
+  const match = clean.match(
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/|youtube\.com\/live\/)([a-zA-Z0-9_-]{11})/
+  );
+  return match?.[1] ?? null;
 }
 
 /**
@@ -120,7 +124,14 @@ export function extractYouTubeId(url: string): string | null {
  * - https://www.bilibili.com/video/av123456
  */
 export function extractBilibiliId(url: string): string | null {
-  return normalizeExtractBilibiliId(url);
+  if (!url) return null;
+  const clean = url.trim();
+  const bvMatch = clean.match(
+    /(?:bilibili\.com\/video\/|b23\.tv\/|m\.bilibili\.com\/video\/)(BV[a-zA-Z0-9]+)/i
+  );
+  if (bvMatch) return bvMatch[1];
+  const avMatch = clean.match(/(?:bilibili\.com\/video\/|b23\.tv\/)(av\d+)/i);
+  return avMatch?.[1] ?? null;
 }
 
 // ==================== 工具函数 ====================

@@ -1,9 +1,4 @@
 import { supabase, isSupabaseConfigured } from "./supabase";
-import { readShowsVersion, bumpShowsVersion } from "./syncMeta";
-import {
-  extractYouTubeId as normalizeExtractYouTubeId,
-  extractBilibiliId as normalizeExtractBilibiliId,
-} from "./urlNormalize";
 
 // 全局锁，防止 saveShowData 并发执行导致数据竞态
 let saveShowDataPromise: Promise<ShowSaveResult> | null = null;
@@ -68,7 +63,6 @@ export interface VideoMetadata {
 
 const STORAGE_KEY = "hsik_shows_data";
 const SYNC_AT_KEY = "hsik_shows_sync_at";
-const VERSION_KEY = "hsik_shows_version";
 
 /** 旧版示例数据 ID 集合（s01-s08），sync 时会自动剔除 */
 const LEGACY_SAMPLE_IDS = new Set(["s01", "s02", "s03", "s04", "s05", "s06", "s07", "s08"]);
@@ -158,26 +152,6 @@ export function saveLocalShowData(data: ShowItem[]): void {
   }
 }
 
-export function readLocalVersion(): number | null {
-  try {
-    const v = localStorage.getItem(VERSION_KEY);
-    if (v === null) return null;
-    const n = Number(v);
-    return Number.isFinite(n) ? n : null;
-  } catch {
-    return null;
-  }
-}
-
-export function writeLocalVersion(v: number | null): void {
-  try {
-    if (v === null) localStorage.removeItem(VERSION_KEY);
-    else localStorage.setItem(VERSION_KEY, String(v));
-  } catch {
-    // ignore
-  }
-}
-
 /** 导入前备份，返回备份 key */
 export function backupShowData(): string {
   const key = `${STORAGE_KEY}_backup_${Date.now()}`;
@@ -231,14 +205,6 @@ export async function syncShowData(): Promise<ShowItem[]> {
   saveLocalShowData(merged);
   recordSyncTime();
 
-  // 回写本地版本号
-  try {
-    const v = await readShowsVersion();
-    writeLocalVersion(v);
-  } catch {
-    // ignore
-  }
-
   return merged;
 }
 
@@ -246,45 +212,12 @@ export interface ShowSaveResult {
   error: string | null;
   /** 检测到 ID 重复被丢弃的条目 */
   conflicts?: { id: string; kept: ShowItem; dropped: ShowItem }[];
-  /** 乐观锁冲突：写入前发现云端版本已变化，本次未写入 */
-  conflict?: boolean;
-  /** 冲突时的云端当前版本 */
-  remoteVersion?: number | null;
-  /** 成功后的新版本 */
-  version?: number | null;
   /** 是否可重试（网络类错误） */
   retriable?: boolean;
 }
 
-export interface SaveShowOptions {
-  /** 客户端上次见到的版本号；传了则做严格乐观锁 */
-  expectedVersion?: number | null;
-  /** 是否允许删除云端多余行（默认 false，避免误删） */
-  allowRemoteDelete?: boolean;
-}
-
-function isNetworkError(e: unknown): boolean {
-  const m = String((e as { message?: string })?.message ?? e).toLowerCase();
-  return (
-    m.includes("fetch") ||
-    m.includes("network") ||
-    m.includes("timeout") ||
-    m.includes("failed to fetch") ||
-    m.includes("503") ||
-    m.includes("502") ||
-    m.includes("504")
-  );
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-export async function saveShowData(
-  data: ShowItem[],
-  options: SaveShowOptions = {}
-): Promise<ShowSaveResult> {
-  // ① 按 ID 去重，保留第一个，记录被丢弃项
+export async function saveShowData(data: ShowItem[]): Promise<ShowSaveResult> {
+  // 按 ID 去重，保留第一个
   const seen = new Map<string, ShowItem>();
   const conflicts: { id: string; kept: ShowItem; dropped: ShowItem }[] = [];
   for (const item of data) {
@@ -297,148 +230,65 @@ export async function saveShowData(
   }
   const uniqueData = [...seen.values()];
 
-  // ② 串行化
+  // 串行化
   if (saveShowDataPromise) await saveShowDataPromise;
 
   saveShowDataPromise = (async (): Promise<ShowSaveResult> => {
-    // ③ 本地先落盘，保证离线可用
+    // 本地先落盘，保证离线可用
     saveLocalShowData(uniqueData);
-    writeLocalVersion(options.expectedVersion ?? null);
 
     if (!isSupabaseConfigured()) {
-      return { error: null, conflicts, version: null };
+      return { error: null, conflicts };
     }
 
-    // ④ 乐观锁前置检查
-    const remoteV = await readShowsVersion();
-    if (options.expectedVersion != null && remoteV != null && remoteV !== options.expectedVersion) {
-      return {
-        error: `云端数据已被其他端修改（本地 v${options.expectedVersion} / 云端 v${remoteV}）`,
-        conflict: true,
-        remoteVersion: remoteV,
-        retriable: false,
-        conflicts,
-      };
-    }
-
-    // ⑤ 字段级合并：拉取远端，本地空字段用远端补齐（防止抹掉 Worker 更新的播放量）
-    let remoteMap = new Map<string, Record<string, unknown>>();
-    try {
-      const PAGE_SIZE = 100;
-      let allRemote: any[] = [];
-      let from = 0;
-      let hasMore = true;
-      while (hasMore) {
-        const { data: remoteRows, error } = await supabase
-          .from("shows")
-          .select("id,views,date,duration")
-          .range(from, from + PAGE_SIZE - 1);
-        if (error) break;
-        if (remoteRows && remoteRows.length > 0) {
-          allRemote = allRemote.concat(remoteRows);
-          hasMore = remoteRows.length === PAGE_SIZE;
-          from += PAGE_SIZE;
-        } else {
-          hasMore = false;
-        }
-      }
-      remoteMap = new Map(allRemote.map((r) => [String(r.id), r]));
-    } catch {
-      // 拉取远端失败不影响写入，只是无法做字段级合并
-    }
-
-    const merged = uniqueData.map((it) => {
-      const r = remoteMap.get(it.id);
-      if (!r) return it;
-      return {
-        ...it,
-        views: it.views || String(r.views ?? ""),
-        date: it.date || String(r.date ?? ""),
-        duration: it.duration || String(r.duration ?? ""),
-      };
-    });
-
-    // ⑥ 分批 upsert
     const BATCH_SIZE = 20;
-    for (let i = 0; i < merged.length; i += BATCH_SIZE) {
-      const batch = merged.slice(i, i + BATCH_SIZE).map(toDbRow);
-      try {
-        const { error } = await supabase.from("shows").upsert(batch, { onConflict: "id" });
-        if (error) {
-          return {
-            error: `保存批次 ${Math.floor(i / BATCH_SIZE) + 1} 失败: ${error.message}`,
-            retriable: isNetworkError(error),
-            conflicts,
-          };
-        }
-      } catch (e) {
+    const rows = uniqueData.map(toDbRow);
+
+    // 分批 upsert
+    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+      const batch = rows.slice(i, i + BATCH_SIZE);
+      const { error } = await supabase.from("shows").upsert(batch, { onConflict: "id" });
+      if (error) {
         return {
-          error: `保存批次 ${Math.floor(i / BATCH_SIZE) + 1} 失败: ${String(e)}`,
-          retriable: isNetworkError(e),
+          error: `保存批次 ${Math.floor(i / BATCH_SIZE) + 1} 失败: ${error.message}`,
           conflicts,
         };
       }
     }
 
-    // ⑦ 可选删除云端多余行（默认关闭）
-    if (options.allowRemoteDelete && merged.length >= 0) {
-      try {
-        const currentIds = new Set(merged.map((d) => d.id));
-        const { data: remoteRows, error: fetchErr } = await supabase
-          .from("shows")
-          .select("id")
-          .limit(9995);
-        if (!fetchErr && remoteRows) {
-          const idsToDelete = remoteRows
-            .filter((r: any) => !currentIds.has(String(r.id)))
-            .map((r: any) => String(r.id));
-          for (let i = 0; i < idsToDelete.length; i += BATCH_SIZE) {
-            const batch = idsToDelete.slice(i, i + BATCH_SIZE);
-            await supabase.from("shows").delete().in("id", batch);
-          }
-        }
-      } catch {
-        // delete 失败不致命
+    recordSyncTime();
+
+    // 删除云端多余行
+    if (uniqueData.length === 0) {
+      return { error: null, conflicts };
+    }
+    const currentIds = new Set(uniqueData.map((d) => d.id));
+    const { data: remoteRows, error: fetchErr } = await supabase
+      .from("shows")
+      .select("id")
+      .limit(9995);
+    if (fetchErr) {
+      return { error: null, conflicts };
+    }
+
+    const idsToDelete = (remoteRows || [])
+      .filter((r: any) => !currentIds.has(String(r.id)))
+      .map((r: any) => String(r.id));
+
+    for (let i = 0; i < idsToDelete.length; i += BATCH_SIZE) {
+      const batch = idsToDelete.slice(i, i + BATCH_SIZE);
+      const { error: delError } = await supabase.from("shows").delete().in("id", batch);
+      if (delError && import.meta.env.DEV) {
+        console.warn("[shows] delete batch failed:", delError.message);
       }
     }
 
-    // ⑧ bump 版本；失败说明并发写入，仍算成功但告警
-    const baseVersion = remoteV ?? 0;
-    const bump = await bumpShowsVersion(baseVersion);
-    const version = bump.ok ? bump.current : remoteV;
-    writeLocalVersion(version);
-
-    if (!bump.ok) {
-      return {
-        error: "保存成功，但检测到其他端并发写入，请刷新确认",
-        conflict: true,
-        version,
-        retriable: false,
-        conflicts,
-      };
-    }
-
-    return { error: null, version, conflicts };
+    return { error: null, conflicts };
   })();
 
   const result = await saveShowDataPromise;
   saveShowDataPromise = null;
   return result;
-}
-
-export async function saveShowDataWithRetry(
-  data: ShowItem[],
-  options: SaveShowOptions & { retries?: number } = {}
-): Promise<ShowSaveResult> {
-  const retries = options.retries ?? 3;
-  let last: ShowSaveResult = { error: "未执行保存" };
-  for (let i = 0; i <= retries; i++) {
-    last = await saveShowData(data, options);
-    if (!last.error) return last;
-    if (!last.retriable || last.conflict) return last;
-    if (i < retries) await sleep(1000 * 2 ** i);
-  }
-  return last;
 }
 
 export async function addShowItem(item: ShowItem): Promise<ShowSaveResult> {
@@ -500,12 +350,25 @@ export const memberColors: Record<ShowMember, string> = {
 
 /** 从 YouTube URL 中提取视频 ID */
 export function extractYouTubeId(url: string): string | null {
-  return normalizeExtractYouTubeId(url);
+  if (!url) return null;
+  const clean = url.trim();
+  if (/^[a-zA-Z0-9_-]{11}$/.test(clean)) return clean;
+  const match = clean.match(
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/|youtube\.com\/live\/)([a-zA-Z0-9_-]{11})/
+  );
+  return match?.[1] ?? null;
 }
 
 /** 从 Bilibili URL 中提取 BV/av 号 */
 export function extractBilibiliId(url: string): string | null {
-  return normalizeExtractBilibiliId(url);
+  if (!url) return null;
+  const clean = url.trim();
+  const bvMatch = clean.match(
+    /(?:bilibili\.com\/video\/|b23\.tv\/|m\.bilibili\.com\/video\/)(BV[a-zA-Z0-9]+)/i
+  );
+  if (bvMatch) return bvMatch[1];
+  const avMatch = clean.match(/(?:bilibili\.com\/video\/|b23\.tv\/)(av\d+)/i);
+  return avMatch?.[1] ?? null;
 }
 
 /** 获取 YouTube 缩略图 URL */

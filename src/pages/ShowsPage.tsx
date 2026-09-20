@@ -20,11 +20,11 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
-  ListPlus,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  saveShowDataWithRetry,
+  loadShowData,
+  saveShowData,
   syncShowData,
   fromDbRow,
   memberColors,
@@ -35,8 +35,6 @@ import {
   getDisplayDate,
   getCachedMetadata,
   isCacheStale,
-  readLocalVersion,
-  deleteShowItem,
   type ShowItem,
   type ShowMember,
 } from "@/lib/showData";
@@ -109,9 +107,7 @@ import BatchEditShowsModal from "@/components/BatchEditShowsModal";
 import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
 import ScrollToTop from "@/components/ScrollToTop";
 import PageLoader from "@/components/PageLoader";
-import ShowImportPreviewModal from "@/components/ShowImportPreviewModal";
 import { useRealtimeData } from "@/hooks/useRealtimeData";
-import { useImportQueue } from "@/hooks/useImportQueue";
 
 const allMembers: ShowMember[] = [
   "任炫植",
@@ -274,15 +270,9 @@ export default function ShowsPage() {
   const [batchSelectedIds, setBatchSelectedIds] = useState<Set<string>>(new Set());
   const [batchEditMode, setBatchEditMode] = useState(false);
 
-  const [importOpen, setImportOpen] = useState(false);
-  const [clearAllOpen, setClearAllOpen] = useState(false);
-
+  const initialLoadRef = useRef(true);
+  const userModifiedRef = useRef(false);
   const showDataRef = useRef<ShowItem[]>([]);
-  const savingRef = useRef(false);
-  const localDirtyRef = useRef<Map<string, number>>(new Map());
-  const pendingRemoteRef = useRef<any[] | null>(null);
-  const versionRef = useRef<number | null>(null);
-  const DIRTY_TTL_MS = 10_000;
 
   useEffect(() => {
     showDataRef.current = showData;
@@ -291,103 +281,40 @@ export default function ShowsPage() {
   const prevRtShowCountRef = useRef(0);
   const rtShowNotifiedRef = useRef(false);
 
-  const markDirty = useCallback((ids: string[]) => {
-    const now = Date.now();
-    ids.forEach((id) => localDirtyRef.current.set(id, now));
-  }, []);
-
-  const clearDirty = useCallback((ids: string[]) => {
-    ids.forEach((id) => localDirtyRef.current.delete(id));
-  }, []);
-
-  const mergeRemote = useCallback(
-    (local: ShowItem[], remote: ShowItem[], dirty: Map<string, number>, ttlMs: number): ShowItem[] => {
-      const now = Date.now();
-      const localMap = new Map(local.map((i) => [i.id, i]));
-      const out = remote.map((r) => {
-        const l = localMap.get(r.id);
-        const dirtyAt = dirty.get(r.id);
-        if (l && dirtyAt && now - dirtyAt < ttlMs) return l;
-        return r;
-      });
-      const remoteIds = new Set(remote.map((r) => r.id));
-      for (const l of local) if (!remoteIds.has(l.id)) out.push(l);
-      return out;
-    },
-    []
-  );
-
-  const applyRemote = useCallback(
-    (remote: ShowItem[], force = false) => {
-      setShowData((prev) => mergeRemote(prev, remote, localDirtyRef.current, force ? 0 : DIRTY_TTL_MS));
+  useEffect(() => {
+    if (!rtShowData || rtShowData.length === 0) return;
+    if (!userModifiedRef.current) {
+      const items = rtShowData.map((row: any) => fromDbRow(row));
+      setShowData(items);
       try {
-        localStorage.setItem("hsik_shows_data", JSON.stringify(remote));
+        localStorage.setItem("hsik_shows_data", JSON.stringify(items));
       } catch {
         // ignore
       }
-    },
-    [mergeRemote]
-  );
-
-  const persist = useCallback(
-    async (
-      next: ShowItem[],
-      opts?: { allowRemoteDelete?: boolean; dirtyIds?: string[] }
-    ): Promise<{ ok: boolean; code: "ok" | "network" | "conflict" | "unknown"; error?: string }> => {
-      if (savingRef.current) {
-        return { ok: false, code: "unknown", error: "正在保存中，请稍候再试" };
+      if (!isAdmin && rtShowNotifiedRef.current && rtShowData.length !== prevRtShowCountRef.current) {
+        toast.info("数据已更新", { description: "管理员发布了最新档案数据" });
       }
-      savingRef.current = true;
-      if (opts?.dirtyIds) markDirty(opts.dirtyIds);
-      try {
-        const res = await saveShowDataWithRetry(next, {
-          expectedVersion: versionRef.current,
-          allowRemoteDelete: opts?.allowRemoteDelete ?? false,
-        });
-        if (res.conflict) {
-          const fresh = await syncShowData();
-          versionRef.current = readLocalVersion();
-          applyRemote(fresh, true);
-          return { ok: false, code: "conflict", error: res.error ?? "云端数据已被其他端修改" };
-        }
-        if (res.error) {
-          return { ok: false, code: res.retriable ? "network" : "unknown", error: res.error };
-        }
-        versionRef.current = res.version ?? versionRef.current;
-        clearDirty(opts?.dirtyIds ?? []);
-        return { ok: true, code: "ok" };
-      } finally {
-        savingRef.current = false;
-        if (pendingRemoteRef.current) {
-          const r = pendingRemoteRef.current;
-          pendingRemoteRef.current = null;
-          applyRemote(r.map(fromDbRow));
-        }
-      }
-    },
-    [applyRemote, markDirty, clearDirty]
-  );
+      prevRtShowCountRef.current = rtShowData.length;
+      rtShowNotifiedRef.current = true;
+    }
+  }, [rtShowData, isAdmin]);
 
   useEffect(() => {
-    if (!rtShowData || rtShowData.length === 0) return;
-    if (savingRef.current) {
-      pendingRemoteRef.current = rtShowData;
-      return;
+    // 优先同步读取本地缓存：有缓存先渲染，避免每次切页都显示加载动画
+    const local = loadShowData();
+    if (local.length > 0 && !userModifiedRef.current) {
+      setShowData(local);
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
     }
-    const items = rtShowData.map((row: any) => fromDbRow(row));
-    applyRemote(items);
-    if (!isAdmin && rtShowNotifiedRef.current && rtShowData.length !== prevRtShowCountRef.current) {
-      toast.info("数据已更新", { description: "管理员发布了最新档案数据" });
-    }
-    prevRtShowCountRef.current = rtShowData.length;
-    rtShowNotifiedRef.current = true;
-  }, [rtShowData, isAdmin, applyRemote]);
 
-  useEffect(() => {
-    setIsLoading(true);
+    // 后台同步云端最新数据
     syncShowData()
       .then((synced) => {
-        setShowData(synced);
+        if (!userModifiedRef.current) {
+          setShowData(synced);
+        }
       })
       .catch(() => {})
       .finally(() => setIsLoading(false));
@@ -405,9 +332,6 @@ export default function ShowsPage() {
         // ignore
       }
     }
-
-    versionRef.current = readLocalVersion();
-
     autoRefreshTimerRef.current = setInterval(() => {
       if (!metaRefreshing && showDataRef.current.length > 0) {
         refreshMetadata();
@@ -433,6 +357,21 @@ export default function ShowsPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (showData.length > 0) {
+      if (initialLoadRef.current) {
+        initialLoadRef.current = false;
+        return;
+      }
+      userModifiedRef.current = true;
+      saveShowData(showData).then(({ error }) => {
+        if (error) {
+          toast.error("云端同步失败", { description: error });
+        }
+      }).catch(() => {});
+    }
+  }, [showData]);
 
   const refreshMetadata = useCallback(async () => {
     if (refreshAbortRef.current) return;
@@ -556,80 +495,44 @@ export default function ShowsPage() {
   };
 
   const handleSave = async (item: ShowItem) => {
-    const isEdit = !!editingItem;
-    const newData = isEdit
-      ? showData.map((s) => (s.id === item.id ? item : s))
-      : [...showData, item];
-    setShowData(newData);
+    userModifiedRef.current = true;
+    let newData: ShowItem[];
 
-    const res = await persist(newData, { dirtyIds: [item.id] });
-    if (!res.ok) {
-      toast.error("保存失败", { description: res.error });
-      return;
+    if (editingItem) {
+      newData = showData.map((s) => (s.id === item.id ? item : s));
+      setShowData(newData);
+      toast.success("修改已保存", { description: item.title });
+    } else {
+      newData = [...showData, item];
+      setShowData(newData);
+      toast.success("综艺已添加", { description: item.title });
     }
 
-    toast.success(isEdit ? "修改已保存" : "综艺已添加", { description: item.title });
+    const { error } = await saveShowData(newData);
+    if (error) {
+      toast.error("云端同步失败", { description: error });
+    }
+
     setFormOpen(false);
     setEditingItem(null);
   };
 
-  const handleCommitImport = useCallback(
-    async (items: ShowItem[]): Promise<{
-      ok: boolean;
-      code: "ok" | "network" | "conflict" | "unknown";
-      error?: string;
-      savedCount?: number;
-    }> => {
-      const current = showDataRef.current;
-      const merged = [...current];
-      for (const it of items) {
-        const idx = merged.findIndex((x) => x.id === it.id);
-        if (idx >= 0) merged[idx] = it;
-        else merged.push(it);
-      }
-      setShowData(merged);
-      const res = await persist(merged, { dirtyIds: items.map((i) => i.id) });
-      return { ...res, savedCount: items.length };
-    },
-    [persist]
-  );
-
-  const { pendingCount, deadCount, flush, enqueue } = useImportQueue(
-    async (items, expectedVersion) => {
-      versionRef.current = expectedVersion ?? versionRef.current;
-      const r = await handleCommitImport(items);
-      return { ok: r.ok, retriable: r.code === "network", error: r.error };
-    },
-    { enabled: isAdmin }
-  );
-
-  const handleDelete = async (item: ShowItem) => {
-    const original = showData;
-    const newData = showData.filter((s) => s.id !== item.id);
+  const handleSaveBatch = (items: ShowItem[]) => {
+    userModifiedRef.current = true;
+    const newData = [...showData, ...items];
     setShowData(newData);
-
-    const { error } = await deleteShowItem(item.id);
-    if (error) {
-      toast.error("删除失败", { description: error });
-      setShowData(original);
-      return;
-    }
-
-    localDirtyRef.current.delete(item.id);
-    toast.success("已删除", { description: item.title });
+    saveShowData(newData);
+    toast.success(`已批量添加 ${items.length} 条综艺`, { description: "数据正在同步到云端..." });
+    setFormOpen(false);
+    setEditingItem(null);
   };
 
-  const handleClearAll = async () => {
-    const original = showData;
-    setShowData([]);
-    const res = await persist([], { allowRemoteDelete: true });
-    if (!res.ok) {
-      toast.error("清空失败", { description: res.error });
-      setShowData(original);
-      return;
-    }
-    localDirtyRef.current.clear();
-    toast.success("已清空全部档案", { description: "云端与本地数据已重置" });
+  const handleDelete = (item: ShowItem) => {
+    userModifiedRef.current = true;
+    const newData = showData.filter((s) => s.id !== item.id);
+    setShowData(newData);
+    saveShowData(newData);
+    toast.success("已删除", { description: item.title });
   };
 
   const toggleBatchSelect = (id: string) => {
@@ -639,14 +542,11 @@ export default function ShowsPage() {
     setBatchSelectedIds(next);
   };
 
-  const handleBatchEditSave = async (updatedItems: ShowItem[]) => {
-    const next = showData.map((item) => updatedItems.find((u) => u.id === item.id) ?? item);
-    setShowData(next);
-    const res = await persist(next, { dirtyIds: updatedItems.map((i) => i.id) });
-    if (!res.ok) {
-      toast.error("批量更新失败", { description: res.error });
-      return;
-    }
+  const handleBatchEditSave = (updatedItems: ShowItem[]) => {
+    setShowData((prev) => prev.map((item) => {
+      const updated = updatedItems.find((u) => u.id === item.id);
+      return updated || item;
+    }));
     toast.success(`已批量更新 ${updatedItems.length} 条档案`);
     setBatchEditOpen(false);
     setBatchSelectedIds(new Set());
@@ -759,30 +659,6 @@ export default function ShowsPage() {
         </div>
       </div>
 
-      {isAdmin && (pendingCount > 0 || deadCount > 0) && (
-        <div className="mb-4 p-3 rounded-sm bg-amber-50/70 border border-amber-200/60 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm text-amber-700">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            <span>
-              {pendingCount > 0 ? `有 ${pendingCount} 条档案待同步到云端` : ""}
-              {deadCount > 0
-                ? `${pendingCount > 0 ? "，" : ""}${deadCount} 条同步失败需手动处理`
-                : ""}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            {pendingCount > 0 && (
-              <button
-                onClick={flush}
-                className="px-3 py-1.5 rounded-sm bg-amber-100 text-amber-700 text-xs font-medium hover:bg-amber-200 transition-colors"
-              >
-                立即重试
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
       {isLoading ? (
         <PageLoader />
       ) : viewMode === "stats" ? (
@@ -874,13 +750,6 @@ export default function ShowsPage() {
                     添加综艺
                   </button>
                   <button
-                    onClick={() => setImportOpen(true)}
-                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-sm bg-white/50 text-steel-600 hover:bg-white/70 border border-steel-200/60 text-sm font-medium transition-colors shadow-sm whitespace-nowrap"
-                  >
-                    <ListPlus className="w-4 h-4" />
-                    批量导入
-                  </button>
-                  <button
                     onClick={() => {
                       if (batchEditMode) {
                         if (batchSelectedIds.size > 0) {
@@ -913,13 +782,6 @@ export default function ShowsPage() {
                       </button>
                     </>
                   )}
-                  <button
-                    onClick={() => setClearAllOpen(true)}
-                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-sm bg-red-50 text-red-600 hover:bg-red-100 border border-red-200/60 text-sm font-medium transition-colors shadow-sm whitespace-nowrap"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    清空全部
-                  </button>
                 </div>
               )}
             </div>
@@ -1081,6 +943,14 @@ export default function ShowsPage() {
                               className="w-full h-full object-cover"
                               onError={(e) => {
                                 const target = e.currentTarget;
+                                const currentSrc = target.src;
+                                // YouTube maxresdefault 失败时降级到 hqdefault
+                                const maxresMatch = currentSrc.match(/\/vi\/([a-zA-Z0-9_-]{11})\/maxresdefault\.jpg/);
+                                if (maxresMatch && !target.dataset.triedFallback) {
+                                  target.dataset.triedFallback = "true";
+                                  target.src = `https://images.weserv.nl/?url=${encodeURIComponent(`https://img.youtube.com/vi/${maxresMatch[1]}/hqdefault.jpg`)}&n=-1`;
+                                  return;
+                                }
                                 target.style.display = "none";
                                 if (target.parentElement) {
                                   target.parentElement.style.background = `linear-gradient(135deg, ${item.thumbnailFrom}, ${item.thumbnailTo})`;
@@ -1203,36 +1073,8 @@ export default function ShowsPage() {
                   <div className="w-16 h-16 rounded-full bg-steel-50/70 border border-steel-200/60 flex items-center justify-center mb-3">
                     <Tv className="w-8 h-8 text-steel-400" />
                   </div>
-                  {showData.length === 0 ? (
-                    <>
-                      <p className="text-sm text-steel-500/70 mb-1">还没有任何综艺档案</p>
-                      <p className="text-xs text-steel-500/50 mb-1">管理员可点击右上角添加或导入视频</p>
-                      <p className="text-[10px] text-steel-400/50 mb-4">若仍看到旧示例数据，请清除浏览器网站数据后刷新</p>
-                      {isAdmin && (
-                        <div className="flex flex-wrap gap-2 justify-center">
-                          <button
-                            onClick={handleAdd}
-                            className="flex items-center gap-1.5 px-4 py-2 rounded-sm bg-steel-500 text-white text-sm font-medium hover:bg-steel-600 transition-colors"
-                          >
-                            <Plus className="w-4 h-4" />
-                            添加综艺
-                          </button>
-                          <button
-                            onClick={() => setImportOpen(true)}
-                            className="flex items-center gap-1.5 px-4 py-2 rounded-sm bg-white/50 text-steel-600 border border-steel-200/60 text-sm font-medium hover:bg-white/70 transition-colors"
-                          >
-                            <ListPlus className="w-4 h-4" />
-                            批量导入
-                          </button>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-sm text-steel-500/70 mb-1">没有找到匹配的综艺档案</p>
-                      <p className="text-xs text-steel-500/50">尝试调整筛选条件或清除筛选</p>
-                    </>
-                  )}
+                  <p className="text-sm text-steel-500/70 mb-1">没有找到匹配的综艺档案</p>
+                  <p className="text-xs text-steel-500/50">尝试调整筛选条件或清除筛选</p>
                 </div>
               )}
             </div>
@@ -1240,20 +1082,9 @@ export default function ShowsPage() {
         </motion.div>
       )}
 
-      <ShowFormModal open={formOpen} onClose={() => { setFormOpen(false); setEditingItem(null); }} onSave={handleSave} editingItem={editingItem} />
+      <ShowFormModal open={formOpen} onClose={() => { setFormOpen(false); setEditingItem(null); }} onSave={handleSave} onSaveBatch={handleSaveBatch} editingItem={editingItem} />
       <BatchEditShowsModal open={batchEditOpen} onClose={() => setBatchEditOpen(false)} items={showData.filter((item) => batchSelectedIds.has(item.id))} onSave={handleBatchEditSave} />
-      <ShowImportPreviewModal
-        open={importOpen}
-        onClose={() => setImportOpen(false)}
-        existingItems={showData}
-        onCommit={handleCommitImport}
-        onQueue={(items) => {
-          enqueue(items, versionRef.current);
-          toast.info("已加入导入队列", { description: "网络恢复后自动同步到云端" });
-        }}
-      />
       <DeleteConfirmDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => deleteTarget && handleDelete(deleteTarget)} title="删除综艺" message={`确定要删除「${deleteTarget?.title}」吗？此操作不可撤销。`} />
-      <DeleteConfirmDialog open={clearAllOpen} onClose={() => setClearAllOpen(false)} onConfirm={handleClearAll} title="清空全部综艺档案" message="确定要清空所有视频档案吗？此操作会删除云端全部 shows 数据且不可撤销。建议先导出备份。" />
       <ScrollToTop />
     </div>
   );
