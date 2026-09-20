@@ -77,3 +77,26 @@ CREATE POLICY "Allow public read" ON social_posts FOR SELECT USING (true);
 CREATE POLICY "Allow public insert" ON social_posts FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow public update" ON social_posts FOR UPDATE USING (true);
 CREATE POLICY "Allow public delete" ON social_posts FOR DELETE USING (true);
+
+-- 数据版本表（乐观锁，用于视频档案导入冲突检测）
+CREATE TABLE IF NOT EXISTS sync_meta (
+  id TEXT PRIMARY KEY,
+  version BIGINT NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+ALTER TABLE sync_meta ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read" ON sync_meta;
+DROP POLICY IF EXISTS "Allow public insert" ON sync_meta;
+DROP POLICY IF EXISTS "Allow public update" ON sync_meta;
+CREATE POLICY "Allow public read"   ON sync_meta FOR SELECT USING (true);
+CREATE POLICY "Allow public insert" ON sync_meta FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update" ON sync_meta FOR UPDATE USING (true);
+INSERT INTO sync_meta (id, version) VALUES ('shows', 0) ON CONFLICT (id) DO NOTHING;
+
+-- 原子递增 shows 版本号
+CREATE OR REPLACE FUNCTION bump_shows_version() RETURNS BIGINT
+LANGUAGE sql VOLATILE AS $$
+  UPDATE sync_meta SET version = version + 1, updated_at = now()
+  WHERE id = 'shows' RETURNING version;
+$$;
+GRANT EXECUTE ON FUNCTION bump_shows_version() TO anon, authenticated;

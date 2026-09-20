@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import {
   loadShowData,
   saveShowData,
+  saveShowDataWithRetry,
   syncShowData,
   fromDbRow,
   memberColors,
@@ -35,6 +36,10 @@ import {
   getDisplayDate,
   getCachedMetadata,
   isCacheStale,
+  readLocalVersion,
+  writeLocalVersion,
+  backupShowData,
+  deleteShowItem,
   type ShowItem,
   type ShowMember,
 } from "@/lib/showData";
@@ -107,7 +112,9 @@ import BatchEditShowsModal from "@/components/BatchEditShowsModal";
 import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
 import ScrollToTop from "@/components/ScrollToTop";
 import PageLoader from "@/components/PageLoader";
+import ShowImportPreviewModal from "@/components/ShowImportPreviewModal";
 import { useRealtimeData } from "@/hooks/useRealtimeData";
+import { useImportQueue } from "@/hooks/useImportQueue";
 
 const allMembers: ShowMember[] = [
   "任炫植",
@@ -270,9 +277,14 @@ export default function ShowsPage() {
   const [batchSelectedIds, setBatchSelectedIds] = useState<Set<string>>(new Set());
   const [batchEditMode, setBatchEditMode] = useState(false);
 
-  const initialLoadRef = useRef(true);
-  const userModifiedRef = useRef(false);
+  const [importOpen, setImportOpen] = useState(false);
+
   const showDataRef = useRef<ShowItem[]>([]);
+  const savingRef = useRef(false);
+  const localDirtyRef = useRef<Map<string, number>>(new Map());
+  const pendingRemoteRef = useRef<any[] | null>(null);
+  const versionRef = useRef<number | null>(null);
+  const DIRTY_TTL_MS = 10_000;
 
   useEffect(() => {
     showDataRef.current = showData;
@@ -281,31 +293,103 @@ export default function ShowsPage() {
   const prevRtShowCountRef = useRef(0);
   const rtShowNotifiedRef = useRef(false);
 
-  useEffect(() => {
-    if (!rtShowData || rtShowData.length === 0) return;
-    if (!userModifiedRef.current) {
-      const items = rtShowData.map((row: any) => fromDbRow(row));
-      setShowData(items);
+  const markDirty = useCallback((ids: string[]) => {
+    const now = Date.now();
+    ids.forEach((id) => localDirtyRef.current.set(id, now));
+  }, []);
+
+  const clearDirty = useCallback((ids: string[]) => {
+    ids.forEach((id) => localDirtyRef.current.delete(id));
+  }, []);
+
+  const mergeRemote = useCallback(
+    (local: ShowItem[], remote: ShowItem[], dirty: Map<string, number>, ttlMs: number): ShowItem[] => {
+      const now = Date.now();
+      const localMap = new Map(local.map((i) => [i.id, i]));
+      const out = remote.map((r) => {
+        const l = localMap.get(r.id);
+        const dirtyAt = dirty.get(r.id);
+        if (l && dirtyAt && now - dirtyAt < ttlMs) return l;
+        return r;
+      });
+      const remoteIds = new Set(remote.map((r) => r.id));
+      for (const l of local) if (!remoteIds.has(l.id)) out.push(l);
+      return out;
+    },
+    []
+  );
+
+  const applyRemote = useCallback(
+    (remote: ShowItem[], force = false) => {
+      setShowData((prev) => mergeRemote(prev, remote, localDirtyRef.current, force ? 0 : DIRTY_TTL_MS));
       try {
-        localStorage.setItem("hsik_shows_data", JSON.stringify(items));
+        localStorage.setItem("hsik_shows_data", JSON.stringify(remote));
       } catch {
         // ignore
       }
-      if (!isAdmin && rtShowNotifiedRef.current && rtShowData.length !== prevRtShowCountRef.current) {
-        toast.info("数据已更新", { description: "管理员发布了最新档案数据" });
+    },
+    [mergeRemote]
+  );
+
+  const persist = useCallback(
+    async (
+      next: ShowItem[],
+      opts?: { allowRemoteDelete?: boolean; dirtyIds?: string[] }
+    ): Promise<{ ok: boolean; code: "ok" | "network" | "conflict" | "unknown"; error?: string }> => {
+      if (savingRef.current) {
+        return { ok: false, code: "unknown", error: "正在保存中，请稍候再试" };
       }
-      prevRtShowCountRef.current = rtShowData.length;
-      rtShowNotifiedRef.current = true;
+      savingRef.current = true;
+      if (opts?.dirtyIds) markDirty(opts.dirtyIds);
+      try {
+        const res = await saveShowDataWithRetry(next, {
+          expectedVersion: versionRef.current,
+          allowRemoteDelete: opts?.allowRemoteDelete ?? false,
+        });
+        if (res.conflict) {
+          const fresh = await syncShowData();
+          versionRef.current = readLocalVersion();
+          applyRemote(fresh, true);
+          return { ok: false, code: "conflict", error: res.error ?? "云端数据已被其他端修改" };
+        }
+        if (res.error) {
+          return { ok: false, code: res.retriable ? "network" : "unknown", error: res.error };
+        }
+        versionRef.current = res.version ?? versionRef.current;
+        clearDirty(opts?.dirtyIds ?? []);
+        return { ok: true, code: "ok" };
+      } finally {
+        savingRef.current = false;
+        if (pendingRemoteRef.current) {
+          const r = pendingRemoteRef.current;
+          pendingRemoteRef.current = null;
+          applyRemote(r.map(fromDbRow));
+        }
+      }
+    },
+    [applyRemote, markDirty, clearDirty]
+  );
+
+  useEffect(() => {
+    if (!rtShowData || rtShowData.length === 0) return;
+    if (savingRef.current) {
+      pendingRemoteRef.current = rtShowData;
+      return;
     }
-  }, [rtShowData, isAdmin]);
+    const items = rtShowData.map((row: any) => fromDbRow(row));
+    applyRemote(items);
+    if (!isAdmin && rtShowNotifiedRef.current && rtShowData.length !== prevRtShowCountRef.current) {
+      toast.info("数据已更新", { description: "管理员发布了最新档案数据" });
+    }
+    prevRtShowCountRef.current = rtShowData.length;
+    rtShowNotifiedRef.current = true;
+  }, [rtShowData, isAdmin, applyRemote]);
 
   useEffect(() => {
     setIsLoading(true);
     syncShowData()
       .then((synced) => {
-        if (!userModifiedRef.current) {
-          setShowData(synced);
-        }
+        setShowData(synced);
       })
       .catch(() => {})
       .finally(() => setIsLoading(false));
@@ -323,6 +407,9 @@ export default function ShowsPage() {
         // ignore
       }
     }
+
+    versionRef.current = readLocalVersion();
+
     autoRefreshTimerRef.current = setInterval(() => {
       if (!metaRefreshing && showDataRef.current.length > 0) {
         refreshMetadata();
@@ -348,21 +435,6 @@ export default function ShowsPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    if (showData.length > 0) {
-      if (initialLoadRef.current) {
-        initialLoadRef.current = false;
-        return;
-      }
-      userModifiedRef.current = true;
-      saveShowData(showData).then(({ error }) => {
-        if (error) {
-          toast.error("云端同步失败", { description: error });
-        }
-      }).catch(() => {});
-    }
-  }, [showData]);
 
   const refreshMetadata = useCallback(async () => {
     if (refreshAbortRef.current) return;
@@ -486,43 +558,67 @@ export default function ShowsPage() {
   };
 
   const handleSave = async (item: ShowItem) => {
-    userModifiedRef.current = true;
-    let newData: ShowItem[];
-
-    if (editingItem) {
-      newData = showData.map((s) => (s.id === item.id ? item : s));
-      setShowData(newData);
-      toast.success("修改已保存", { description: item.title });
-    } else {
-      newData = [...showData, item];
-      setShowData(newData);
-      toast.success("综艺已添加", { description: item.title });
-    }
-
-    const { error } = await saveShowData(newData);
-    if (error) {
-      toast.error("云端同步失败", { description: error });
-    }
-
-    setFormOpen(false);
-    setEditingItem(null);
-  };
-
-  const handleSaveBatch = (items: ShowItem[]) => {
-    userModifiedRef.current = true;
-    const newData = [...showData, ...items];
+    const isEdit = !!editingItem;
+    const newData = isEdit
+      ? showData.map((s) => (s.id === item.id ? item : s))
+      : [...showData, item];
     setShowData(newData);
-    saveShowData(newData);
-    toast.success(`已批量添加 ${items.length} 条综艺`, { description: "数据正在同步到云端..." });
+
+    const res = await persist(newData, { dirtyIds: [item.id] });
+    if (!res.ok) {
+      toast.error("保存失败", { description: res.error });
+      return;
+    }
+
+    toast.success(isEdit ? "修改已保存" : "综艺已添加", { description: item.title });
     setFormOpen(false);
     setEditingItem(null);
   };
 
-  const handleDelete = (item: ShowItem) => {
-    userModifiedRef.current = true;
+  const handleCommitImport = useCallback(
+    async (items: ShowItem[]): Promise<{
+      ok: boolean;
+      code: "ok" | "network" | "conflict" | "unknown";
+      error?: string;
+      savedCount?: number;
+    }> => {
+      const current = showDataRef.current;
+      const byId = new Map(current.map((i) => [i.id, i]));
+      const merged = [...current];
+      for (const it of items) {
+        const idx = merged.findIndex((x) => x.id === it.id);
+        if (idx >= 0) merged[idx] = it;
+        else merged.push(it);
+      }
+      setShowData(merged);
+      const res = await persist(merged, { dirtyIds: items.map((i) => i.id) });
+      return { ...res, savedCount: items.length };
+    },
+    [persist]
+  );
+
+  const { pendingCount, deadCount, flush, enqueue } = useImportQueue(
+    async (items, expectedVersion) => {
+      versionRef.current = expectedVersion ?? versionRef.current;
+      const r = await handleCommitImport(items);
+      return { ok: r.ok, retriable: r.code === "network", error: r.error };
+    },
+    { enabled: isAdmin }
+  );
+
+  const handleDelete = async (item: ShowItem) => {
+    const original = showData;
     const newData = showData.filter((s) => s.id !== item.id);
     setShowData(newData);
-    saveShowData(newData);
+
+    const { error } = await deleteShowItem(item.id);
+    if (error) {
+      toast.error("删除失败", { description: error });
+      setShowData(original);
+      return;
+    }
+
+    localDirtyRef.current.delete(item.id);
     toast.success("已删除", { description: item.title });
   };
 
@@ -533,11 +629,14 @@ export default function ShowsPage() {
     setBatchSelectedIds(next);
   };
 
-  const handleBatchEditSave = (updatedItems: ShowItem[]) => {
-    setShowData((prev) => prev.map((item) => {
-      const updated = updatedItems.find((u) => u.id === item.id);
-      return updated || item;
-    }));
+  const handleBatchEditSave = async (updatedItems: ShowItem[]) => {
+    const next = showData.map((item) => updatedItems.find((u) => u.id === item.id) ?? item);
+    setShowData(next);
+    const res = await persist(next, { dirtyIds: updatedItems.map((i) => i.id) });
+    if (!res.ok) {
+      toast.error("批量更新失败", { description: res.error });
+      return;
+    }
     toast.success(`已批量更新 ${updatedItems.length} 条档案`);
     setBatchEditOpen(false);
     setBatchSelectedIds(new Set());
@@ -650,6 +749,30 @@ export default function ShowsPage() {
         </div>
       </div>
 
+      {isAdmin && (pendingCount > 0 || deadCount > 0) && (
+        <div className="mb-4 p-3 rounded-sm bg-amber-50/70 border border-amber-200/60 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm text-amber-700">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>
+              {pendingCount > 0 ? `有 ${pendingCount} 条档案待同步到云端` : ""}
+              {deadCount > 0
+                ? `${pendingCount > 0 ? "，" : ""}${deadCount} 条同步失败需手动处理`
+                : ""}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {pendingCount > 0 && (
+              <button
+                onClick={flush}
+                className="px-3 py-1.5 rounded-sm bg-amber-100 text-amber-700 text-xs font-medium hover:bg-amber-200 transition-colors"
+              >
+                立即重试
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {isLoading ? (
         <PageLoader />
       ) : viewMode === "stats" ? (
@@ -739,6 +862,13 @@ export default function ShowsPage() {
                   >
                     <Plus className="w-4 h-4" />
                     添加综艺
+                  </button>
+                  <button
+                    onClick={() => setImportOpen(true)}
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-sm bg-white/50 text-steel-600 hover:bg-white/70 border border-steel-200/60 text-sm font-medium transition-colors shadow-sm whitespace-nowrap"
+                  >
+                    <ListPlus className="w-4 h-4" />
+                    批量导入
                   </button>
                   <button
                     onClick={() => {
@@ -1065,8 +1195,18 @@ export default function ShowsPage() {
         </motion.div>
       )}
 
-      <ShowFormModal open={formOpen} onClose={() => { setFormOpen(false); setEditingItem(null); }} onSave={handleSave} onSaveBatch={handleSaveBatch} editingItem={editingItem} />
+      <ShowFormModal open={formOpen} onClose={() => { setFormOpen(false); setEditingItem(null); }} onSave={handleSave} editingItem={editingItem} />
       <BatchEditShowsModal open={batchEditOpen} onClose={() => setBatchEditOpen(false)} items={showData.filter((item) => batchSelectedIds.has(item.id))} onSave={handleBatchEditSave} />
+      <ShowImportPreviewModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        existingItems={showData}
+        onCommit={handleCommitImport}
+        onQueue={(items) => {
+          enqueue(items, versionRef.current);
+          toast.info("已加入导入队列", { description: "网络恢复后自动同步到云端" });
+        }}
+      />
       <DeleteConfirmDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => deleteTarget && handleDelete(deleteTarget)} title="删除综艺" message={`确定要删除「${deleteTarget?.title}」吗？此操作不可撤销。`} />
       <ScrollToTop />
     </div>

@@ -447,6 +447,22 @@ async function handleRefreshAllShows(env, ctx) {
     }
 
     console.log(`[refresh] Complete: ${updated} updated, ${failed} failed, ${skipped} skipped, total: ${shows.length}`);
+
+    // 更新成功后递增 shows 版本号，通知前端有并发变更
+    try {
+      await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/bump_shows_version`, {
+        method: "POST",
+        headers: {
+          'apikey': env.SUPABASE_SERVICE_KEY,
+          'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: "{}",
+      });
+    } catch (e) {
+      console.log("[refresh] bump version failed:", e.message);
+    }
+
     return { updated, failed, skipped, total: shows.length };
   } catch (e) {
     console.error("[refresh-all] error:", e);

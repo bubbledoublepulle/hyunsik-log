@@ -1,7 +1,12 @@
 import { supabase, isSupabaseConfigured } from "./supabase";
+import { readShowsVersion, bumpShowsVersion } from "./syncMeta";
+import {
+  extractYouTubeId as normalizeExtractYouTubeId,
+  extractBilibiliId as normalizeExtractBilibiliId,
+} from "./urlNormalize";
 
 // 全局锁，防止 saveShowData 并发执行导致数据竞态
-let saveShowDataPromise: Promise<{ error: string | null }> | null = null;
+let saveShowDataPromise: Promise<ShowSaveResult> | null = null;
 
 export type ShowMember =
   | "任炫植"
@@ -89,9 +94,7 @@ export const initialShowData: ShowItem[] = [
     thumbnailFrom: "#667EEA",
     thumbnailTo: "#764BA2",
     description: "炫植独自主持的深夜音乐电台，分享创作故事与歌曲推荐。",
-    links: [
-      { platform: "YouTube", url: "https://www.youtube.com/watch?v=9bZkp7q19f0" },
-    ],
+    links: [{ platform: "YouTube", url: "https://www.youtube.com/watch?v=9bZkp7q19f0" }],
   },
   {
     id: "s03",
@@ -122,9 +125,7 @@ export const initialShowData: ShowItem[] = [
     thumbnailFrom: "#4FAC50",
     thumbnailTo: "#00BBF9",
     description: "Weekly Idol经典环节，随机舞蹈与偶像游戏挑战。",
-    links: [
-      { platform: "YouTube", url: "https://www.youtube.com/watch?v=60uiZM9jD6M" },
-    ],
+    links: [{ platform: "YouTube", url: "https://www.youtube.com/watch?v=60uiZM9jD6M" }],
   },
   {
     id: "s05",
@@ -138,9 +139,7 @@ export const initialShowData: ShowItem[] = [
     thumbnailFrom: "#FA709A",
     thumbnailTo: "#FEE140",
     description: "炫植在家制作料理的治愈系直播记录。",
-    links: [
-      { platform: "V LIVE", url: "https://www.vlive.tv" },
-    ],
+    links: [{ platform: "V LIVE", url: "https://www.vlive.tv" }],
   },
   {
     id: "s06",
@@ -197,6 +196,7 @@ export const initialShowData: ShowItem[] = [
 
 const STORAGE_KEY = "hsik_shows_data";
 const SYNC_AT_KEY = "hsik_shows_sync_at";
+const VERSION_KEY = "hsik_shows_version";
 
 function recordSyncTime() {
   try { localStorage.setItem(SYNC_AT_KEY, Date.now().toString()); } catch {}
@@ -275,12 +275,41 @@ export function loadShowData(): ShowItem[] {
   return [];
 }
 
-function saveLocalShowData(data: ShowItem[]): void {
+export function saveLocalShowData(data: ShowItem[]): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch {
     // ignore storage errors
   }
+}
+
+export function readLocalVersion(): number | null {
+  try {
+    const v = localStorage.getItem(VERSION_KEY);
+    if (v === null) return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeLocalVersion(v: number | null): void {
+  try {
+    if (v === null) localStorage.removeItem(VERSION_KEY);
+    else localStorage.setItem(VERSION_KEY, String(v));
+  } catch {
+    // ignore
+  }
+}
+
+/** 导入前备份，返回备份 key */
+export function backupShowData(): string {
+  const key = `${STORAGE_KEY}_backup_${Date.now()}`;
+  try {
+    localStorage.setItem(key, JSON.stringify(loadShowData()));
+  } catch {}
+  return key;
 }
 
 // ─── Supabase 读写 ───
@@ -303,7 +332,7 @@ export async function syncShowData(): Promise<ShowItem[]> {
       .range(from, from + PAGE_SIZE - 1);
 
     if (error) {
-      console.warn("[shows] sync failed:", error.message);
+      if (import.meta.env.DEV) console.warn("[shows] sync failed:", error.message);
       return loadShowData();
     }
 
@@ -316,90 +345,204 @@ export async function syncShowData(): Promise<ShowItem[]> {
     }
   }
 
-    const items = allRows.map(fromDbRow);
+  const items = allRows.map(fromDbRow);
   const localData = loadShowData();
-  
+
   // 合并：保留云端数据 + 本地独有的数据（防止未上传成功的数据被覆盖）
-  const remoteIds = new Set(items.map(i => i.id));
-  const merged = [...items, ...localData.filter(i => !remoteIds.has(i.id))];
-  
+  const remoteIds = new Set(items.map((i) => i.id));
+  const merged = [...items, ...localData.filter((i) => !remoteIds.has(i.id))];
+
   saveLocalShowData(merged);
   recordSyncTime();
+
+  // 回写本地版本号
+  try {
+    const v = await readShowsVersion();
+    writeLocalVersion(v);
+  } catch {
+    // ignore
+  }
+
   return merged;
 }
 
-  export async function saveShowData(data: ShowItem[]): Promise<{ error: string | null }> {
-  // 按 ID 去重，保留最后一个
-  const uniqueData = Array.from(
-    new Map(data.map((item) => [item.id, item])).values()
+export interface ShowSaveResult {
+  error: string | null;
+  /** 检测到 ID 重复被丢弃的条目 */
+  conflicts?: { id: string; kept: ShowItem; dropped: ShowItem }[];
+  /** 乐观锁冲突：写入前发现云端版本已变化，本次未写入 */
+  conflict?: boolean;
+  /** 冲突时的云端当前版本 */
+  remoteVersion?: number | null;
+  /** 成功后的新版本 */
+  version?: number | null;
+  /** 是否可重试（网络类错误） */
+  retriable?: boolean;
+}
+
+export interface SaveShowOptions {
+  /** 客户端上次见到的版本号；传了则做严格乐观锁 */
+  expectedVersion?: number | null;
+  /** 是否允许删除云端多余行（默认 false，避免误删） */
+  allowRemoteDelete?: boolean;
+}
+
+function isNetworkError(e: unknown): boolean {
+  const m = String((e as { message?: string })?.message ?? e).toLowerCase();
+  return (
+    m.includes("fetch") ||
+    m.includes("network") ||
+    m.includes("timeout") ||
+    m.includes("failed to fetch") ||
+    m.includes("503") ||
+    m.includes("502") ||
+    m.includes("504")
   );
+}
 
-  // 如果已有保存正在进行，等待它完成后再执行新的，避免并发竞态
-  if (saveShowDataPromise) {
-    await saveShowDataPromise;
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function saveShowData(
+  data: ShowItem[],
+  options: SaveShowOptions = {}
+): Promise<ShowSaveResult> {
+  // ① 按 ID 去重，保留第一个，记录被丢弃项
+  const seen = new Map<string, ShowItem>();
+  const conflicts: { id: string; kept: ShowItem; dropped: ShowItem }[] = [];
+  for (const item of data) {
+    const prev = seen.get(item.id);
+    if (prev) conflicts.push({ id: item.id, kept: prev, dropped: item });
+    else seen.set(item.id, item);
   }
+  if (conflicts.length && import.meta.env.DEV) {
+    console.error("[saveShowData] 检测到重复 ID，已丢弃:", conflicts);
+  }
+  const uniqueData = [...seen.values()];
 
-  saveShowDataPromise = (async (): Promise<{ error: string | null }> => {
-    console.log("[saveShowData] 开始保存", uniqueData.length, "条数据");  // ✅ 改成 uniqueData.length
-    saveLocalShowData(uniqueData);  // ✅ 改成 uniqueData
+  // ② 串行化
+  if (saveShowDataPromise) await saveShowDataPromise;
+
+  saveShowDataPromise = (async (): Promise<ShowSaveResult> => {
+    // ③ 本地先落盘，保证离线可用
+    saveLocalShowData(uniqueData);
+    writeLocalVersion(options.expectedVersion ?? null);
+
     if (!isSupabaseConfigured()) {
-      console.warn("[saveShowData] Supabase 未配置，仅保存到 localStorage");
-      return { error: null };
+      return { error: null, conflicts, version: null };
     }
+
+    // ④ 乐观锁前置检查
+    const remoteV = await readShowsVersion();
+    if (options.expectedVersion != null && remoteV != null && remoteV !== options.expectedVersion) {
+      return {
+        error: `云端数据已被其他端修改（本地 v${options.expectedVersion} / 云端 v${remoteV}）`,
+        conflict: true,
+        remoteVersion: remoteV,
+        retriable: false,
+        conflicts,
+      };
+    }
+
+    // ⑤ 字段级合并：拉取远端，本地空字段用远端补齐（防止抹掉 Worker 更新的播放量）
+    let remoteMap = new Map<string, Record<string, unknown>>();
+    try {
+      const PAGE_SIZE = 100;
+      let allRemote: any[] = [];
+      let from = 0;
+      let hasMore = true;
+      while (hasMore) {
+        const { data: remoteRows, error } = await supabase
+          .from("shows")
+          .select("id,views,date,duration")
+          .range(from, from + PAGE_SIZE - 1);
+        if (error) break;
+        if (remoteRows && remoteRows.length > 0) {
+          allRemote = allRemote.concat(remoteRows);
+          hasMore = remoteRows.length === PAGE_SIZE;
+          from += PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
+      }
+      remoteMap = new Map(allRemote.map((r) => [String(r.id), r]));
+    } catch {
+      // 拉取远端失败不影响写入，只是无法做字段级合并
+    }
+
+    const merged = uniqueData.map((it) => {
+      const r = remoteMap.get(it.id);
+      if (!r) return it;
+      return {
+        ...it,
+        views: it.views || String(r.views ?? ""),
+        date: it.date || String(r.date ?? ""),
+        duration: it.duration || String(r.duration ?? ""),
+      };
+    });
+
+    // ⑥ 分批 upsert
     const BATCH_SIZE = 20;
-    const rows = uniqueData.map(toDbRow);
-    console.log("[saveShowData] 准备 upsert", rows.length, "条, 分", Math.ceil(rows.length / BATCH_SIZE), "批");
-
-    // 分批 upsert，避免单请求过大导致超时或失败
-    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-      const batch = rows.slice(i, i + BATCH_SIZE);
-      console.log(`[saveShowData] upsert 批次 ${Math.floor(i / BATCH_SIZE) + 1}:`, batch.map((r) => r.id));
-      const { error, data: upsertData } = await supabase.from("shows").upsert(batch, { onConflict: "id" }).select();
-      if (error) {
-        console.error(`[shows] upsert batch ${i + 1} failed:`, error.message, error);
-        return { error: `保存批次 ${Math.floor(i / BATCH_SIZE) + 1} 失败: ${error.message}` };
-      }
-      console.log(`[saveShowData] upsert 批次 ${Math.floor(i / BATCH_SIZE) + 1} 成功:`, upsertData?.length || 0, "条");
-    }
-    recordSyncTime();
-
-    // upsert 后验证：直接查询数据库确认数据真的写入了
-    const { data: verifyData, error: verifyErr } = await supabase.from("shows").select("id,title").limit(200);
-    if (verifyErr) {
-      console.error("[saveShowData] 验证查询失败:", verifyErr.message);
-    } else {
-      console.log("[saveShowData] 验证查询: 数据库中共有", verifyData?.length || 0, "条记录");
-      console.log("[saveShowData] 数据库中的 IDs:", verifyData?.map((r: any) => r.id));
-    }
-
-    // 分批 delete：先获取所有远程 ID，找出不在 currentIds 中的，分批删除
-    if (uniqueData.length === 0) {
-      console.log("[saveShowData] data 为空，跳过删除");
-      return { error: null };
-    }
-    const currentIds = new Set(uniqueData.map((d) => d.id));
-   const { data: remoteRows, error: fetchErr } = await supabase.from("shows").select("id").limit(9995);
-    if (fetchErr) {
-      console.warn("[shows] fetch ids for delete failed:", fetchErr.message);
-      return { error: null }; // upsert 已成功，delete 失败不致命
-    }
-
-    const idsToDelete = (remoteRows || [])
-      .filter((r: any) => !currentIds.has(r.id))
-      .map((r: any) => r.id);
-    console.log("[saveShowData] 需要删除的 IDs:", idsToDelete);
-
-    for (let i = 0; i < idsToDelete.length; i += BATCH_SIZE) {
-      const batch = idsToDelete.slice(i, i + BATCH_SIZE);
-      console.log("[saveShowData] delete 批次", batch);
-      const { error: delError } = await supabase.from("shows").delete().in("id", batch);
-      if (delError) {
-        console.warn("[shows] delete batch failed:", delError.message);
+    for (let i = 0; i < merged.length; i += BATCH_SIZE) {
+      const batch = merged.slice(i, i + BATCH_SIZE).map(toDbRow);
+      try {
+        const { error } = await supabase.from("shows").upsert(batch, { onConflict: "id" });
+        if (error) {
+          return {
+            error: `保存批次 ${Math.floor(i / BATCH_SIZE) + 1} 失败: ${error.message}`,
+            retriable: isNetworkError(error),
+            conflicts,
+          };
+        }
+      } catch (e) {
+        return {
+          error: `保存批次 ${Math.floor(i / BATCH_SIZE) + 1} 失败: ${String(e)}`,
+          retriable: isNetworkError(e),
+          conflicts,
+        };
       }
     }
 
-    console.log("[saveShowData] 保存完成");
-    return { error: null };
+    // ⑦ 可选删除云端多余行（默认关闭）
+    if (options.allowRemoteDelete && merged.length >= 0) {
+      try {
+        const currentIds = new Set(merged.map((d) => d.id));
+        const { data: remoteRows, error: fetchErr } = await supabase
+          .from("shows")
+          .select("id")
+          .limit(9995);
+        if (!fetchErr && remoteRows) {
+          const idsToDelete = remoteRows
+            .filter((r: any) => !currentIds.has(String(r.id)))
+            .map((r: any) => String(r.id));
+          for (let i = 0; i < idsToDelete.length; i += BATCH_SIZE) {
+            const batch = idsToDelete.slice(i, i + BATCH_SIZE);
+            await supabase.from("shows").delete().in("id", batch);
+          }
+        }
+      } catch {
+        // delete 失败不致命
+      }
+    }
+
+    // ⑧ bump 版本；失败说明并发写入，仍算成功但告警
+    const baseVersion = remoteV ?? 0;
+    const bump = await bumpShowsVersion(baseVersion);
+    const version = bump.ok ? bump.current : remoteV;
+    writeLocalVersion(version);
+
+    if (!bump.ok) {
+      return {
+        error: "保存成功，但检测到其他端并发写入，请刷新确认",
+        conflict: true,
+        version,
+        retriable: false,
+        conflicts,
+      };
+    }
+
+    return { error: null, version, conflicts };
   })();
 
   const result = await saveShowDataPromise;
@@ -407,34 +550,53 @@ export async function syncShowData(): Promise<ShowItem[]> {
   return result;
 }
 
-export async function addShowItem(item: ShowItem): Promise<void> {
+export async function saveShowDataWithRetry(
+  data: ShowItem[],
+  options: SaveShowOptions & { retries?: number } = {}
+): Promise<ShowSaveResult> {
+  const retries = options.retries ?? 3;
+  let last: ShowSaveResult = { error: "未执行保存" };
+  for (let i = 0; i <= retries; i++) {
+    last = await saveShowData(data, options);
+    if (!last.error) return last;
+    if (!last.retriable || last.conflict) return last;
+    if (i < retries) await sleep(1000 * 2 ** i);
+  }
+  return last;
+}
+
+export async function addShowItem(item: ShowItem): Promise<ShowSaveResult> {
   let current = loadShowData();
   if (current.length === 0) {
     current = await syncShowData();
   }
   const updated = [...current, item];
-  await saveShowData(updated);
+  return saveShowData(updated);
 }
 
-export async function updateShowItem(item: ShowItem): Promise<void> {
+export async function updateShowItem(item: ShowItem): Promise<ShowSaveResult> {
   let current = loadShowData();
   if (current.length === 0) {
     current = await syncShowData();
   }
   const updated = current.map((s) => (s.id === item.id ? item : s));
-  await saveShowData(updated);
+  return saveShowData(updated);
 }
 
-export async function deleteShowItem(id: string): Promise<void> {
+export async function deleteShowItem(id: string): Promise<{ error: string | null }> {
   const current = loadShowData();
   const updated = current.filter((s) => s.id !== id);
   saveLocalShowData(updated);
-  if (!isSupabaseConfigured()) return;
+  if (!isSupabaseConfigured()) return { error: null };
   const { error } = await supabase.from("shows").delete().eq("id", id);
   if (error) {
-    console.warn("[shows] delete from supabase failed:", error.message);
+    // 云端删除失败，恢复本地
+    saveLocalShowData(current);
+    return { error: error.message };
   }
+  return { error: null };
 }
+
 export async function resetShowData(): Promise<ShowItem[]> {
   const data = JSON.parse(JSON.stringify(initialShowData));
   await saveShowData(data);
@@ -468,22 +630,12 @@ export const memberColors: Record<ShowMember, string> = {
 
 /** 从 YouTube URL 中提取视频 ID */
 export function extractYouTubeId(url: string): string | null {
-  if (!url) return null;
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/|youtube\.com\/live\/)([a-zA-Z0-9_-]{11})/,
-  ];
-  for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match && match[1]) return match[1];
-  }
-  return null;
+  return normalizeExtractYouTubeId(url);
 }
 
-/** 从 Bilibili URL 中提取 BV 号 */
+/** 从 Bilibili URL 中提取 BV/av 号 */
 export function extractBilibiliId(url: string): string | null {
-  if (!url) return null;
-  const match = url.match(/bilibili\.com\/video\/(BV[a-zA-Z0-9]+)/);
-  return match && match[1] ? match[1] : null;
+  return normalizeExtractBilibiliId(url);
 }
 
 /** 获取 YouTube 缩略图 URL */
@@ -507,7 +659,7 @@ export function isYouTubeLink(url: string): boolean {
 
 /** 判断链接是否为 Bilibili */
 export function isBilibiliLink(url: string): boolean {
-  return /bilibili\.com/.test(url);
+  return /bilibili\.com|b23\.tv/.test(url);
 }
 
 /**
@@ -519,13 +671,13 @@ export function getPreferredThumbnail(item: ShowItem): string | null {
   if (item.thumbnailFrom && /^https?:\/\//.test(item.thumbnailFrom)) {
     return item.thumbnailFrom;
   }
-  
+
   // 优先从缓存元数据获取（Worker 抓取的真实缩略图，包含直播封面）
   const cachedMeta = getCachedMetadata(item.id);
   if (cachedMeta?.thumbnail) {
     return cachedMeta.thumbnail;
   }
-  
+
   // 其次从 YouTube 链接生成缩略图
   for (const link of item.links) {
     if (isYouTubeLink(link.url)) {
@@ -535,7 +687,7 @@ export function getPreferredThumbnail(item: ShowItem): string | null {
       if (thumbHq) return thumbHq;
     }
   }
-  
+
   return null;
 }
 
@@ -608,7 +760,7 @@ export function getCachedMetadata(itemId: string): VideoMetadata | null {
       if (isYouTubeLink(link.url)) {
         const videoId = extractYouTubeId(link.url);
         if (videoId) {
-          const preKey = 'yt:' + videoId;
+          const preKey = "yt:" + videoId;
           const preFetched = (videoPreFetch as Record<string, VideoMetadata>)[preKey];
           if (preFetched) {
             // 预取数据视为新鲜缓存，更新 fetchedAt 为当前时间
@@ -618,7 +770,7 @@ export function getCachedMetadata(itemId: string): VideoMetadata | null {
       } else if (isBilibiliLink(link.url)) {
         const bvid = extractBilibiliId(link.url);
         if (bvid) {
-          const preKey = 'bl:' + bvid;
+          const preKey = "bl:" + bvid;
           const preFetched = (videoPreFetch as Record<string, VideoMetadata>)[preKey];
           if (preFetched) {
             // 预取数据视为新鲜缓存，更新 fetchedAt 为当前时间
@@ -702,9 +854,7 @@ async function fetchBilibiliMetadata(bvid: string): Promise<VideoMetadata | null
         const data = await resp.json();
         if (data?.code === 0 && data?.data) {
           const d = data.data;
-          const pubDate = d.pubdate
-            ? new Date(d.pubdate * 1000).toISOString().split("T")[0]
-            : undefined;
+          const pubDate = d.pubdate ? new Date(d.pubdate * 1000).toISOString().split("T")[0] : undefined;
           return {
             thumbnail: d.pic || undefined,
             duration: d.duration ? formatDuration(d.duration) : undefined,
@@ -731,9 +881,7 @@ async function fetchBilibiliMetadata(bvid: string): Promise<VideoMetadata | null
       const data = await resp.json();
       if (data?.code !== 0 || !data?.data) continue;
       const d = data.data;
-      const pubDate = d.pubdate
-        ? new Date(d.pubdate * 1000).toISOString().split("T")[0]
-        : undefined;
+      const pubDate = d.pubdate ? new Date(d.pubdate * 1000).toISOString().split("T")[0] : undefined;
       return {
         thumbnail: d.pic || undefined,
         duration: d.duration ? formatDuration(d.duration) : undefined,
@@ -762,7 +910,7 @@ async function fetchYouTubeMetadata(videoId: string): Promise<VideoMetadata | nu
     const info = await fetchVideoInfo(watchUrl);
     // 只有当 fetchVideoInfo 返回有效标题时，才视为成功
     if (!info.title) {
-      console.warn(`[youtube] ${videoId}: fetchVideoInfo returned empty title`);
+      if (import.meta.env.DEV) console.warn(`[youtube] ${videoId}: fetchVideoInfo returned empty title`);
       return null;
     }
     return {
@@ -775,7 +923,7 @@ async function fetchYouTubeMetadata(videoId: string): Promise<VideoMetadata | nu
       fetchedAt: Date.now(),
     };
   } catch (e) {
-    console.warn(`[youtube] ${videoId}: fetchVideoInfo failed`, e);
+    if (import.meta.env.DEV) console.warn(`[youtube] ${videoId}: fetchVideoInfo failed`, e);
     return null;
   }
 }
@@ -830,7 +978,7 @@ export async function fetchShowMetadata(
         }
       }
     } catch (e) {
-      console.log("API fetch failed:", e);
+      if (import.meta.env.DEV) console.log("API fetch failed:", e);
     }
   }
 
@@ -1007,7 +1155,6 @@ export function getPlatformStyle(platform: string) {
   return platformStyles[platform] || platformStyles["其他"];
 }
 
-
 // ==================== 实时同步 ====================
 
 /** 订阅 shows 表实时变更（INSERT / UPDATE / DELETE） */
@@ -1016,12 +1163,14 @@ export function subscribeShowChanges(onChange: (items: ShowItem[]) => void): () 
   const channel = supabase
     .channel("shows_realtime")
     .on("postgres_changes", { event: "*", schema: "public", table: "shows" }, async () => {
-      console.log("[realtime] shows updated");
+      if (import.meta.env.DEV) console.log("[realtime] shows updated");
       const fresh = await syncShowData();
       onChange(fresh);
     })
     .subscribe();
-  return () => { supabase.removeChannel(channel); };
+  return () => {
+    supabase.removeChannel(channel);
+  };
 }
 
 /** 检查远程是否有更新，有则同步并返回新数据 */
@@ -1030,7 +1179,7 @@ export async function checkRemoteUpdates(): Promise<ShowItem[] | null> {
   const { count, error } = await supabase.from("shows").select("*", { count: "exact", head: true });
   if (error) return null;
   if (count !== null && count !== loadShowData().length) {
-    console.log("[sync] remote count changed, refreshing...");
+    if (import.meta.env.DEV) console.log("[sync] remote count changed, refreshing...");
     return syncShowData();
   }
   // 每 5 分钟强制全量对比一次（防止删一条加一条导致 count 不变）
@@ -1042,16 +1191,17 @@ export async function checkRemoteUpdates(): Promise<ShowItem[] | null> {
   return null;
 }
 
-
 // ==================== 服务端元数据刷新 ====================
 
 /**
  * 立即刷新单个视频的元数据（调用 Worker）
  * 用于管理员添加/更新视频后，立即获取最新播放量
  */
-export async function refreshSingleShowMetadata(item: ShowItem): Promise<{ error: string | null; metadata?: any }> {
-  const youtubeLink = item.links.find(l => isYouTubeLink(l.url));
-  const bilibiliLink = item.links.find(l => isBilibiliLink(l.url));
+export async function refreshSingleShowMetadata(
+  item: ShowItem
+): Promise<{ error: string | null; metadata?: any }> {
+  const youtubeLink = item.links.find((l) => isYouTubeLink(l.url));
+  const bilibiliLink = item.links.find((l) => isBilibiliLink(l.url));
 
   if (!youtubeLink && !bilibiliLink) {
     return { error: null };
@@ -1066,8 +1216,8 @@ export async function refreshSingleShowMetadata(item: ShowItem): Promise<{ error
     if (videoId) params.append("videoId", videoId);
     if (bvid) params.append("bvid", bvid);
 
-    const resp = await fetch(`/api/refresh-show?${params.toString()}`, { 
-      signal: AbortSignal.timeout(30000) 
+    const resp = await fetch(`/api/refresh-show?${params.toString()}`, {
+      signal: AbortSignal.timeout(30000),
     });
     if (!resp.ok) {
       return { error: `刷新失败: HTTP ${resp.status}` };
@@ -1090,9 +1240,9 @@ export async function refreshSingleShowMetadata(item: ShowItem): Promise<{ error
  */
 export async function batchRefreshMetadata(): Promise<{ error: string | null; updated?: number }> {
   try {
-    const resp = await fetch('/api/refresh-all-shows', { 
-      method: 'POST',
-      signal: AbortSignal.timeout(120000) 
+    const resp = await fetch("/api/refresh-all-shows", {
+      method: "POST",
+      signal: AbortSignal.timeout(120000),
     });
     if (!resp.ok) {
       return { error: `批量刷新失败: HTTP ${resp.status}` };

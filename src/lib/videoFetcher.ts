@@ -8,6 +8,12 @@
  * 缓存策略：URL → 结果缓存到 localStorage（key: URL 的 hash），24 小时 TTL。
  */
 import videoPreFetch from "@/data/video-meta.json";
+import {
+  detectPlatform as normalizeDetectPlatform,
+  extractYouTubeId as normalizeExtractYouTubeId,
+  extractBilibiliId as normalizeExtractBilibiliId,
+  normalizeVideoUrl,
+} from "./urlNormalize";
 
 // ==================== 类型定义 ====================
 
@@ -78,16 +84,10 @@ function saveCache(cache: Record<string, CacheEntry>): void {
 }
 
 function getCacheKey(url: string): string {
-  // 对于 YouTube 链接，使用 videoId 作为 key，避免不同 URL 格式产生不同缓存
-  const ytId = extractYouTubeId(url);
-  if (ytId) {
-    return `yt:${ytId}`;
-  }
-
-  // Bilibili 同理
-  const bvid = extractBilibiliId(url);
-  if (bvid) {
-    return `bl:${bvid}`;
+  // 优先使用规范化后的去重键，与导入去重保持一致并提高缓存命中率
+  const normalized = normalizeVideoUrl(url);
+  if (normalized) {
+    return normalized.dedupeKey;
   }
 
   // 其他链接用 URL hash
@@ -100,47 +100,26 @@ function getCacheKey(url: string): string {
 
 // ==================== 平台识别 ====================
 
-export function detectPlatform(
-  url: string
-): "youtube" | "bilibili" | "unknown" {
-  if (/youtube\.com|youtu\.be/.test(url)) return "youtube";
-  if (/bilibili\.com|b23\.tv/.test(url)) return "bilibili";
-  return "unknown";
+export function detectPlatform(url: string): "youtube" | "bilibili" | "unknown" {
+  return normalizeDetectPlatform(url);
 }
 
 // ==================== URL 解析 ====================
 
 export function extractYouTubeId(url: string): string | null {
-  if (!url) return null;
-  // 直接输入 11 位 videoId
-  if (/^[a-zA-Z0-9_-]{11}$/.test(url.trim())) return url.trim();
-  // URL 格式提取
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/|youtube\.com\/live\/)([a-zA-Z0-9_-]{11})/,
-  ];
-  for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match && match[1]) return match[1];
-  }
-  return null;
+  return normalizeExtractYouTubeId(url);
 }
 
 /**
- * 从 Bilibili 链接中提取 BV 号。
+ * 从 Bilibili 链接中提取 BV/av 号。
  * 支持格式：
  * - https://www.bilibili.com/video/BV1xx411c7mD
  * - https://m.bilibili.com/video/BV1xx411c7mD
  * - https://b23.tv/BV1xx411c7mD
+ * - https://www.bilibili.com/video/av123456
  */
 export function extractBilibiliId(url: string): string | null {
-  if (!url) return null;
-  // bilibili.com 完整链接（含移动端 m. 前缀）
-  const fullMatch = url.match(/bilibili\.com\/video\/(BV[a-zA-Z0-9]+)/);
-  if (fullMatch) return fullMatch[1];
-  // b23.tv 短链接中直接包含 BV 号
-  const b23Match = url.match(/b23\.tv\/(BV[a-zA-Z0-9]+)/i);
-  if (b23Match) return b23Match[1];
-  return null;
+  return normalizeExtractBilibiliId(url);
 }
 
 // ==================== 工具函数 ====================
