@@ -23,7 +23,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  loadShowData,
   saveShowData,
   syncShowData,
   fromDbRow,
@@ -300,16 +299,7 @@ export default function ShowsPage() {
   }, [rtShowData, isAdmin]);
 
   useEffect(() => {
-    // 优先同步读取本地缓存：有缓存先渲染，避免每次切页都显示加载动画
-    const local = loadShowData();
-    if (local.length > 0 && !userModifiedRef.current) {
-      setShowData(local);
-      setIsLoading(false);
-    } else {
-      setIsLoading(true);
-    }
-
-    // 后台同步云端最新数据
+    setIsLoading(true);
     syncShowData()
       .then((synced) => {
         if (!userModifiedRef.current) {
@@ -943,14 +933,6 @@ export default function ShowsPage() {
                               className="w-full h-full object-cover"
                               onError={(e) => {
                                 const target = e.currentTarget;
-                                const currentSrc = target.src;
-                                // YouTube maxresdefault 失败时降级到 hqdefault
-                                const maxresMatch = currentSrc.match(/\/vi\/([a-zA-Z0-9_-]{11})\/maxresdefault\.jpg/);
-                                if (maxresMatch && !target.dataset.triedFallback) {
-                                  target.dataset.triedFallback = "true";
-                                  target.src = `https://images.weserv.nl/?url=${encodeURIComponent(`https://img.youtube.com/vi/${maxresMatch[1]}/hqdefault.jpg`)}&n=-1`;
-                                  return;
-                                }
                                 target.style.display = "none";
                                 if (target.parentElement) {
                                   target.parentElement.style.background = `linear-gradient(135deg, ${item.thumbnailFrom}, ${item.thumbnailTo})`;
