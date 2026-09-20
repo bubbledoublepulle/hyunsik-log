@@ -20,11 +20,10 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  ListPlus,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  loadShowData,
-  saveShowData,
   saveShowDataWithRetry,
   syncShowData,
   fromDbRow,
@@ -37,8 +36,6 @@ import {
   getCachedMetadata,
   isCacheStale,
   readLocalVersion,
-  writeLocalVersion,
-  backupShowData,
   deleteShowItem,
   type ShowItem,
   type ShowMember,
@@ -278,6 +275,7 @@ export default function ShowsPage() {
   const [batchEditMode, setBatchEditMode] = useState(false);
 
   const [importOpen, setImportOpen] = useState(false);
+  const [clearAllOpen, setClearAllOpen] = useState(false);
 
   const showDataRef = useRef<ShowItem[]>([]);
   const savingRef = useRef(false);
@@ -583,7 +581,6 @@ export default function ShowsPage() {
       savedCount?: number;
     }> => {
       const current = showDataRef.current;
-      const byId = new Map(current.map((i) => [i.id, i]));
       const merged = [...current];
       for (const it of items) {
         const idx = merged.findIndex((x) => x.id === it.id);
@@ -620,6 +617,19 @@ export default function ShowsPage() {
 
     localDirtyRef.current.delete(item.id);
     toast.success("已删除", { description: item.title });
+  };
+
+  const handleClearAll = async () => {
+    const original = showData;
+    setShowData([]);
+    const res = await persist([], { allowRemoteDelete: true });
+    if (!res.ok) {
+      toast.error("清空失败", { description: res.error });
+      setShowData(original);
+      return;
+    }
+    localDirtyRef.current.clear();
+    toast.success("已清空全部档案", { description: "云端与本地数据已重置" });
   };
 
   const toggleBatchSelect = (id: string) => {
@@ -903,6 +913,13 @@ export default function ShowsPage() {
                       </button>
                     </>
                   )}
+                  <button
+                    onClick={() => setClearAllOpen(true)}
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-sm bg-red-50 text-red-600 hover:bg-red-100 border border-red-200/60 text-sm font-medium transition-colors shadow-sm whitespace-nowrap"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    清空全部
+                  </button>
                 </div>
               )}
             </div>
@@ -1186,8 +1203,36 @@ export default function ShowsPage() {
                   <div className="w-16 h-16 rounded-full bg-steel-50/70 border border-steel-200/60 flex items-center justify-center mb-3">
                     <Tv className="w-8 h-8 text-steel-400" />
                   </div>
-                  <p className="text-sm text-steel-500/70 mb-1">没有找到匹配的综艺档案</p>
-                  <p className="text-xs text-steel-500/50">尝试调整筛选条件或清除筛选</p>
+                  {showData.length === 0 ? (
+                    <>
+                      <p className="text-sm text-steel-500/70 mb-1">还没有任何综艺档案</p>
+                      <p className="text-xs text-steel-500/50 mb-1">管理员可点击右上角添加或导入视频</p>
+                      <p className="text-[10px] text-steel-400/50 mb-4">若仍看到旧示例数据，请清除浏览器网站数据后刷新</p>
+                      {isAdmin && (
+                        <div className="flex flex-wrap gap-2 justify-center">
+                          <button
+                            onClick={handleAdd}
+                            className="flex items-center gap-1.5 px-4 py-2 rounded-sm bg-steel-500 text-white text-sm font-medium hover:bg-steel-600 transition-colors"
+                          >
+                            <Plus className="w-4 h-4" />
+                            添加综艺
+                          </button>
+                          <button
+                            onClick={() => setImportOpen(true)}
+                            className="flex items-center gap-1.5 px-4 py-2 rounded-sm bg-white/50 text-steel-600 border border-steel-200/60 text-sm font-medium hover:bg-white/70 transition-colors"
+                          >
+                            <ListPlus className="w-4 h-4" />
+                            批量导入
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm text-steel-500/70 mb-1">没有找到匹配的综艺档案</p>
+                      <p className="text-xs text-steel-500/50">尝试调整筛选条件或清除筛选</p>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -1208,6 +1253,7 @@ export default function ShowsPage() {
         }}
       />
       <DeleteConfirmDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => deleteTarget && handleDelete(deleteTarget)} title="删除综艺" message={`确定要删除「${deleteTarget?.title}」吗？此操作不可撤销。`} />
+      <DeleteConfirmDialog open={clearAllOpen} onClose={() => setClearAllOpen(false)} onConfirm={handleClearAll} title="清空全部综艺档案" message="确定要清空所有视频档案吗？此操作会删除云端全部 shows 数据且不可撤销。建议先导出备份。" />
       <ScrollToTop />
     </div>
   );

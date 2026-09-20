@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X,
@@ -11,6 +11,7 @@ import {
   Clock,
   Save,
   RotateCcw,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { ShowItem, ShowMember, ArchiveStatus } from "@/lib/showData";
@@ -387,7 +388,7 @@ export default function ShowImportPreviewModal({
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-white">批量导入视频档案</h2>
-                  <p className="text-xs text-white/80">
+                  <p className={`text-xs ${step === "preview" && hasIssues ? "text-amber-200" : "text-white/80"}`}>
                     {step === "input" && "粘贴 YouTube / Bilibili 链接"}
                     {step === "parsing" && "正在解析链接..."}
                     {step === "preview" && `新增 ${previewItems.length} · 重复 ${duplicateRows.length} · 失败 ${parseFailures.length} · 无法识别 ${unparsableRows.length}`}

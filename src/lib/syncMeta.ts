@@ -16,11 +16,11 @@ export async function readShowsVersion(): Promise<number | null> {
   }
   if (!data) {
     // 首次使用：补建行（忽略冲突）
-    await supabase
-      .from("sync_meta")
-      .insert({ id: SHOWS_META_ID, version: 0 })
-      .then(() => {})
-      .catch(() => {});
+    try {
+      await supabase.from("sync_meta").insert({ id: SHOWS_META_ID, version: 0 });
+    } catch {
+      // ignore
+    }
     return 0;
   }
   return Number(data.version);

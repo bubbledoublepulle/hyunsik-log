@@ -1,4 +1,5 @@
 import type { ShowItem } from "./showData";
+import type { NormalizedVideoRef } from "./urlNormalize";
 
 const QUEUE_KEY = "hsik_import_queue_v1";
 const PREVIEW_KEY = "hsik_import_preview_v1";
@@ -31,7 +32,7 @@ export interface ImportPreviewDraft {
   version: 1;
   createdAt: number;
   items: ShowItem[];
-  duplicates: { dedupeKey: string; url: string; existingShowId: string }[];
+  duplicates: { ref: NormalizedVideoRef; rawUrl: string; existingShowId: string }[];
 }
 
 function generateJobId(): string {

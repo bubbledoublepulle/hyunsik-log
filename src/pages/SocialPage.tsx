@@ -49,7 +49,6 @@ import {
 import { toast } from "sonner";
 import { fetchLinkPreview, type LinkPreview } from "@/lib/linkPreviewFetcher";
 import {
-  loadSocialData,
   saveSocialData,
   syncSocialData,
   socialCategories,

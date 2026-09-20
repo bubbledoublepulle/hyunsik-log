@@ -64,139 +64,14 @@ export interface VideoMetadata {
   fetchedAt: number;
 }
 
-export const initialShowData: ShowItem[] = [
-  {
-    id: "s01",
-    title: "BTOB的卡拉OK出击",
-    platform: "Mnet",
-    date: "2024-03-12",
-    duration: "1:15:00",
-    views: "280万",
-    members: ["任炫植", "李旼赫", "陆星材"],
-    status: "已补档",
-    thumbnailFrom: "#42B4E6",
-    thumbnailTo: "#1A5A7A",
-    description: "成员们挑战经典歌曲翻唱，展现音乐实力与即兴合作。",
-    links: [
-      { platform: "YouTube", url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" },
-      { platform: "Bilibili", url: "https://www.bilibili.com/video/BV1xx411c7mD" },
-    ],
-  },
-  {
-    id: "s02",
-    title: "任炫植的深夜电台",
-    platform: "NAVER NOW",
-    date: "2024-06-20",
-    duration: "48:00",
-    views: "120万",
-    members: ["任炫植"],
-    status: "已补档",
-    thumbnailFrom: "#667EEA",
-    thumbnailTo: "#764BA2",
-    description: "炫植独自主持的深夜音乐电台，分享创作故事与歌曲推荐。",
-    links: [{ platform: "YouTube", url: "https://www.youtube.com/watch?v=9bZkp7q19f0" }],
-  },
-  {
-    id: "s03",
-    title: "认识的哥哥 EP 450",
-    platform: "JTBC",
-    date: "2023-11-04",
-    duration: "1:10:00",
-    views: "520万",
-    members: ["任炫植", "徐恩光", "李昌燮", "陆星材"],
-    status: "已补档",
-    thumbnailFrom: "#F093FB",
-    thumbnailTo: "#F5576C",
-    description: "BTOB全体成员出演，搞笑互动与现场演唱环节。",
-    links: [
-      { platform: "YouTube", url: "https://www.youtube.com/watch?v=kJQP7kiw5Fk" },
-      { platform: "Bilibili", url: "https://www.bilibili.com/video/BV1GJ411x7h7" },
-    ],
-  },
-  {
-    id: "s04",
-    title: "Weekly Idol BTOB特辑",
-    platform: "MBC",
-    date: "2023-08-15",
-    duration: "55:00",
-    views: "340万",
-    members: ["BTOB"],
-    status: "已补档",
-    thumbnailFrom: "#4FAC50",
-    thumbnailTo: "#00BBF9",
-    description: "Weekly Idol经典环节，随机舞蹈与偶像游戏挑战。",
-    links: [{ platform: "YouTube", url: "https://www.youtube.com/watch?v=60uiZM9jD6M" }],
-  },
-  {
-    id: "s05",
-    title: "炫植的厨房日记",
-    platform: "V LIVE",
-    date: "2024-01-30",
-    duration: "35:00",
-    views: "85万",
-    members: ["任炫植"],
-    status: "待补档",
-    thumbnailFrom: "#FA709A",
-    thumbnailTo: "#FEE140",
-    description: "炫植在家制作料理的治愈系直播记录。",
-    links: [{ platform: "V LIVE", url: "https://www.vlive.tv" }],
-  },
-  {
-    id: "s06",
-    title: "BTOB 12周年纪念直播",
-    platform: "Weverse",
-    date: "2024-03-21",
-    duration: "2:00:00",
-    views: "410万",
-    members: ["BTOB"],
-    status: "已补档",
-    thumbnailFrom: "#30CFD0",
-    thumbnailTo: "#330867",
-    description: "出道12周年纪念直播，成员回顾与粉丝互动。",
-    links: [
-      { platform: "Weverse", url: "https://weverse.io" },
-      { platform: "YouTube", url: "https://www.youtube.com/watch?v=OPf0YbXqDm0" },
-    ],
-  },
-  {
-    id: "s07",
-    title: "炫植 & 旼赫的音乐对谈",
-    platform: "NAVER NOW",
-    date: "2024-05-14",
-    duration: "42:00",
-    views: "95万",
-    members: ["任炫植", "李旼赫"],
-    status: "待补档",
-    thumbnailFrom: "#A8EDEA",
-    thumbnailTo: "#FED6E3",
-    description: "两位音乐制作人的深度对谈，聊创作理念与灵感来源。",
-    links: [
-      { platform: "YouTube", url: "https://www.youtube.com/watch?v=RubBzkZzpRA" },
-      { platform: "Bilibili", url: "https://www.bilibili.com/video/BV1uv411q7iM" },
-    ],
-  },
-  {
-    id: "s08",
-    title: "RUN BTOB Season 2",
-    platform: "YouTube",
-    date: "2024-09-08",
-    duration: "1:30:00",
-    views: "230万",
-    members: ["任炫植", "徐恩光", "李昌燮", "Peniel", "陆星材"],
-    status: "已补档",
-    thumbnailFrom: "#667EEA",
-    thumbnailTo: "#00D2FF",
-    description: "团综第二季，成员们展开旅行挑战与游戏对决。",
-    links: [
-      { platform: "YouTube", url: "https://www.youtube.com/watch?v=3JZ_D3ELwOQ" },
-      { platform: "Bilibili", url: "https://www.bilibili.com/video/BV1aV411W7aS" },
-    ],
-  },
-];
+// 旧示例数据已移除；不再提供默认占位综艺，首次加载应显示空态/加载动画。
 
 const STORAGE_KEY = "hsik_shows_data";
 const SYNC_AT_KEY = "hsik_shows_sync_at";
 const VERSION_KEY = "hsik_shows_version";
+
+/** 旧版示例数据 ID 集合（s01-s08），sync 时会自动剔除 */
+const LEGACY_SAMPLE_IDS = new Set(["s01", "s02", "s03", "s04", "s05", "s06", "s07", "s08"]);
 
 function recordSyncTime() {
   try { localStorage.setItem(SYNC_AT_KEY, Date.now().toString()); } catch {}
@@ -346,7 +221,8 @@ export async function syncShowData(): Promise<ShowItem[]> {
   }
 
   const items = allRows.map(fromDbRow);
-  const localData = loadShowData();
+  // 自愈：剔除旧版示例数据（s01-s08），避免污染真实档案
+  const localData = loadShowData().filter((i) => !LEGACY_SAMPLE_IDS.has(i.id));
 
   // 合并：保留云端数据 + 本地独有的数据（防止未上传成功的数据被覆盖）
   const remoteIds = new Set(items.map((i) => i.id));
@@ -597,12 +473,6 @@ export async function deleteShowItem(id: string): Promise<{ error: string | null
   return { error: null };
 }
 
-export async function resetShowData(): Promise<ShowItem[]> {
-  const data = JSON.parse(JSON.stringify(initialShowData));
-  await saveShowData(data);
-  return data;
-}
-
 /** 将当前 localStorage 中的数据批量导入 Supabase */
 export async function migrateShowsToSupabase(): Promise<{ success: number; error: string | null }> {
   if (!isSupabaseConfigured()) {
@@ -703,7 +573,8 @@ export function getPreferredSource(item: ShowItem): string | null {
 // ==================== 元数据抓取与缓存 ====================
 
 /** 构建时预取的视频元数据（YouTube 页面爬取 + Bilibili API） */
-import videoPreFetch from "@/data/video-meta.json";
+import videoPreFetchRaw from "@/data/video-meta.json";
+const videoPreFetch = videoPreFetchRaw as Record<string, VideoMetadata>;
 import { fetchVideoInfo } from "@/lib/videoFetcher";
 
 const CORS_PROXIES = [
@@ -754,14 +625,15 @@ export function getCachedMetadata(itemId: string): VideoMetadata | null {
   const cache = loadMetadataCache();
   if (cache[itemId]) return cache[itemId];
 
-  const item = initialShowData.find((s) => s.id === itemId);
+  // 从当前本地数据中查找对应条目，回退到预取元数据
+  const item = loadShowData().find((s) => s.id === itemId);
   if (item) {
     for (const link of item.links) {
       if (isYouTubeLink(link.url)) {
         const videoId = extractYouTubeId(link.url);
         if (videoId) {
           const preKey = "yt:" + videoId;
-          const preFetched = (videoPreFetch as Record<string, VideoMetadata>)[preKey];
+          const preFetched = videoPreFetch[preKey];
           if (preFetched) {
             // 预取数据视为新鲜缓存，更新 fetchedAt 为当前时间
             return { ...preFetched, fetchedAt: Date.now() };
@@ -771,7 +643,7 @@ export function getCachedMetadata(itemId: string): VideoMetadata | null {
         const bvid = extractBilibiliId(link.url);
         if (bvid) {
           const preKey = "bl:" + bvid;
-          const preFetched = (videoPreFetch as Record<string, VideoMetadata>)[preKey];
+          const preFetched = videoPreFetch[preKey];
           if (preFetched) {
             // 预取数据视为新鲜缓存，更新 fetchedAt 为当前时间
             return { ...preFetched, fetchedAt: Date.now() };
@@ -830,7 +702,7 @@ function formatViews(views: number): string {
  */
 async function fetchBilibiliMetadata(bvid: string): Promise<VideoMetadata | null> {
   // ① 构建时预取数据 — 最可靠
-  const preKey = `bl:${bvid}` as keyof typeof videoPreFetch;
+  const preKey = `bl:${bvid}`;
   const preFetched = videoPreFetch[preKey];
   if (preFetched?.thumbnail && preFetched?.fetchedAt) {
     return {

@@ -18,9 +18,8 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { loadMusicData, syncMusicData, type MusicItem } from "@/lib/musicData";
+import { syncMusicData, type MusicItem } from "@/lib/musicData";
 import {
-  loadShowData,
   syncShowData,
   getPreferredThumbnail,
   getDisplayDuration,
@@ -29,7 +28,7 @@ import {
   memberColors,
   type ShowItem,
 } from "@/lib/showData";
-import { loadSocialData, syncSocialData, type SocialPost } from "@/lib/socialData";
+import { syncSocialData, type SocialPost } from "@/lib/socialData";
 import DataManager from "@/components/DataManager";
 import PageLoader from "@/components/PageLoader";
 

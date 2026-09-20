@@ -7,7 +7,8 @@
  *
  * 缓存策略：URL → 结果缓存到 localStorage（key: URL 的 hash），24 小时 TTL。
  */
-import videoPreFetch from "@/data/video-meta.json";
+import videoPreFetchRaw from "@/data/video-meta.json";
+const videoPreFetch = videoPreFetchRaw as Record<string, import("./showData").VideoMetadata>;
 import {
   detectPlatform as normalizeDetectPlatform,
   extractYouTubeId as normalizeExtractYouTubeId,
@@ -352,7 +353,7 @@ function getYouTubePrefetch(videoId: string): VideoInfo | null {
 }
 
 function getBilibiliPrefetch(bvid: string): VideoInfo | null {
-  const key = `bl:${bvid}` as keyof typeof videoPreFetch;
+  const key = `bl:${bvid}`;
   const data = videoPreFetch[key];
   if (!data?.fetchedAt) return null;
 
