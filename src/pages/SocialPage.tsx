@@ -1271,8 +1271,8 @@ export default function SocialPage() {
           <div className="space-y-4">
             <AnimatePresence mode="popLayout">
               {sortedAndFilteredData.map((post) => {
-                const platformStyle = platformVisualStyles[post.platform];
-                const catStyle = post.category ? categoryStyles[post.category] : categoryStyles["个人动态"];
+                const platformStyle = platformVisualStyles[post.platform] || platformVisualStyles["X"];
+                const catStyle = (post.category && categoryStyles[post.category]) || categoryStyles["个人动态"];
                 const isSelected = batchSelectedIds.has(post.id);
                 return (
                                     <motion.div
@@ -1426,8 +1426,8 @@ function DetailModal({ post, imageIdx, onImageIdxChange, onClose }: {
   onImageIdxChange: (idx: number) => void;
   onClose: () => void;
 }) {
-  const platformStyle = platformVisualStyles[post.platform];
-  const catStyle = post.category ? categoryStyles[post.category] : categoryStyles["个人动态"];
+  const platformStyle = platformVisualStyles[post.platform] || platformVisualStyles["X"];
+  const catStyle = (post.category && categoryStyles[post.category]) || categoryStyles["个人动态"];
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

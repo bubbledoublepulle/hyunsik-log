@@ -6,8 +6,8 @@ let socialSyncCache: { data: SocialPost[]; at: number } | null = null;
 let socialSyncPromise: Promise<SocialPost[]> | null = null;
 const SYNC_CACHE_TTL = 5 * 60 * 1000;
 
-/** 社交动态分类标签（二选一） */
-export type SocialCategory = "个人动态" | "官方动态";
+/** 社交动态分类标签 */
+export type SocialCategory = "个人动态" | "官方动态" | "他人更新相关";
 
 /** 社交平台（实际发布平台） */
 export type SocialPlatform =
@@ -48,6 +48,7 @@ export interface SocialPost {
 export const socialCategories: { key: SocialCategory; label: string; desc: string }[] = [
   { key: "个人动态", label: "个人动态", desc: "成员个人发布的内容" },
   { key: "官方动态", label: "官方动态", desc: "官方账号发布的动态" },
+  { key: "他人更新相关", label: "他人更新", desc: "与他人相关的内容更新" },
 ];
 
 /** 平台样式映射 */
@@ -113,6 +114,11 @@ export const categoryStyles: Record<
     active: "bg-violet-500 text-white border-violet-500",
     inactive: "bg-white text-violet-600 border-violet-200 hover:border-violet-400",
     dot: "bg-violet-500",
+  },
+  他人更新相关: {
+    active: "bg-stone-500 text-white border-stone-500",
+    inactive: "bg-white text-stone-600 border-stone-200 hover:border-stone-400",
+    dot: "bg-stone-500",
   },
 };
 
