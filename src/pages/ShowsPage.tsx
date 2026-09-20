@@ -44,23 +44,7 @@ function getProxiedThumbnail(url: string | null | undefined): string | null {
   return `https://images.weserv.nl/?url=${encodeURIComponent(url)}&n=-1`;
 }
 
-const SPAN_PATTERN = [
-  "md:col-span-7",
-  "md:col-span-5",
-  "md:col-span-4",
-  "md:col-span-4",
-  "md:col-span-4",
-];
-
-function getCardSpan(index: number) {
-  return SPAN_PATTERN[index % SPAN_PATTERN.length];
-}
-
-function getCardAspect(spanClass: string) {
-  if (spanClass.includes("col-span-7")) return "aspect-[16/10]";
-  if (spanClass.includes("col-span-5")) return "aspect-square";
-  return "aspect-[4/3]";
-}
+const CARD_ASPECT = "aspect-video";
 
 function CardLogoDecoration() {
   return (
@@ -897,7 +881,7 @@ export default function ShowsPage() {
             </motion.aside>
 
             <div className="flex-1 min-w-0">
-              <div className="grid grid-cols-12 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {visibleData.map((item, index) => {
                   const thumbUrl = getPreferredThumbnail(item);
                   const dataSource = getPreferredSource(item);
@@ -907,11 +891,9 @@ export default function ShowsPage() {
                   const cachedMeta = getCachedMetadata(item.id);
                   const isStale = isCacheStale(cachedMeta);
                   const isSelected = batchSelectedIds.has(item.id);
-                  const span = getCardSpan(index);
-                  const aspect = getCardAspect(span);
                   const no = String(index + 1).padStart(2, '0');
                   return (
-                    <LazyCard key={item.id} id={item.id} className={`col-span-12 ${span}`}>
+                    <LazyCard key={item.id} id={item.id} className="">
                       <div
                         className={`group relative bg-white/40 rounded-sm border border-steel-200/60 shadow-sm overflow-hidden hover:-translate-y-2 hover:border-steel-300/80 transition-all ${batchEditMode ? "cursor-pointer" : ""} ${isSelected ? "ring-2 ring-steel-500 ring-offset-2" : ""} ${flashId === item.id ? "flash-highlight" : ""}`}
                         onClick={() => {
@@ -922,7 +904,7 @@ export default function ShowsPage() {
                         data-show-card
                       >
                         <div
-                          className={`relative ${aspect} overflow-hidden bg-steel-50/30`}
+                          className={`relative ${CARD_ASPECT} overflow-hidden bg-steel-50/30`}
                           style={thumbUrl ? undefined : { background: `linear-gradient(135deg, ${item.thumbnailFrom}, ${item.thumbnailTo})` }}
                         >
                           {thumbUrl ? (

@@ -37,7 +37,7 @@ export default function Navbar() {
         <div className="w-8 md:w-32 shrink-0" />
 
         {/* Navigation — centered, always one row */}
-        <div className="flex-1 flex items-center justify-center gap-3 sm:gap-6 md:gap-12 overflow-x-auto no-scrollbar">
+        <div className="flex-1 flex items-center justify-center gap-3 sm:gap-6 md:gap-12 overflow-hidden">
           {navItems.map(({ path, label }) => {
             const isActive = location.pathname === path;
             return (

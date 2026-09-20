@@ -43,23 +43,7 @@ import { useRealtimeData } from "@/hooks/useRealtimeData";
 type SortBy = "date-desc" | "date-asc" | "title-asc";
 type ViewMode = "cards" | "table" | "album";
 
-const SPAN_PATTERN = [
-  "md:col-span-7",
-  "md:col-span-5",
-  "md:col-span-4",
-  "md:col-span-4",
-  "md:col-span-4",
-];
-
-function getCardSpan(index: number) {
-  return SPAN_PATTERN[index % SPAN_PATTERN.length];
-}
-
-function getCardAspect(spanClass: string) {
-  if (spanClass.includes("col-span-7")) return "aspect-[16/10]";
-  if (spanClass.includes("col-span-5")) return "aspect-square";
-  return "aspect-[4/3]";
-}
+const CARD_ASPECT = "aspect-[4/3]";
 
 function CardLogoDecoration() {
   return (
@@ -550,11 +534,9 @@ export default function MusicPage() {
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-12 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               <AnimatePresence mode="popLayout">
                 {filteredData.map((item, index) => {
-                  const span = getCardSpan(index);
-                  const aspect = getCardAspect(span);
                   const no = String(index + 1).padStart(2, '0');
                   const year = new Date(item.releaseDate).getFullYear();
                   return (
@@ -566,9 +548,9 @@ export default function MusicPage() {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.95 }}
                       transition={{ delay: Math.min(index * 0.03, 0.3) }}
-                      className={`col-span-12 ${span} group relative bg-white/40 rounded-sm border border-steel-200/60 shadow-sm overflow-hidden hover:-translate-y-2 hover:border-steel-300/80 transition-all ${flashId === item.id ? "flash-highlight" : ""}`}
+                      className={`group relative bg-white/40 rounded-sm border border-steel-200/60 shadow-sm overflow-hidden hover:-translate-y-2 hover:border-steel-300/80 transition-all ${flashId === item.id ? "flash-highlight" : ""}`}
                     >
-                      <div className={`relative ${aspect} bg-steel-50/30 flex items-center justify-center overflow-hidden`}>
+                      <div className={`relative ${CARD_ASPECT} bg-steel-50/30 flex items-center justify-center overflow-hidden`}>
                         <span className="font-serif italic text-3xl sm:text-4xl text-steel-400/40">Music N°{no}</span>
                         <CardLogoDecoration />
                         {isAdmin && (
