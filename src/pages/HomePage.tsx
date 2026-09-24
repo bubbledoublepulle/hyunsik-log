@@ -14,6 +14,8 @@ import {
   Clock,
   Eye,
   ExternalLink,
+  ChevronLeft,
+  ChevronRight,
   Image as ImageIcon,
   X,
   Languages,
@@ -406,44 +408,23 @@ function VideoDetailModal({ item, onClose }: { item: ShowItem; onClose: () => vo
   );
 }
 
-function SocialImageGrid({ images }: { images: string[] }) {
-  if (images.length === 0) return null;
-  if (images.length === 1) {
-    return (
-      <div className="rounded-sm overflow-hidden bg-steel-50/40 border border-steel-200/60">
-        <img src={getProxiedImageUrl(images[0])} alt="图片" loading="lazy" className="w-full h-auto max-h-[400px] object-contain" />
-      </div>
-    );
-  }
-  if (images.length === 2) {
-    return (
-      <div className="grid grid-cols-2 gap-1 rounded-sm overflow-hidden">
-        {images.map((img, i) => <img key={i} src={getProxiedImageUrl(img)} alt={`图片 ${i + 1}`} loading="lazy" className="w-full h-40 object-cover" />)}
-      </div>
-    );
-  }
-  if (images.length === 3) {
-    return (
-      <div className="grid grid-cols-2 gap-1 rounded-sm overflow-hidden">
-        <img src={getProxiedImageUrl(images[0])} alt="图片 1" loading="lazy" className="w-full h-40 object-cover" />
-        <img src={getProxiedImageUrl(images[1])} alt="图片 2" loading="lazy" className="w-full h-40 object-cover" />
-        <img src={getProxiedImageUrl(images[2])} alt="图片 3" loading="lazy" className="w-full h-40 object-cover col-span-2" />
-      </div>
-    );
-  }
-  return (
-    <div className="grid grid-cols-2 gap-1 rounded-sm overflow-hidden">
-      {images.slice(0, 4).map((img, i) => (
-        <div key={i} className="relative">
-          <img src={getProxiedImageUrl(img)} alt={`图片 ${i + 1}`} loading="lazy" className="w-full h-36 object-cover" />
-          {i === 3 && images.length > 4 && <div className="absolute inset-0 bg-black/50 flex items-center justify-center"><span className="text-white text-lg font-bold">+{images.length - 4}</span></div>}
-        </div>
-      ))}
-    </div>
-  );
-}
+function SocialDetailModal({ item, imageIdx, onImageIdxChange, onClose }: {
+  item: SocialPost;
+  imageIdx: number;
+  onImageIdxChange: (idx: number) => void;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      if (item.images.length <= 1) return;
+      if (e.key === "ArrowLeft") onImageIdxChange((imageIdx - 1 + item.images.length) % item.images.length);
+      if (e.key === "ArrowRight") onImageIdxChange((imageIdx + 1) % item.images.length);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose, imageIdx, item.images.length, onImageIdxChange]);
 
-function SocialDetailModal({ item, onClose }: { item: SocialPost; onClose: () => void }) {
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -458,54 +439,73 @@ function SocialDetailModal({ item, onClose }: { item: SocialPost; onClose: () =>
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
         transition={{ duration: 0.25 }}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-lg max-h-[85vh] bg-white/90 backdrop-blur-xl border border-steel-200/60 rounded-sm shadow-2xl overflow-hidden flex flex-col"
+        className="relative w-full max-w-2xl max-h-[90vh] bg-white/90 backdrop-blur-xl border border-steel-200/60 rounded-sm shadow-2xl overflow-hidden flex flex-col"
       >
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full bg-steel-500/20 backdrop-blur-sm flex items-center justify-center text-steel-700 hover:bg-steel-500/30 transition-colors"
+          className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/40 transition-colors"
         >
           <X className="w-4 h-4" />
         </button>
 
         <div className="h-1 bg-gradient-to-r from-steel-400 to-steel-600" />
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <span className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600 px-2 py-0.5 rounded-sm border border-steel-200/60 bg-steel-50/70">Social</span>
-            <span className="text-xs text-steel-500/70">{item.postDate.split("T")[0]}</span>
-          </div>
-
-          <h2 className="text-lg font-bold text-steel-700 mb-1">{item.author || "新动态"}</h2>
-          <p className="text-sm text-steel-500/70 mb-1">{item.platform} · {item.category}</p>
-
-          {item.translation && item.translation.trim() && (
-            <div className="mb-4 rounded-sm border border-steel-200/60 border-l-2 border-l-steel-400 bg-steel-50/50 px-3 py-2.5">
-              <div className="flex items-center gap-1.5 mb-1.5">
-                <Languages className="w-3 h-3 text-steel-500" />
-                <span className="text-[10px] font-medium text-steel-500/80 uppercase tracking-[0.12em]">翻译</span>
-              </div>
-              <p className="text-sm text-steel-600 leading-relaxed whitespace-pre-wrap">{linkifyText(item.translation)}</p>
-            </div>
-          )}
-
-          <p className="text-sm text-steel-600/90 leading-relaxed whitespace-pre-wrap mb-4">{linkifyText(item.content)}</p>
-
+        <div className="flex-1 overflow-y-auto">
           {item.images.length > 0 && (
-            <div className="mb-4">
-              <SocialImageGrid images={item.images} />
+            <div className="relative bg-white/40">
+              <div className="relative" style={{ aspectRatio: item.images.length === 1 ? "auto" : "16/10" }}>
+                <img src={getProxiedImageUrl(item.images[imageIdx])} alt={`图片 ${imageIdx + 1}`} className="w-full h-full object-contain max-h-[50vh]" />
+                {item.images.length > 1 && (
+                  <>
+                    <button onClick={(e) => { e.stopPropagation(); onImageIdxChange((imageIdx - 1 + item.images.length) % item.images.length); }} className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/50 transition-colors">
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); onImageIdxChange((imageIdx + 1) % item.images.length); }} className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/50 transition-colors">
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+                      {item.images.map((_, i) => (
+                        <button key={i} onClick={(e) => { e.stopPropagation(); onImageIdxChange(i); }} className={`w-1.5 h-1.5 rounded-full transition-all ${i === imageIdx ? "bg-white w-3" : "bg-white/50"}`} />
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           )}
 
-          {item.postUrl && (
-            <a
-              href={item.postUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-sm bg-steel-50/70 text-sm text-steel-600 hover:bg-steel-100 transition-colors font-medium border border-steel-200/60"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              查看原帖
-            </a>
-          )}
+          <div className="p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600 px-2 py-0.5 rounded-sm border border-steel-200/60 bg-steel-50/70">Social</span>
+              <span className="text-xs text-steel-500/70">{item.postDate.split("T")[0]}</span>
+            </div>
+
+            <h2 className="text-lg font-bold text-steel-700 mb-1">{item.author || "新动态"}</h2>
+            <p className="text-sm text-steel-500/70 mb-1">{item.platform} · {item.category}</p>
+
+            {item.translation && item.translation.trim() && (
+              <div className="mb-4 rounded-sm border border-steel-200/60 border-l-2 border-l-steel-400 bg-steel-50/50 px-3 py-2.5">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Languages className="w-3 h-3 text-steel-500" />
+                  <span className="text-[10px] font-medium text-steel-500/80 uppercase tracking-[0.12em]">翻译</span>
+                </div>
+                <p className="text-sm text-steel-600 leading-relaxed whitespace-pre-wrap">{linkifyText(item.translation)}</p>
+              </div>
+            )}
+
+            <p className="text-sm text-steel-600/90 leading-relaxed whitespace-pre-wrap mb-4">{linkifyText(item.content)}</p>
+
+            {item.postUrl && (
+              <a
+                href={item.postUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-sm bg-steel-50/70 text-sm text-steel-600 hover:bg-steel-100 transition-colors font-medium border border-steel-200/60"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                查看原帖
+              </a>
+            )}
+          </div>
         </div>
       </motion.div>
     </motion.div>
@@ -541,6 +541,7 @@ export default function HomePage() {
   const [selectedMusic, setSelectedMusic] = useState<MusicItem | null>(null);
   const [selectedVideo, setSelectedVideo] = useState<ShowItem | null>(null);
   const [selectedSocial, setSelectedSocial] = useState<SocialPost | null>(null);
+  const [socialImageIdx, setSocialImageIdx] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
   const buildUpdates = useCallback((
@@ -1082,7 +1083,12 @@ export default function HomePage() {
           <VideoDetailModal item={selectedVideo} onClose={() => setSelectedVideo(null)} />
         )}
         {selectedSocial && (
-          <SocialDetailModal item={selectedSocial} onClose={() => setSelectedSocial(null)} />
+          <SocialDetailModal
+            item={selectedSocial}
+            imageIdx={socialImageIdx}
+            onImageIdxChange={setSocialImageIdx}
+            onClose={() => { setSelectedSocial(null); setSocialImageIdx(0); }}
+          />
         )}
       </AnimatePresence>
       </>
