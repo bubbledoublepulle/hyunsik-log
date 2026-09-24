@@ -477,8 +477,6 @@ function SocialDetailModal({ item, onClose }: { item: SocialPost; onClose: () =>
           <h2 className="text-lg font-bold text-steel-700 mb-1">{item.author || "新动态"}</h2>
           <p className="text-sm text-steel-500/70 mb-1">{item.platform} · {item.category}</p>
 
-          <p className="text-sm text-steel-600/90 leading-relaxed whitespace-pre-wrap mb-4">{linkifyText(item.content)}</p>
-
           {item.translation && item.translation.trim() && (
             <div className="mb-4 rounded-sm border border-steel-200/60 border-l-2 border-l-steel-400 bg-steel-50/50 px-3 py-2.5">
               <div className="flex items-center gap-1.5 mb-1.5">
@@ -488,6 +486,8 @@ function SocialDetailModal({ item, onClose }: { item: SocialPost; onClose: () =>
               <p className="text-sm text-steel-600 leading-relaxed whitespace-pre-wrap">{linkifyText(item.translation)}</p>
             </div>
           )}
+
+          <p className="text-sm text-steel-600/90 leading-relaxed whitespace-pre-wrap mb-4">{linkifyText(item.content)}</p>
 
           {item.images.length > 0 && (
             <div className="mb-4">

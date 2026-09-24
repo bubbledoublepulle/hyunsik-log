@@ -1479,8 +1479,6 @@ function DetailModal({ post, imageIdx, onImageIdxChange, onClose, isAdmin, onEdi
               {post.member && <span className={`text-xs px-2 py-0.5 rounded border font-medium ${memberColors[post.member as ShowMember]}`}>{post.member}</span>}
             </div>
 
-            {post.content && <p className="text-sm text-steel-700 leading-relaxed whitespace-pre-wrap mb-4">{linkifyText(post.content)}</p>}
-
             {post.translation && post.translation.trim() && (
               <div className="mb-4 rounded-sm border border-steel-200/60 border-l-2 border-l-steel-400 bg-steel-50/50 px-3 py-2.5">
                 <div className="flex items-center gap-1.5 mb-1.5">
@@ -1490,6 +1488,8 @@ function DetailModal({ post, imageIdx, onImageIdxChange, onClose, isAdmin, onEdi
                 <p className="text-sm text-steel-600 leading-relaxed whitespace-pre-wrap">{linkifyText(post.translation)}</p>
               </div>
             )}
+
+            {post.content && <p className="text-sm text-steel-700 leading-relaxed whitespace-pre-wrap mb-4">{linkifyText(post.content)}</p>}
 
             {post.videos && post.videos.length > 0 && post.images.length > 0 && (
               <div className="space-y-2 mb-4">
