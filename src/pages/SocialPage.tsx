@@ -44,10 +44,12 @@ import {
   Loader2,
   Link2,
   Search,
+  Languages,
 } from "lucide-react";
 
 import { toast } from "sonner";
 import { fetchLinkPreview, type LinkPreview } from "@/lib/linkPreviewFetcher";
+import { translateToChinese, DEEPSEEK_KEY_STORAGE } from "@/lib/translator";
 import {
   saveSocialData,
   syncSocialData,
@@ -170,7 +172,7 @@ function BatchEditSocialModal({ open, onClose, items, onSave }: {
   const [suffixText, setSuffixText] = useState("");
 
   // AI 翻译
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem("hsik_deepseek_key") || "");
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem(DEEPSEEK_KEY_STORAGE) || "");
   const [targetLang, setTargetLang] = useState("中文");
   const [isTranslating, setIsTranslating] = useState(false);
   const [translationProgress, setTranslationProgress] = useState({ current: 0, total: 0 });
@@ -190,83 +192,36 @@ function BatchEditSocialModal({ open, onClose, items, onSave }: {
       alert("请输入 DeepSeek API Key");
       return;
     }
-    localStorage.setItem("hsik_deepseek_key", apiKey);
+    localStorage.setItem(DEEPSEEK_KEY_STORAGE, apiKey);
 
     setIsTranslating(true);
     setTranslations({});
     setTranslationProgress({ current: 0, total: items.length });
 
     const results: Record<string, string> = {};
+    let failedCount = 0;
 
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       setTranslationProgress({ current: i + 1, total: items.length });
-            let translated = "";
-      let attempts = 0;
-      const maxRetries = 2;
 
-      while (attempts <= maxRetries && !translated) {
-        try {
-          const resp = await fetch("https://api.deepseek.com/v1/chat/completions", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-              model: "deepseek-chat",
-              messages: [
-                {
-                  role: "system",
-                  content: `你是一位专业的韩翻中翻译助手，擅长翻译韩国偶像团体的社交媒体公告、社交平台动态、youtube视频标题
-
-【翻译规则】
-1. 所有韩文内容必须完整翻译成中文，不允许遗漏任何文字
-2. 保留所有话题标签（#xxx），标签内的韩文可翻译为中文后保留原标签
-3. 保留所有@提及和表情符号
-4. 保留英文部分（如艺人英文名、节目英文名），主要翻译的艺人为韩国男团BTOB，翻译的成员名字以BTOB成员汉字名为准
-5. 节目名称、电台名称等专有名词保留原名，可在括号内加注中文
-6. 时间、日期、数字照原文保留
-7. 保持原文的换行和分段格式
-8."현식시"统一翻译成"炫植时"、"꼬옥"统一翻译成"紧紧拥抱"
-
-【输出要求】
-- 只返回翻译后的纯文本
-- 不要解释、不要添加"翻译如下"等前缀
-- 不要遗漏任何一行内容`,
-                },
-                {
-                  role: "user",
-                  content: item.content,
-                },
-              ],
-              temperature: 0.1,
-            }),
-          });
-          const data = await resp.json();
-          if (data.choices?.[0]?.message?.content) {
-            const raw = data.choices[0].message.content.trim();
-            // 如果返回了内容，且和原文不一样，才算成功
-            if (raw && raw !== item.content) {
-              translated = raw;
-            }
-          }
-        } catch {
-          // 网络错误，继续重试
-        }
-        attempts++;
-        if (!translated && attempts <= maxRetries) {
-          await new Promise((r) => setTimeout(r, 1000));
-        }
+      // 翻译失败返回空串，绝不拿原文冒充译文
+      const translated = await translateToChinese(item.content, apiKey);
+      if (translated) {
+        results[item.id] = translated;
+      } else {
+        // 失败的条目不写入 results，保留原有译文不被误删
+        failedCount++;
       }
-
-            results[item.id] = translated || item.content;
 
       if (i < items.length - 1) await new Promise((r) => setTimeout(r, 500));
     }
 
     setTranslations(results);
     setIsTranslating(false);
+    if (failedCount > 0) {
+      toast.warning(`${failedCount} 条翻译失败`, { description: "请稍后重试，或用单条编辑手动填写" });
+    }
   };
 
   const generatePreview = () => {
@@ -288,8 +243,15 @@ function BatchEditSocialModal({ open, onClose, items, onSave }: {
       }
 
       if (activeTab === "translate") {
-        if (translations[item.id]) {
-          newItem.content = translations[item.id];
+        // 原文 content 保持不变，译文只写入 translation 字段
+        const t = translations[item.id];
+        if (t !== undefined) {
+          const v = t.trim();
+          if (v) {
+            newItem.translation = v;
+          } else {
+            delete newItem.translation; // 手动清空 = 删除译文
+          }
         }
       }
 
@@ -422,7 +384,7 @@ function BatchEditSocialModal({ open, onClose, items, onSave }: {
 
               {Object.keys(translations).length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-sm font-bold text-steel-700">翻译结果（可手动修改）：</p>
+                  <p className="text-sm font-bold text-steel-700">翻译结果（可手动修改，原文不会被覆盖）：</p>
                   <div className="border border-steel-200/60 rounded-sm overflow-hidden max-h-64 overflow-y-auto">
                     <table className="w-full text-sm">
                       <thead className="bg-steel-50/70 sticky top-0">
@@ -439,7 +401,8 @@ function BatchEditSocialModal({ open, onClose, items, onSave }: {
                             </td>
                             <td className="px-3 py-2 align-top">
                               <textarea
-                                value={translations[item.id] || item.content}
+                                value={translations[item.id] ?? ""}
+                                placeholder="翻译失败或未翻译，可手动填写"
                                 onChange={(e) => updateTranslation(item.id, e.target.value)}
                                 rows={Math.min(Math.max(Math.ceil(item.content.length / 30), 3), 8)}
                                 className="w-full px-2 py-1.5 rounded border border-steel-200/60 text-sm outline-none focus:border-steel-500 resize-y min-h-[60px]"
@@ -464,19 +427,37 @@ function BatchEditSocialModal({ open, onClose, items, onSave }: {
                 <table className="w-full text-sm">
                   <thead className="bg-steel-50/70 sticky top-0">
                     <tr>
-                      <th className="px-3 py-2 text-left font-medium text-steel-600">原文案</th>
-                      <th className="px-3 py-2 text-left font-medium text-steel-600">→</th>
-                      <th className="px-3 py-2 text-left font-medium text-steel-600">新文案</th>
+                      <th className="px-3 py-2 text-left font-medium text-steel-600">
+                        {activeTab === "translate" ? "原文（不变）" : "原文案"}
+                      </th>
+                      <th className="px-3 py-2 text-left font-medium text-steel-600">
+                        {activeTab === "translate" ? "译文" : "→"}
+                      </th>
+                      <th className="px-3 py-2 text-left font-medium text-steel-600">
+                        {activeTab === "translate" ? "状态" : "新文案"}
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-steel-100/60">
-                    {preview.map((item, idx) => (
-                      <tr key={item.id}>
-                        <td className="px-3 py-1.5 text-steel-500/70 line-through">{items[idx].content}</td>
-                        <td className="px-3 py-1.5 text-steel-400">→</td>
-                        <td className="px-3 py-1.5 font-medium text-steel-700">{item.content}</td>
-                      </tr>
-                    ))}
+                    {preview.map((item, idx) =>
+                      activeTab === "translate" ? (
+                        <tr key={item.id}>
+                          <td className="px-3 py-1.5 text-steel-500/70 whitespace-pre-wrap">{items[idx].content}</td>
+                          <td className="px-3 py-1.5 font-medium text-steel-700 whitespace-pre-wrap">
+                            {item.translation || "—"}
+                          </td>
+                          <td className="px-3 py-1.5 text-[11px] text-steel-500/70">
+                            {item.translation ? "写入译文" : "无译文"}
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr key={item.id}>
+                          <td className="px-3 py-1.5 text-steel-500/70 line-through">{items[idx].content}</td>
+                          <td className="px-3 py-1.5 text-steel-400">→</td>
+                          <td className="px-3 py-1.5 font-medium text-steel-700">{item.content}</td>
+                        </tr>
+                      )
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -938,7 +919,7 @@ export default function SocialPage() {
     if (error) {
       toast.error("批量更新同步失败", { description: error });
     } else {
-      toast.success(`已批量更新 ${updatedItems.length} 条动态文案`);
+      toast.success(`已批量更新 ${updatedItems.length} 条动态`);
     }
     setBatchEditOpen(false);
     setBatchSelectedIds(new Set());
@@ -1403,7 +1384,14 @@ export default function SocialPage() {
 
       <AnimatePresence>
         {selectedPost && (
-          <DetailModal post={selectedPost} imageIdx={detailImageIdx} onImageIdxChange={setDetailImageIdx} onClose={() => { setSelectedPost(null); setDetailImageIdx(0); }} />
+          <DetailModal
+            post={selectedPost}
+            imageIdx={detailImageIdx}
+            onImageIdxChange={setDetailImageIdx}
+            onClose={() => { setSelectedPost(null); setDetailImageIdx(0); }}
+            isAdmin={isAdmin}
+            onEdit={(post) => { setSelectedPost(null); setEditingPost(post); setFormOpen(true); }}
+          />
         )}
       </AnimatePresence>
 
@@ -1420,11 +1408,13 @@ export default function SocialPage() {
   );
 }
 
-function DetailModal({ post, imageIdx, onImageIdxChange, onClose }: {
+function DetailModal({ post, imageIdx, onImageIdxChange, onClose, isAdmin, onEdit }: {
   post: SocialPost;
   imageIdx: number;
   onImageIdxChange: (idx: number) => void;
   onClose: () => void;
+  isAdmin: boolean;
+  onEdit: (post: SocialPost) => void;
 }) {
   const platformStyle = platformVisualStyles[post.platform] || platformVisualStyles["X"];
   const catStyle = (post.category && categoryStyles[post.category]) || categoryStyles["个人动态"];
@@ -1443,9 +1433,20 @@ function DetailModal({ post, imageIdx, onImageIdxChange, onClose }: {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
       <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} transition={{ duration: 0.25 }} onClick={(e) => e.stopPropagation()} className="relative w-full max-w-2xl max-h-[90vh] bg-white/40 rounded-sm shadow-2xl overflow-hidden flex flex-col">
-        <button onClick={onClose} className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/40 transition-colors">
-          <X className="w-4 h-4" />
-        </button>
+        <div className="absolute top-4 right-4 z-10 flex gap-2">
+          {isAdmin && (
+            <button
+              onClick={() => { onClose(); onEdit(post); }}
+              title="编辑这条动态"
+              className="w-8 h-8 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/40 transition-colors"
+            >
+              <Pencil className="w-4 h-4" />
+            </button>
+          )}
+          <button onClick={onClose} className="w-8 h-8 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/40 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
 
         <div className="flex-1 overflow-y-auto">
           {post.images.length > 0 && (
@@ -1496,6 +1497,16 @@ function DetailModal({ post, imageIdx, onImageIdxChange, onClose }: {
             </div>
 
             {post.content && <p className="text-sm text-steel-700 leading-relaxed whitespace-pre-wrap mb-4">{linkifyText(post.content)}</p>}
+
+            {post.translation && post.translation.trim() && (
+              <div className="mb-4 rounded-sm border border-steel-200/60 border-l-2 border-l-steel-400 bg-steel-50/50 px-3 py-2.5">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Languages className="w-3 h-3 text-steel-500" />
+                  <span className="text-[10px] font-medium text-steel-500/80 uppercase tracking-[0.12em]">翻译</span>
+                </div>
+                <p className="text-sm text-steel-600 leading-relaxed whitespace-pre-wrap">{linkifyText(post.translation)}</p>
+              </div>
+            )}
 
             {post.videos && post.videos.length > 0 && post.images.length > 0 && (
               <div className="space-y-2 mb-4">

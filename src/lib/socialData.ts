@@ -31,8 +31,10 @@ export interface SocialPost {
   author: string;
   /** 相关成员（用于成员筛选，可选） */
   member?: ShowMember;
-  /** 文字内容 */
+  /** 文字内容（原文） */
   content: string;
+  /** 译文（可选；有值才在详情页渲染翻译区块） */
+  translation?: string;
   /** 图片列表（URL 或空数组） */
   images: string[];
   /** 视频列表（URL 或空数组） */
@@ -309,6 +311,7 @@ function toDbRow(post: SocialPost) {
     author: post.author,
     member: post.member ?? null,
     content: post.content,
+    translation: post.translation ?? null,
     images: post.images,
     videos: post.videos ?? [],
     post_url: post.postUrl,
@@ -325,6 +328,10 @@ function fromDbRow(row: Record<string, unknown>): SocialPost {
     author: String(row.author),
     member: row.member ? String(row.member) as ShowMember : undefined,
     content: String(row.content),
+    translation:
+      typeof row.translation === "string" && row.translation.trim()
+        ? row.translation
+        : undefined,
     images: Array.isArray(row.images) ? (row.images as string[]).map(String) : [],
     videos: Array.isArray(row.videos) ? (row.videos as string[]).map(String) : [],
     postUrl: String(row.post_url ?? ""),
@@ -433,8 +440,24 @@ export async function saveSocialData(data: SocialPost[]): Promise<{ error: strin
 
   // Upsert all current rows
   if (uniqueData.length > 0) {
-    const { error } = await supabase.from("social_posts").upsert(uniqueData.map(toDbRow), { onConflict: "id" });
+    const rows = uniqueData.map(toDbRow);
+    const { error } = await supabase.from("social_posts").upsert(rows, { onConflict: "id" });
     if (error) {
+      // 兼容：云端尚未执行 ALTER TABLE ... ADD COLUMN translation
+      const missingColumn =
+        /translation/i.test(error.message) || error.code === "42703" || error.code === "PGRST204";
+      if (missingColumn) {
+        const { error: retryError } = await supabase
+          .from("social_posts")
+          .upsert(rows.map(({ translation: _drop, ...rest }) => rest), { onConflict: "id" });
+        if (!retryError) {
+          console.error(
+            "[social] 云端缺少 translation 列，本次未同步译文。请在 Supabase 执行：ALTER TABLE social_posts ADD COLUMN IF NOT EXISTS translation TEXT;"
+          );
+          return { error: "云端缺少 translation 列，译文未同步（原文已保存）。请执行 ALTER TABLE 后重试。" };
+        }
+        return { error: retryError.message };
+      }
       console.warn("[social] save to supabase failed:", error.message);
       return { error: error.message };
     }

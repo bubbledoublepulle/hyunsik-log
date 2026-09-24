@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Link2, ImageIcon, Plus, Trash2, Loader2 } from "lucide-react";
+import { X, Link2, ImageIcon, Plus, Trash2, Loader2, Languages, KeyRound } from "lucide-react";
 import { toast } from "sonner";
+import { translateToChinese, DEEPSEEK_KEY_STORAGE } from "@/lib/translator";
 import {
   socialCategories,
   categoryStyles,
@@ -32,6 +33,10 @@ export default function SocialFormModal({
   const [platform, setPlatform] = useState<SocialPlatform>("X");
   const [author, setAuthor] = useState("");
   const [content, setContent] = useState("");
+  const [translation, setTranslation] = useState("");
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem(DEEPSEEK_KEY_STORAGE) || "");
+  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
   const [postUrl, setPostUrl] = useState("");
   const [postDate, setPostDate] = useState("");
   const [images, setImages] = useState<string[]>([""]);
@@ -46,6 +51,7 @@ export default function SocialFormModal({
       setPlatform(editingPost.platform);
       setAuthor(editingPost.author);
       setContent(editingPost.content);
+      setTranslation(editingPost.translation || "");
       setPostUrl(editingPost.postUrl);
       setPostDate(editingPost.postDate);
       setImages(editingPost.images.length > 0 ? [...editingPost.images] : [""]);
@@ -55,6 +61,7 @@ export default function SocialFormModal({
       setPlatform("X");
       setAuthor("");
       setContent("");
+      setTranslation("");
       setPostUrl("");
       setPostDate(getNowBeijingTimeString());
       setImages([""]);
@@ -63,6 +70,8 @@ export default function SocialFormModal({
     setErrors({});
     setFetchedFields(new Set());
     setIsFetching(false);
+    setIsTranslating(false);
+    setShowApiKeyInput(false);
   }, [editingPost, open]);
 
   // 粘贴链接后自动抓取
@@ -113,6 +122,31 @@ export default function SocialFormModal({
     return () => clearTimeout(timer);
   }, [postUrl, editingPost]);
 
+  const handleAiTranslate = async () => {
+    if (!content.trim()) {
+      toast.error("请先填写原文（文字内容）再翻译");
+      return;
+    }
+    if (!apiKey.trim()) {
+      setShowApiKeyInput(true);
+      toast.error("请先填写 DeepSeek API Key");
+      return;
+    }
+    localStorage.setItem(DEEPSEEK_KEY_STORAGE, apiKey);
+    setIsTranslating(true);
+    try {
+      const result = await translateToChinese(content, apiKey.trim());
+      if (result) {
+        setTranslation(result);
+        toast.success("AI 翻译完成，可手动修改后再保存");
+      } else {
+        toast.error("翻译失败，请检查 API Key 或稍后重试，也可手动填写");
+      }
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
   const validate = () => {
     const e: Record<string, string> = {};
     if (!author.trim()) e.author = "请输入发布者名称";
@@ -128,12 +162,14 @@ export default function SocialFormModal({
     e.preventDefault();
     if (!validate()) return;
 
+    const trimmedTranslation = translation.trim();
     const post: SocialPost = {
       id: editingPost?.id || `s_${Date.now()}`,
       category,
       platform,
       author: author.trim(),
       content: content.trim(),
+      ...(trimmedTranslation ? { translation: trimmedTranslation } : {}),
       postUrl: postUrl.trim(),
       postDate,
       images: images.filter((i) => i.trim()),
@@ -278,6 +314,72 @@ export default function SocialFormModal({
             />
             {errors.content && (
               <p className="text-xs text-red-500 mt-1">{errors.content}</p>
+            )}
+          </div>
+
+          {/* Translation */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-sm font-medium text-gray-700 flex items-center">
+                翻译（译文）
+                <span className="text-xs text-gray-400 ml-1.5 font-normal">(可选)</span>
+              </label>
+              <button
+                type="button"
+                onClick={handleAiTranslate}
+                disabled={isTranslating}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-sky-600 bg-sky-50 hover:bg-sky-100 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {isTranslating ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    翻译中...
+                  </>
+                ) : (
+                  <>
+                    <Languages className="w-3.5 h-3.5" />
+                    AI 翻译
+                  </>
+                )}
+              </button>
+            </div>
+            <textarea
+              value={translation}
+              onChange={(e) => setTranslation(e.target.value)}
+              placeholder="可点右上角「AI 翻译」自动生成，也可手动填写；留空则详情页不显示翻译区块"
+              rows={3}
+              className="w-full px-3.5 py-2.5 rounded-xl border-2 border-gray-100 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none transition-all resize-none"
+            />
+            {showApiKeyInput && (
+              <div className="mt-2 flex gap-2">
+                <div className="relative flex-1">
+                  <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        setShowApiKeyInput(false);
+                        handleAiTranslate();
+                      }
+                    }}
+                    placeholder="DeepSeek API Key（会保存在本地，下次自动带出）"
+                    className="w-full pl-10 pr-4 py-2 rounded-xl border-2 border-gray-100 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none transition-all"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowApiKeyInput(false);
+                    handleAiTranslate();
+                  }}
+                  className="px-3 py-2 rounded-xl bg-sky-400 text-white text-sm font-medium hover:bg-sky-500 transition-colors"
+                >
+                  开始
+                </button>
+              </div>
             )}
           </div>
 

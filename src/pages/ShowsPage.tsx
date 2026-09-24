@@ -991,7 +991,10 @@ export default function ShowsPage() {
                         </div>
 
                         <div className="p-4">
-                          <h3 className="font-bold text-lg text-steel-600 leading-snug line-clamp-2 mb-2 min-h-[2.5rem]">
+                          <h3
+                            className="text-xs font-normal text-steel-700 leading-snug line-clamp-2 mb-2 min-h-[2.25rem]"
+                            title={item.title}
+                          >
                             {item.title}
                           </h3>
 

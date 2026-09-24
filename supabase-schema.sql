@@ -111,3 +111,7 @@ LANGUAGE sql VOLATILE AS $$
   WHERE id = 'shows' RETURNING version;
 $$;
 GRANT EXECUTE ON FUNCTION bump_shows_version() TO anon, authenticated;
+
+-- 迁移：为已存在的 social_posts 表补充 translation 列（译文；原文 content 保持不变）
+ALTER TABLE social_posts
+  ADD COLUMN IF NOT EXISTS translation TEXT;
