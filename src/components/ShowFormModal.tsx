@@ -23,7 +23,25 @@ const allMembers: ShowMember[] = [
 ];
 
 const platforms = ["Mnet", "JTBC", "MBC", "NAVER NOW", "V LIVE", "Weverse", "YouTube", "其他"];
-const linkPlatforms = ["YouTube", "Bilibili", "V LIVE", "Weverse", "NAVER NOW", "其他"];
+const linkPlatforms = ["YouTube", "Bilibili", "小红书", "微博", "V LIVE", "Weverse", "NAVER NOW", "其他"];
+
+/** 不支持自动抓取的平台（需要登录，第三方代理取不到元数据） */
+const NO_FETCH_PLATFORMS = new Set(["小红书", "微博"]);
+
+/** 本地识别链接所属平台（纯域名判断，不发起任何网络请求） */
+function detectLocalPlatformFromUrl(rawUrl: string): string | null {
+  let host = "";
+  try {
+    host = new URL(rawUrl.trim()).hostname.replace(/^www\./, "").toLowerCase();
+  } catch {
+    return null;
+  }
+  if (!host) return null;
+  const isHost = (root: string) => host === root || host.endsWith(`.${root}`);
+  if (isHost("xiaohongshu.com") || isHost("xhslink.com")) return "小红书";
+  if (isHost("weibo.com") || isHost("weibo.cn")) return "微博";
+  return null;
+}
 
 const gradientPresets = [
   { from: "#42B4E6", to: "#1A5A7A" },
@@ -162,6 +180,16 @@ export default function ShowFormModal({
       setFetchErrorMsg("");
       return;
     }
+    // 小红书 / 微博：只用本地域名识别，不发起网络请求（这些平台无法被第三方代理抓取）
+    const local = detectLocalPlatformFromUrl(cleanUrl);
+    if (local) {
+      setDetectedPlatform(null);
+      setFetchErrorMsg("");
+      updateLink(index, "platform", local);
+      if (fetchState === "error") setFetchState("idle");
+      return;
+    }
+
     const detected = detectPlatform(cleanUrl);
     if (detected === "unknown") {
       setDetectedPlatform(null);
@@ -722,8 +750,8 @@ export default function ShowFormModal({
                           )}
                         </div>
 
-                        {/* 自动抓取按钮 */}
-                        {link.url.trim() && (
+                        {/* 自动抓取按钮（小红书 / 微博不支持抓取，隐藏） */}
+                        {link.url.trim() && !NO_FETCH_PLATFORMS.has(link.platform) && (
                           <button
                             type="button"
                             onClick={() => handleFetch(index)}

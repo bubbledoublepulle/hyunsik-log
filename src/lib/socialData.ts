@@ -17,7 +17,9 @@ export type SocialPlatform =
   | "bubble"
   | "Weverse"
   | "YouTube Community"
-  | "Fan Club";
+  | "Fan Club"
+  | "小红书"
+  | "微博";
 
 export interface SocialPost {
   id: string;
@@ -100,6 +102,18 @@ export const platformVisualStyles: Record<
     label: "Fan Club",
     gradient: "from-amber-400 to-amber-600",
   },
+  小红书: {
+    bg: "bg-[#FF2442]",
+    text: "text-white",
+    label: "小红书",
+    gradient: "from-[#FF2442] to-rose-500",
+  },
+  微博: {
+    bg: "bg-orange-600",
+    text: "text-white",
+    label: "微博",
+    gradient: "from-orange-500 to-orange-700",
+  },
 };
 
 /** 分类标签的视觉样式 */
@@ -133,6 +147,8 @@ export const allPlatforms: SocialPlatform[] = [
   "Weverse",
   "YouTube Community",
   "Fan Club",
+  "小红书",
+  "微博",
 ];
 
 /** 分类 → 对应平台映射（兼容旧代码） */

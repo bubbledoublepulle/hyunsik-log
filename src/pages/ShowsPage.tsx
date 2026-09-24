@@ -1073,6 +1073,8 @@ function getPlatformStyleLocal(platform: string) {
   const styles: Record<string, { bg: string; text: string }> = {
     YouTube: { bg: "bg-red-500", text: "text-white" },
     Bilibili: { bg: "bg-pink-500", text: "text-white" },
+    小红书: { bg: "bg-[#FF2442]", text: "text-white" },
+    微博: { bg: "bg-orange-600", text: "text-white" },
     "V LIVE": { bg: "bg-indigo-500", text: "text-white" },
     Weverse: { bg: "bg-blue-500", text: "text-white" },
     "NAVER NOW": { bg: "bg-green-500", text: "text-white" },

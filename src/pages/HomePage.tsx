@@ -19,13 +19,15 @@ import {
   Image as ImageIcon,
   X,
   Languages,
+  Pencil,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
-import { loadMusicData, syncMusicData, type MusicItem } from "@/lib/musicData";
+import { loadMusicData, syncMusicData, saveMusicData, type MusicItem } from "@/lib/musicData";
 import {
   loadShowData,
   syncShowData,
+  saveShowData,
   getPreferredThumbnail,
   getDisplayDuration,
   getDisplayViews,
@@ -33,10 +35,13 @@ import {
   memberColors,
   type ShowItem,
 } from "@/lib/showData";
-import { loadSocialData, syncSocialData, type SocialPost } from "@/lib/socialData";
+import { loadSocialData, syncSocialData, saveSocialData, type SocialPost } from "@/lib/socialData";
 import { linkifyText } from "@/lib/linkify";
 import DataManager from "@/components/DataManager";
 import PageLoader from "@/components/PageLoader";
+import MusicFormModal from "@/components/MusicFormModal";
+import ShowFormModal from "@/components/ShowFormModal";
+import SocialFormModal from "@/components/SocialFormModal";
 
 interface UpdateItem {
   id: string;
@@ -51,6 +56,12 @@ interface UpdateItem {
 }
 
 type TabKey = "music" | "show" | "social";
+
+/** 首页正在编辑的目标（那年今日 / 随机品熊 共用） */
+type EditingTarget =
+  | { kind: "music"; item: MusicItem }
+  | { kind: "show"; item: ShowItem }
+  | { kind: "social"; item: SocialPost };
 
 const TAB_CONFIG: { key: TabKey; label: string; icon: typeof Music; link: string }[] = [
   { key: "music", label: "音乐", icon: Disc3, link: "/music" },
@@ -82,6 +93,8 @@ function getPlatformStyleLocal(platform: string) {
   const styles: Record<string, { bg: string; text: string }> = {
     YouTube: { bg: "bg-red-500", text: "text-white" },
     Bilibili: { bg: "bg-pink-500", text: "text-white" },
+    小红书: { bg: "bg-[#FF2442]", text: "text-white" },
+    微博: { bg: "bg-orange-600", text: "text-white" },
     "V LIVE": { bg: "bg-indigo-500", text: "text-white" },
     Weverse: { bg: "bg-blue-500", text: "text-white" },
     "NAVER NOW": { bg: "bg-green-500", text: "text-white" },
@@ -542,6 +555,7 @@ export default function HomePage() {
   const [selectedVideo, setSelectedVideo] = useState<ShowItem | null>(null);
   const [selectedSocial, setSelectedSocial] = useState<SocialPost | null>(null);
   const [socialImageIdx, setSocialImageIdx] = useState(0);
+  const [editingTarget, setEditingTarget] = useState<EditingTarget | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const buildUpdates = useCallback((
@@ -675,6 +689,63 @@ export default function HomePage() {
     items.sort((a, b) => b.year - a.year);
     return items;
   }, [musicData, showData, socialData, todayMonth, todayDate]);
+
+  // ========== 管理员：那年今日 / 随机品熊 直接编辑 ==========
+
+  const handleEditOnThisDay = (item: (typeof onThisDayItems)[number]) => {
+    if (item.type === "音乐") setEditingTarget({ kind: "music", item: item.data });
+    else if (item.type === "视频") setEditingTarget({ kind: "show", item: item.data });
+    else setEditingTarget({ kind: "social", item: item.data });
+  };
+
+  /** 随机品熊展示的是快照对象，编辑后需同步，否则卡片仍是旧数据 */
+  const syncRandomShow = (updated: ShowItem) => {
+    setRandomShow((prev) => (prev && prev.id === updated.id ? updated : prev));
+  };
+
+  const handleSaveMusic = async (updated: MusicItem) => {
+    const finalItem = { ...updated, coverImageUrl: updated.coverImageUrl?.trim() };
+    const newData = musicData.map((m) => (m.id === finalItem.id ? finalItem : m));
+    setMusicData(newData);
+    setEditingTarget(null);
+    toast.success("修改已保存", { description: finalItem.title });
+    try {
+      const { error } = await saveMusicData(newData);
+      if (error) toast.error("云端同步失败", { description: error });
+    } catch {
+      toast.error("保存失败，请稍后重试");
+    }
+  };
+
+  const handleSaveShow = async (updated: ShowItem) => {
+    const newData = showData.map((s) => (s.id === updated.id ? updated : s));
+    setShowData(newData);
+    syncRandomShow(updated);
+    setEditingTarget(null);
+    toast.success("修改已保存", { description: updated.title });
+    try {
+      const result = await saveShowData(newData);
+      if (result.conflicts && result.conflicts.length > 0) {
+        toast.warning(`检测到重复条目，已丢弃 ${result.conflicts.length} 条`);
+      }
+      if (result.error) toast.error("云端同步失败", { description: result.error });
+    } catch {
+      toast.error("保存失败，请稍后重试");
+    }
+  };
+
+  const handleSaveSocial = async (updated: SocialPost) => {
+    const newData = socialData.map((p) => (p.id === updated.id ? updated : p));
+    setSocialData(newData);
+    setEditingTarget(null);
+    toast.success("动态已更新", { description: updated.author || "社交动态" });
+    try {
+      const { error } = await saveSocialData(newData);
+      if (error) toast.error("云端同步失败", { description: error });
+    } catch {
+      toast.error("保存失败，请稍后重试");
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
@@ -857,6 +928,18 @@ export default function HomePage() {
                   {item.type === "音乐" && <MusicOnThisDayCard item={item.data} year={item.year} index={i} />}
                   {item.type === "视频" && <VideoOnThisDayCard item={item.data} year={item.year} index={i} />}
                   {item.type === "社交" && <SocialOnThisDayCard item={item.data} year={item.year} index={i} />}
+                  {isAdmin && (
+                    <div className="absolute top-3 left-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleEditOnThisDay(item); }}
+                        title="编辑这条内容"
+                        className="w-7 h-7 rounded-sm bg-white/90 backdrop-blur-sm flex items-center justify-center text-steel-600 hover:bg-white hover:text-steel-800 transition-colors border border-steel-200/60"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </motion.div>
               ))}
             </div>
@@ -934,6 +1017,19 @@ export default function HomePage() {
                   </div>
                 )}
               </div>
+
+              {isAdmin && randomShow && (
+                <div className="absolute top-3 left-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setEditingTarget({ kind: "show", item: randomShow }); }}
+                    title="编辑这条视频"
+                    className="w-7 h-7 rounded-sm bg-white/90 backdrop-blur-sm flex items-center justify-center text-steel-600 hover:bg-white hover:text-steel-800 transition-colors border border-steel-200/60"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
 
               <div className="p-4">
                 <h3 className="font-bold text-steel-700 text-sm leading-snug line-clamp-2 mb-2 min-h-[2.5rem]">
@@ -1091,6 +1187,25 @@ export default function HomePage() {
           />
         )}
       </AnimatePresence>
+
+      <MusicFormModal
+        open={editingTarget?.kind === "music"}
+        onClose={() => setEditingTarget(null)}
+        onSave={handleSaveMusic}
+        editingItem={editingTarget && editingTarget.kind === "music" ? editingTarget.item : null}
+      />
+      <ShowFormModal
+        open={editingTarget?.kind === "show"}
+        onClose={() => setEditingTarget(null)}
+        onSave={handleSaveShow}
+        editingItem={editingTarget && editingTarget.kind === "show" ? editingTarget.item : null}
+      />
+      <SocialFormModal
+        open={editingTarget?.kind === "social"}
+        onClose={() => setEditingTarget(null)}
+        onSave={handleSaveSocial}
+        editingPost={editingTarget && editingTarget.kind === "social" ? editingTarget.item : null}
+      />
       </>
       )}
     </div>

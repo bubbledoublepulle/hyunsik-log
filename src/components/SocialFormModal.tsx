@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Link2, ImageIcon, Plus, Trash2, Loader2, Languages, KeyRound } from "lucide-react";
 import { toast } from "sonner";
@@ -15,6 +15,25 @@ import {
   type SocialCategory,
 } from "@/lib/socialData";
 import { fetchLinkPreview, type LinkPreview } from "@/lib/linkPreviewFetcher";
+
+/** 本地识别链接所属平台（纯域名判断，不发起任何网络请求） */
+function detectPlatformFromUrl(rawUrl: string): SocialPlatform | null {
+  let host = "";
+  try {
+    host = new URL(rawUrl.trim()).hostname.replace(/^www\./, "").toLowerCase();
+  } catch {
+    return null;
+  }
+  if (!host) return null;
+  const isHost = (root: string) => host === root || host.endsWith(`.${root}`);
+  if (isHost("xiaohongshu.com") || isHost("xhslink.com")) return "小红书";
+  if (isHost("weibo.com") || isHost("weibo.cn")) return "微博";
+  if (isHost("x.com") || isHost("twitter.com")) return "X";
+  if (isHost("instagram.com")) return "Instagram";
+  if (isHost("weverse.io")) return "Weverse";
+  if (isHost("youtube.com") || host === "youtu.be") return "YouTube Community";
+  return null;
+}
 
 interface SocialFormModalProps {
   open: boolean;
@@ -44,6 +63,8 @@ export default function SocialFormModal({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isFetching, setIsFetching] = useState(false);
   const [fetchedFields, setFetchedFields] = useState<Set<string>>(new Set());
+  /** 用户是否手动改过平台下拉（改过就不再随粘贴的链接自动切换） */
+  const platformTouchedRef = useRef(false);
 
   useEffect(() => {
     if (editingPost) {
@@ -72,6 +93,7 @@ export default function SocialFormModal({
     setIsFetching(false);
     setIsTranslating(false);
     setShowApiKeyInput(false);
+    platformTouchedRef.current = false;
   }, [editingPost, open]);
 
   // 粘贴链接后自动抓取
@@ -258,7 +280,10 @@ export default function SocialFormModal({
             </label>
             <select
               value={platform}
-              onChange={(e) => setPlatform(e.target.value as SocialPlatform)}
+              onChange={(e) => {
+                platformTouchedRef.current = true;
+                setPlatform(e.target.value as SocialPlatform);
+              }}
               className="w-full px-3.5 py-2.5 rounded-xl border-2 border-gray-100 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none transition-all bg-white"
             >
               {allPlatforms.map((p) => (
@@ -400,7 +425,15 @@ export default function SocialFormModal({
               <input
                 type="url"
                 value={postUrl}
-                onChange={(e) => setPostUrl(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setPostUrl(value);
+                  // 本地域名识别，自动选中对应平台（用户手动改过下拉就不再覆盖）
+                  const detected = detectPlatformFromUrl(value);
+                  if (detected && !platformTouchedRef.current && detected !== platform) {
+                    setPlatform(detected);
+                  }
+                }}
                 placeholder="https://x.com/... 或 https://weibo.com/..."
                 className={`w-full pl-10 pr-4 py-2.5 rounded-xl border-2 transition-all outline-none ${
                   fetchedFields.has("postUrl")
