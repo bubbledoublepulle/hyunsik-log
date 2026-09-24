@@ -16,6 +16,7 @@ import {
   ExternalLink,
   Image as ImageIcon,
   X,
+  Languages,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
@@ -31,6 +32,7 @@ import {
   type ShowItem,
 } from "@/lib/showData";
 import { loadSocialData, syncSocialData, type SocialPost } from "@/lib/socialData";
+import { linkifyText } from "@/lib/linkify";
 import DataManager from "@/components/DataManager";
 import PageLoader from "@/components/PageLoader";
 
@@ -183,6 +185,7 @@ function VideoOnThisDayCard({ item, year, index }: { item: ShowItem; year: numbe
 function SocialOnThisDayCard({ item, year, index }: { item: SocialPost; year: number; index: number }) {
   const hasImages = item.images.length > 0;
   const no = String(index + 1).padStart(2, '0');
+  const hasTr = !!item.translation && item.translation.trim().length > 0;
   return (
     <>
       {hasImages ? (
@@ -216,7 +219,24 @@ function SocialOnThisDayCard({ item, year, index }: { item: SocialPost; year: nu
           <span className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600">{year}</span>
         </div>
         <h3 className="font-bold text-steel-700 text-sm mb-1">{item.author || "新动态"}</h3>
-        <p className="text-xs text-steel-500/70 line-clamp-3">{item.content.length > 60 ? item.content.slice(0, 60) + "..." : item.content}</p>
+        {hasTr ? (
+          <>
+            <div className="border-l-2 border-l-steel-400 pl-2 mb-1.5">
+              <div className="flex items-center gap-1 mb-0.5">
+                <Languages className="w-3 h-3 text-steel-500" />
+                <span className="text-[10px] font-medium text-steel-500/80 uppercase tracking-[0.12em]">译</span>
+              </div>
+              <p className="text-xs text-steel-700 leading-relaxed line-clamp-3">
+                {item.translation!.length > 60 ? item.translation!.slice(0, 60) + "..." : item.translation}
+              </p>
+            </div>
+            <p className="text-[11px] text-steel-500/60 leading-relaxed line-clamp-2">
+              {item.content.length > 60 ? item.content.slice(0, 60) + "..." : item.content}
+            </p>
+          </>
+        ) : (
+          <p className="text-xs text-steel-500/70 line-clamp-3">{item.content.length > 60 ? item.content.slice(0, 60) + "..." : item.content}</p>
+        )}
         {!hasImages && item.images.length > 0 && (
           <p className="text-[10px] text-steel-500/70 mt-2 flex items-center gap-1">
             <ImageIcon className="w-3 h-3" />{item.images.length} 张图片
@@ -457,7 +477,17 @@ function SocialDetailModal({ item, onClose }: { item: SocialPost; onClose: () =>
           <h2 className="text-lg font-bold text-steel-700 mb-1">{item.author || "新动态"}</h2>
           <p className="text-sm text-steel-500/70 mb-1">{item.platform} · {item.category}</p>
 
-          <p className="text-sm text-steel-600/90 leading-relaxed whitespace-pre-wrap mb-4">{item.content}</p>
+          <p className="text-sm text-steel-600/90 leading-relaxed whitespace-pre-wrap mb-4">{linkifyText(item.content)}</p>
+
+          {item.translation && item.translation.trim() && (
+            <div className="mb-4 rounded-sm border border-steel-200/60 border-l-2 border-l-steel-400 bg-steel-50/50 px-3 py-2.5">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Languages className="w-3 h-3 text-steel-500" />
+                <span className="text-[10px] font-medium text-steel-500/80 uppercase tracking-[0.12em]">翻译</span>
+              </div>
+              <p className="text-sm text-steel-600 leading-relaxed whitespace-pre-wrap">{linkifyText(item.translation)}</p>
+            </div>
+          )}
 
           {item.images.length > 0 && (
             <div className="mb-4">
@@ -994,13 +1024,13 @@ export default function HomePage() {
             <>
               {groupedUpdates[activeTab].map((item, i) => (
                 <motion.div
-                  key={item.id}
-                  layout
+                  key={`${activeTab}-${item.id}`}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.08 }}
+                  transition={{ duration: 0.32, delay: i * 0.06, ease: [0.22, 1, 0.36, 1] }}
+                  whileHover={{ y: -4, transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] } }}
                   onClick={() => navigate(item.link)}
-                  className="flex items-start gap-4 p-4 rounded-sm bg-white/40 border border-steel-200/60 shadow-sm hover:-translate-y-1 hover:border-steel-300/80 transition-all group cursor-pointer"
+                  className="flex items-start gap-4 p-4 rounded-sm bg-white/40 border border-steel-200/60 shadow-sm transition-colors hover:border-steel-300/80 group cursor-pointer"
                 >
                   <div className="w-10 h-10 rounded-sm bg-steel-50/70 border border-steel-200/60 flex items-center justify-center shrink-0 group-hover:bg-white/70 transition-colors">
                     <item.icon className="w-5 h-5 text-steel-500 group-hover:text-steel-600 transition-colors" />

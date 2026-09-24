@@ -992,7 +992,7 @@ export default function ShowsPage() {
 
                         <div className="p-4">
                           <h3
-                            className="text-xs font-normal text-steel-700 leading-snug line-clamp-2 mb-2 min-h-[2.25rem]"
+                            className="font-bold text-steel-700 text-sm leading-snug line-clamp-2 mb-2 min-h-[2.5rem]"
                             title={item.title}
                           >
                             {item.title}

@@ -50,6 +50,7 @@ import {
 import { toast } from "sonner";
 import { fetchLinkPreview, type LinkPreview } from "@/lib/linkPreviewFetcher";
 import { translateToChinese, DEEPSEEK_KEY_STORAGE } from "@/lib/translator";
+import { linkifyText } from "@/lib/linkify";
 import {
   saveSocialData,
   syncSocialData,
@@ -85,40 +86,6 @@ function getVideoEmbedUrl(url: string): { src: string; platform: "youtube" | "bi
     return { src: `https://player.bilibili.com/player.html?bvid=${bvId}&page=1`, platform: "bilibili" };
   }
   return null;
-}
-
-/** 将文本中的 URL 转换为可点击的超链接（无重复） */
-function linkifyText(text: string): React.ReactNode[] {
-  const urlRegex = /https?:\/\/[^\s]+/g;
-  const result: React.ReactNode[] = [];
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = urlRegex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      result.push(<span key={`text-${lastIndex}`}>{text.slice(lastIndex, match.index)}</span>);
-    }
-    const url = match[0];
-    result.push(
-      <a
-        key={`link-${match.index}`}
-        href={url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-steel-500 hover:text-steel-600 hover:underline break-all"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {url}
-      </a>
-    );
-    lastIndex = match.index + url.length;
-  }
-
-  if (lastIndex < text.length) {
-    result.push(<span key={`text-end`}>{text.slice(lastIndex)}</span>);
-  }
-
-  return result;
 }
 
 /** 将社交动态日期统一转换为北京时间的年月日，避免浏览器本地时区影响筛选 */
@@ -1255,6 +1222,7 @@ export default function SocialPage() {
                 const platformStyle = platformVisualStyles[post.platform] || platformVisualStyles["X"];
                 const catStyle = (post.category && categoryStyles[post.category]) || categoryStyles["个人动态"];
                 const isSelected = batchSelectedIds.has(post.id);
+                const hasTranslation = !!post.translation && post.translation.trim().length > 0;
                 return (
                                     <motion.div
                     key={post.id}
@@ -1322,9 +1290,24 @@ export default function SocialPage() {
                       </div>
                     </div>
 
-                    {post.content && (
+                    {(post.content || hasTranslation) && (
                       <div className="px-4 pb-2" style={batchEditMode ? { marginLeft: "2rem" } : undefined}>
-                        <p className="text-sm text-steel-700 leading-relaxed whitespace-pre-wrap line-clamp-6">{linkifyText(post.content)}</p>
+                        {hasTranslation ? (
+                          <>
+                            <div className="border-l-2 border-l-steel-400 pl-2 mb-2">
+                              <div className="flex items-center gap-1 mb-0.5">
+                                <Languages className="w-3 h-3 text-steel-500" />
+                                <span className="text-[10px] font-medium text-steel-500/80 uppercase tracking-[0.12em]">译</span>
+                              </div>
+                              <p className="text-sm text-steel-700 leading-relaxed whitespace-pre-wrap line-clamp-6">{linkifyText(post.translation || "")}</p>
+                            </div>
+                            {post.content && (
+                              <p className="text-xs text-steel-500/60 leading-relaxed whitespace-pre-wrap line-clamp-3">{linkifyText(post.content)}</p>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-sm text-steel-700 leading-relaxed whitespace-pre-wrap line-clamp-6">{linkifyText(post.content)}</p>
+                        )}
                       </div>
                     )}
 
@@ -1432,7 +1415,7 @@ function DetailModal({ post, imageIdx, onImageIdxChange, onClose, isAdmin, onEdi
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
-      <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} transition={{ duration: 0.25 }} onClick={(e) => e.stopPropagation()} className="relative w-full max-w-2xl max-h-[90vh] bg-white/40 rounded-sm shadow-2xl overflow-hidden flex flex-col">
+      <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} transition={{ duration: 0.25 }} onClick={(e) => e.stopPropagation()} className="relative w-full max-w-2xl max-h-[90vh] bg-white/90 backdrop-blur-xl border border-steel-200/60 rounded-sm shadow-2xl overflow-hidden flex flex-col">
         <div className="absolute top-4 right-4 z-10 flex gap-2">
           {isAdmin && (
             <button
