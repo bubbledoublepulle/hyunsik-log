@@ -2,11 +2,12 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X, Tv, Save, Plus, Trash2, Link2, Search, Loader2, CheckCircle2,
-  Image as ImageIcon, AlertTriangle, ListPlus, FileText,
+  Image as ImageIcon, AlertTriangle, ListPlus, FileText, Languages, KeyRound, Undo2,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { ShowItem, ShowMember, VideoLink } from "@/lib/showData";
 import { detectPlatform, fetchVideoInfo, type VideoInfo, type FetchError } from "@/lib/videoFetcher";
+import { translateToChinese, DEEPSEEK_KEY_STORAGE } from "@/lib/translator";
 
 
 
@@ -84,6 +85,12 @@ export default function ShowFormModal({
   const [fetchErrorMsg, setFetchErrorMsg] = useState<string>("");
   const [autoFetchEnabled, setAutoFetchEnabled] = useState(true); // 粘贴后自动抓取开关
 
+  // AI 翻译（译文直接替换标题，原文暂存在 ref 里可一键还原）
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem(DEEPSEEK_KEY_STORAGE) || "");
+  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [originalTitle, setOriginalTitle] = useState<string | null>(null);
+
   // 初始化 / 重置表单
   useEffect(() => {
     if (editingItem) {
@@ -127,6 +134,10 @@ export default function ShowFormModal({
     setDetectedPlatform(null);
     setFetchErrorMsg("");
     setErrors({});
+    // 重置 AI 翻译状态
+    setOriginalTitle(null);
+    setIsTranslating(false);
+    setShowApiKeyInput(false);
   }, [editingItem, open]);
 
   const toggleMember = (member: ShowMember) => {
@@ -444,6 +455,42 @@ export default function ShowFormModal({
   }
 
   // ========== 表单验证 ==========
+
+  /** AI 翻译标题：译文直接覆盖原标题，可点「还原」撤销 */
+  const handleAiTranslateTitle = async () => {
+    if (!title.trim()) {
+      toast.error("请先填写标题再翻译");
+      return;
+    }
+    if (!apiKey.trim()) {
+      setShowApiKeyInput(true);
+      toast.error("请先填写 DeepSeek API Key");
+      return;
+    }
+    localStorage.setItem(DEEPSEEK_KEY_STORAGE, apiKey.trim());
+    setIsTranslating(true);
+    try {
+      const result = await translateToChinese(title, apiKey.trim());
+      if (result) {
+        setOriginalTitle(title);
+        setTitle(result);
+        toast.success("AI 翻译完成，标题已替换为中文", {
+          description: "可手动修改后再保存，或点「还原」回到原标题",
+        });
+      } else {
+        toast.error("翻译失败，请检查 API Key 或稍后重试");
+      }
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
+  const handleRestoreTitle = () => {
+    if (!originalTitle) return;
+    setTitle(originalTitle);
+    setOriginalTitle(null);
+    toast.success("已还原原标题");
+  };
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -840,10 +887,44 @@ export default function ShowFormModal({
 
               {/* ====== 视频信息（自动填充区） ====== */}
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-1.5 flex items-center">
-                  综艺标题 <span className="text-red-400 ml-0.5">*</span>
-                  {fieldBadge("title")}
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-sm font-medium text-gray-700 flex items-center">
+                    综艺标题 <span className="text-red-400 ml-0.5">*</span>
+                    {fieldBadge("title")}
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    {originalTitle && (
+                      <button
+                        type="button"
+                        onClick={handleRestoreTitle}
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-steel-500 bg-gray-50 hover:bg-gray-100 transition-colors"
+                        title={`还原原标题：${originalTitle}`}
+                      >
+                        <Undo2 className="w-3.5 h-3.5" />
+                        还原
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleAiTranslateTitle}
+                      disabled={isTranslating}
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-sky-600 bg-sky-50 hover:bg-sky-100 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                      title="用 AI 把标题翻译成中文，结果直接替换原标题"
+                    >
+                      {isTranslating ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          翻译中...
+                        </>
+                      ) : (
+                        <>
+                          <Languages className="w-3.5 h-3.5" />
+                          AI 翻译
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
                 <input
                   type="text"
                   value={title}
@@ -858,6 +939,37 @@ export default function ShowFormModal({
                   }`}
                 />
                 {errors.title && <p className="text-xs text-red-500 mt-1">{errors.title}</p>}
+                {showApiKeyInput && (
+                  <div className="mt-2 flex gap-2">
+                    <div className="relative flex-1">
+                      <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input
+                        type="password"
+                        value={apiKey}
+                        onChange={(e) => setApiKey(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            setShowApiKeyInput(false);
+                            handleAiTranslateTitle();
+                          }
+                        }}
+                        placeholder="DeepSeek API Key（会保存在本地，下次自动带出）"
+                        className="w-full pl-10 pr-3 py-2 rounded-xl border-2 border-gray-100 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none transition-all text-sm"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowApiKeyInput(false);
+                        handleAiTranslateTitle();
+                      }}
+                      className="px-3 py-2 rounded-xl bg-sky-500 text-white text-sm font-medium hover:bg-sky-600 transition-colors"
+                    >
+                      翻译
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
