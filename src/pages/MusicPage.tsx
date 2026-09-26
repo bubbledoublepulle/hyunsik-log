@@ -10,7 +10,6 @@ import {
   Sparkles,
   ListMusic,
   ArrowUpDown,
-  RotateCcw,
   LayoutGrid,
   Album,
   Music,
@@ -23,7 +22,6 @@ import { toast } from "sonner";
 import {
   saveMusicData,
   syncMusicData,
-  resetMusicData,
   fromDbRow,
   allTypes,
   allRoles,
@@ -335,12 +333,6 @@ export default function MusicPage() {
     }
   };
 
-  const handleReset = async () => {
-    setMusicData(await resetMusicData());
-    clearAllFilters();
-    toast.success("数据已重置", { description: "恢复到初始 12 条音乐档案" });
-  };
-
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
       <motion.div
@@ -358,9 +350,6 @@ export default function MusicPage() {
         <div className="flex items-center gap-2 flex-wrap">
           {isAdmin && (
             <>
-              <button onClick={handleReset} className="flex items-center gap-1.5 px-3 py-2 rounded-sm border border-steel-200/60 text-steel-600 text-sm font-medium hover:bg-white/50 transition-colors">
-                <RotateCcw className="w-4 h-4" />重置数据
-              </button>
               <button onClick={handleAdd} className="flex items-center gap-1.5 px-4 py-2 rounded-sm bg-steel-500 text-white text-sm font-medium hover:bg-steel-600 transition-colors shadow-sm shadow-steel-500/20">
                 <Plus className="w-4 h-4" />添加歌曲
               </button>

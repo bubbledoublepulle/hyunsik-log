@@ -391,6 +391,18 @@ function saveLocalSocialData(data: SocialPost[]): void {
 
 // ─── Supabase 读写 ───
 
+/** 按 id 去重，保留第一个（防御分页错位导致同一行被重复拉取） */
+function dedupeById<T extends { id: string }>(list: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const item of list) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    out.push(item);
+  }
+  return out;
+}
+
 export async function syncSocialData(): Promise<SocialPost[]> {
   if (!isSupabaseConfigured()) {
     return loadSocialData();
@@ -416,7 +428,9 @@ export async function syncSocialData(): Promise<SocialPost[]> {
         const { data, error } = await supabase
           .from("social_posts")
           .select("*")
+          // 同 shows：created_at 重复值多，必须加 id 作稳定次键，否则分页会重复返回/漏行
           .order("created_at", { ascending: false })
+          .order("id", { ascending: true })
           .range(from, from + PAGE_SIZE - 1);
 
         if (error) {
@@ -433,7 +447,7 @@ export async function syncSocialData(): Promise<SocialPost[]> {
         }
       }
 
-      const items = allRows.map(fromDbRow);
+      const items = dedupeById(allRows.map(fromDbRow));
       saveLocalSocialData(items);
       socialSyncCache = { data: items, at: Date.now() };
       return items;

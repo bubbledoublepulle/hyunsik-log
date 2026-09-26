@@ -281,6 +281,11 @@ async function fetchBilibiliMeta(bvid) {
 async function main() {
   console.log("=== 视频元数据预取 (YouTube + Bilibili) ===\n");
 
+  if (process.env.SKIP_PREFETCH === "1") {
+    console.log("⏭️ SKIP_PREFETCH=1，跳过预取");
+    process.exit(0);
+  }
+
   const config = loadSupabaseConfig();
   if (!config.url || !config.key) {
     console.warn("⚠️ 未配置 Supabase 环境变量，跳过预取，保留现有 video-meta.json");
@@ -319,7 +324,18 @@ async function main() {
   console.log(`发现 ${ytIdList.length} 个 YouTube 视频ID: ${ytIdList.join(", ") || "无"}`);
   console.log(`发现 ${bvidList.length} 个 Bilibili BV号: ${bvidList.join(", ") || "无"}`);
 
+  // 以现有 video-meta.json 为基线做合并，绝不覆盖/删除已有条目
+  let baselineCount = 0;
   const metaMap = {};
+  if (existsSync(OUTPUT)) {
+    try {
+      Object.assign(metaMap, JSON.parse(readFileSync(OUTPUT, "utf-8")));
+      baselineCount = Object.keys(metaMap).length;
+      console.log(`已载入现有 ${baselineCount} 条元数据作为基线（合并模式，不覆盖已有条目）`);
+    } catch (e) {
+      console.warn(`⚠️ 现有 video-meta.json 解析失败(${e.message})，将从零重建`);
+    }
+  }
 
   // ① 抓取 YouTube 数据：优先批量 API，失败再降级单条页面解析
   console.log("\n--- YouTube ---");
@@ -362,6 +378,15 @@ async function main() {
     mkdirSync(outDir, { recursive: true });
   }
 
+  // 保护：合并后没有变多（说明本次基本没抓到），就不写文件，避免抹掉已有数据
+  const mergedCount = Object.keys(metaMap).length;
+  if (mergedCount <= baselineCount) {
+    console.log(
+      `\nℹ️ 本次无新增有效数据(${mergedCount} ≤ 基线 ${baselineCount})，跳过写入以保护现有数据`
+    );
+    return;
+  }
+
   // 写入 JSON
   writeFileSync(OUTPUT, JSON.stringify(metaMap, null, 2), "utf-8");
 
@@ -371,6 +396,7 @@ async function main() {
   console.log(
     `\n✅ 已写入 YouTube ${ytSuccess}/${ytIdList.length} + Bilibili ${blSuccess}/${bvidList.length} 条元数据 → ${OUTPUT}`
   );
+  console.log(`   基线 ${baselineCount} 条 → 现有 ${mergedCount} 条（新增/更新 ${mergedCount - baselineCount} 条）`);
 }
 
 main().catch((e) => {

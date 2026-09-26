@@ -8,7 +8,6 @@ import {
   Clock,
   Eye,
   Calendar,
-  RefreshCw,
   Tv,
   LayoutGrid,
   BarChart3,
@@ -16,7 +15,6 @@ import {
   Film,
   ExternalLink,
   ImageOff,
-  Loader2,
   Check,
   ChevronDown,
   ChevronRight,
@@ -119,11 +117,6 @@ export default function ShowsPage() {
   const [selectedMembers, setSelectedMembers] = useState<Set<ShowMember>>(new Set());
   const [viewMode, setViewMode] = useState<ViewMode>("archive");
 
-  const [metaRefreshing, setMetaRefreshing] = useState(false);
-  const [lastSync, setLastSync] = useState<string>("");
-  const refreshAbortRef = useRef(false);
-  const AUTO_REFRESH_INTERVAL = 24 * 60 * 60 * 1000;
-  const autoRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [flashId, setFlashId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -157,8 +150,9 @@ export default function ShowsPage() {
       );
     }
     if (selectedMembers.size > 0) {
+      // AND 逻辑：选中的标签必须全部包含（而非任一命中）
       result = result.filter((item) =>
-        item.members.some((m) => selectedMembers.has(m))
+        item.members.length > 0 && [...selectedMembers].every((m) => item.members.includes(m))
       );
     }
     switch (sortBy) {
@@ -255,11 +249,6 @@ export default function ShowsPage() {
 
   const initialLoadRef = useRef(true);
   const userModifiedRef = useRef(false);
-  const showDataRef = useRef<ShowItem[]>([]);
-
-  useEffect(() => {
-    showDataRef.current = showData;
-  }, [showData]);
 
   const prevRtShowCountRef = useRef(0);
   const rtShowNotifiedRef = useRef(false);
@@ -292,43 +281,6 @@ export default function ShowsPage() {
       })
       .catch(() => {})
       .finally(() => setIsLoading(false));
-
-    const stored = localStorage.getItem("hsik_show_metadata_cache");
-    if (stored) {
-      try {
-        const cache = JSON.parse(stored);
-        const timestamps = Object.values(cache).map((m: any) => m.fetchedAt || 0);
-        if (timestamps.length > 0) {
-          const latest = Math.max(...timestamps);
-          setLastSync(new Date(latest).toLocaleString("zh-CN"));
-        }
-      } catch {
-        // ignore
-      }
-    }
-    autoRefreshTimerRef.current = setInterval(() => {
-      if (!metaRefreshing && showDataRef.current.length > 0) {
-        refreshMetadata();
-      }
-    }, AUTO_REFRESH_INTERVAL);
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible" && !metaRefreshing && showDataRef.current.length > 0) {
-        const hasStale = showDataRef.current.some((item) => {
-          const meta = getCachedMetadata(item.id);
-          return isCacheStale(meta);
-        });
-        if (hasStale) {
-          refreshMetadata();
-        }
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      if (autoRefreshTimerRef.current) {
-        clearInterval(autoRefreshTimerRef.current);
-      }
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -344,71 +296,6 @@ export default function ShowsPage() {
           toast.error("云端同步失败", { description: error });
         }
       }).catch(() => {});
-    }
-  }, [showData]);
-
-  const refreshMetadata = useCallback(async () => {
-    if (refreshAbortRef.current) return;
-    refreshAbortRef.current = true;
-    setMetaRefreshing(true);
-
-    let totalUpdated = 0;
-    let totalFailed = 0;
-    let totalSkipped = 0;
-    let offset = 0;
-    const limit = 50;
-
-    try {
-      try {
-        localStorage.removeItem("hsik_show_metadata_cache");
-        localStorage.removeItem("hsik_video_fetch_cache");
-      } catch {}
-
-      while (true) {
-        const resp = await fetch(`/api/refresh-all-shows?offset=${offset}&limit=${limit}`, {
-          method: "POST",
-          signal: AbortSignal.timeout(30000),
-        });
-
-        if (!resp.ok) {
-          throw new Error(`HTTP ${resp.status}`);
-        }
-
-        const data = await resp.json();
-
-        totalUpdated += data.updated || 0;
-        totalFailed += data.failed || 0;
-        totalSkipped += data.skipped || 0;
-
-        if (!data.hasMore) {
-          break;
-        }
-
-        offset = data.nextOffset;
-      }
-
-      await new Promise(r => setTimeout(r, 2000));
-
-      const synced = await syncShowData();
-      setShowData(synced);
-
-      const now = new Date().toLocaleString("zh-CN");
-      setLastSync(now);
-      localStorage.setItem("hsik_meta_last_sync", now);
-
-      toast.success("播放量更新完成", {
-        description: `已更新 ${totalUpdated} 条，失败 ${totalFailed} 条，跳过 ${totalSkipped} 条`,
-      });
-    } catch (e) {
-      toast.error("播放量刷新失败", {
-        description: String(e),
-      });
-    } finally {
-      setMetaRefreshing(false);
-      refreshAbortRef.current = false;
-      const now = new Date().toLocaleString("zh-CN");
-      setLastSync(now);
-      localStorage.setItem("hsik_meta_last_sync", now);
     }
   }, [showData]);
 
@@ -606,30 +493,6 @@ export default function ShowsPage() {
             </button>
           </div>
 
-          <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white/40 border border-steel-200/60 text-steel-600 text-xs font-medium">
-            {metaRefreshing ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <RefreshCw className="w-3.5 h-3.5" />
-            )}
-            {lastSync ? `同步于 ${lastSync}` : "尚未同步"}
-          </div>
-
-          {isAdmin && (
-            <button
-              onClick={refreshMetadata}
-              disabled={metaRefreshing}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-steel-200/60 bg-white/40 text-steel-600 text-xs font-medium hover:bg-white/60 hover:border-steel-300/80 transition-all disabled:opacity-50"
-              title="手动刷新视频元数据"
-            >
-              {metaRefreshing ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <RefreshCw className="w-3.5 h-3.5" />
-              )}
-              刷新数据
-            </button>
-          )}
         </div>
       </div>
 

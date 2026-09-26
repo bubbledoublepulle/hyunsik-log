@@ -168,6 +168,18 @@ export function backupShowData(): string {
 
 // ─── Supabase 读写 ───
 
+/** 按 id 去重，保留第一个（防御分页错位导致同一行被重复拉取） */
+function dedupeById<T extends { id: string }>(list: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const item of list) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    out.push(item);
+  }
+  return out;
+}
+
 export async function syncShowData(): Promise<ShowItem[]> {
   if (!isSupabaseConfigured()) {
     return loadShowData();
@@ -195,7 +207,10 @@ export async function syncShowData(): Promise<ShowItem[]> {
         const { data, error } = await supabase
           .from("shows")
           .select("*")
+          // created_at 大量重复（618 行仅 37 个唯一值），单独作为排序键会让分页页边界错位，
+          // 导致同一行被两页重复返回、另一行被跳过。必须用 id 作为稳定次键。
           .order("created_at", { ascending: false })
+          .order("id", { ascending: true })
           .range(from, from + PAGE_SIZE - 1);
 
         if (error) {
@@ -212,7 +227,7 @@ export async function syncShowData(): Promise<ShowItem[]> {
         }
       }
 
-      const items = allRows.map(fromDbRow);
+      const items = dedupeById(allRows.map(fromDbRow));
       // 自愈：剔除旧版示例数据（s01-s08），避免污染真实档案
       const localData = loadShowData().filter((i) => !LEGACY_SAMPLE_IDS.has(i.id));
 
@@ -292,6 +307,7 @@ export async function saveShowData(data: ShowItem[]): Promise<ShowSaveResult> {
     const { data: remoteRows, error: fetchErr } = await supabase
       .from("shows")
       .select("id")
+      .order("id", { ascending: true })
       .limit(9995);
     if (fetchErr) {
       return { error: null, conflicts };
@@ -300,6 +316,16 @@ export async function saveShowData(data: ShowItem[]): Promise<ShowSaveResult> {
     const idsToDelete = (remoteRows || [])
       .filter((r: any) => !currentIds.has(String(r.id)))
       .map((r: any) => String(r.id));
+
+    // 防护：本地数据若因同步分页漏拉而不完整，会把大量正常行误判成"多余行"并删掉。
+    // 正常删除通常是零星几条，超过阈值就认定本地数据不完整，宁可不删。
+    const DELETE_GUARD = Math.max(50, Math.floor(uniqueData.length * 0.2));
+    if (idsToDelete.length > DELETE_GUARD) {
+      console.warn(
+        `[shows] 待删除 ${idsToDelete.length} 条，超过安全阈值 ${DELETE_GUARD}（本地 ${uniqueData.length} 条），疑似本地数据不完整，已跳过云端删除`
+      );
+      return { error: null, conflicts };
+    }
 
     for (let i = 0; i < idsToDelete.length; i += BATCH_SIZE) {
       const batch = idsToDelete.slice(i, i + BATCH_SIZE);
@@ -991,26 +1017,6 @@ export async function refreshSingleShowMetadata(
     }
 
     return { error: null, metadata: data.metadata };
-  } catch (e) {
-    return { error: String(e) };
-  }
-}
-
-/**
- * 批量刷新所有视频的元数据（调用 Worker）
- * 用于批量导入后，或 Cron 触发后前端手动刷新
- */
-export async function batchRefreshMetadata(): Promise<{ error: string | null; updated?: number }> {
-  try {
-    const resp = await fetch("/api/refresh-all-shows", {
-      method: "POST",
-      signal: AbortSignal.timeout(120000),
-    });
-    if (!resp.ok) {
-      return { error: `批量刷新失败: HTTP ${resp.status}` };
-    }
-    const data = await resp.json();
-    return { error: null, updated: data.updated };
   } catch (e) {
     return { error: String(e) };
   }

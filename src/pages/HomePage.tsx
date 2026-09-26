@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -197,7 +197,7 @@ function VideoOnThisDayCard({ item, year, index }: { item: ShowItem; year: numbe
   );
 }
 
-function SocialOnThisDayCard({ item, year, index }: { item: SocialPost; year: number; index: number }) {
+function SocialOnThisDayCard({ item, year, index, hidePlaceholder }: { item: SocialPost; year: number; index: number; hidePlaceholder?: boolean }) {
   const hasImages = item.images.length > 0;
   const no = String(index + 1).padStart(2, '0');
   const hasTr = !!item.translation && item.translation.trim().length > 0;
@@ -222,18 +222,21 @@ function SocialOnThisDayCard({ item, year, index }: { item: SocialPost; year: nu
             </div>
           )}
         </div>
-      ) : (
+      ) : !hidePlaceholder ? (
         <div className="relative aspect-[16/10] bg-steel-50/30 flex items-center justify-center overflow-hidden">
           <span className="font-serif italic text-3xl sm:text-4xl text-steel-400/40">Social N°{no}</span>
           <CardLogoDecoration />
         </div>
-      )}
-      <div className="p-4">
+      ) : null}
+      <div className={`p-4 ${hidePlaceholder && !hasImages ? "flex-1 flex flex-col justify-center" : ""}`}>
         <div className="flex items-center justify-between mb-2">
           <span className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600">Social</span>
           <span className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600">{year}</span>
         </div>
         <h3 className="font-bold text-steel-700 text-sm mb-1">{item.author || "新动态"}</h3>
+        {hidePlaceholder && !hasImages && (
+          <span className="font-serif italic text-4xl leading-none text-steel-300/60 select-none mb-1" aria-hidden="true">“</span>
+        )}
         {hasTr ? (
           <>
             <div className="border-l-2 border-l-steel-400 pl-2 mb-1.5">
@@ -241,16 +244,18 @@ function SocialOnThisDayCard({ item, year, index }: { item: SocialPost; year: nu
                 <Languages className="w-3 h-3 text-steel-500" />
                 <span className="text-[10px] font-medium text-steel-500/80 uppercase tracking-[0.12em]">译</span>
               </div>
-              <p className="text-xs text-steel-700 leading-relaxed line-clamp-3">
-                {item.translation!.length > 60 ? item.translation!.slice(0, 60) + "..." : item.translation}
+              <p className={`text-steel-700 leading-relaxed break-words ${hidePlaceholder && !hasImages ? "text-[13px]" : "text-xs line-clamp-3"}`}>
+                {item.translation!.length > 60 && !hidePlaceholder ? item.translation!.slice(0, 60) + "..." : item.translation}
               </p>
             </div>
-            <p className="text-[11px] text-steel-500/60 leading-relaxed line-clamp-2">
-              {item.content.length > 60 ? item.content.slice(0, 60) + "..." : item.content}
+            <p className={`text-steel-500/60 leading-relaxed break-words ${hidePlaceholder && !hasImages ? "text-xs" : "text-[11px] line-clamp-2"}`}>
+              {item.content.length > 60 && !hidePlaceholder ? item.content.slice(0, 60) + "..." : item.content}
             </p>
           </>
         ) : (
-          <p className="text-xs text-steel-500/70 line-clamp-3">{item.content.length > 60 ? item.content.slice(0, 60) + "..." : item.content}</p>
+          <p className={`text-steel-500/70 leading-relaxed break-words ${hidePlaceholder && !hasImages ? "text-[13px]" : "text-xs line-clamp-3"}`}>
+            {item.content.length > 60 && !hidePlaceholder ? item.content.slice(0, 60) + "..." : item.content}
+          </p>
         )}
         {!hasImages && item.images.length > 0 && (
           <p className="text-[10px] text-steel-500/70 mt-2 flex items-center gap-1">
@@ -259,6 +264,49 @@ function SocialOnThisDayCard({ item, year, index }: { item: SocialPost; year: nu
         )}
       </div>
     </>
+  );
+}
+
+/** 随机品熊用的音乐卡（样式对齐 MusicOnThisDayCard）；无封面时不渲染占位区 */
+function RandomMusicCard({ item }: { item: MusicItem }) {
+  const year = new Date(item.releaseDate).getFullYear();
+  return (
+    <>
+      {item.coverImageUrl ? (
+        <div className="relative aspect-[16/10] overflow-hidden bg-steel-50/30">
+          <img
+            src={item.coverImageUrl}
+            alt={item.title}
+            loading="lazy"
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+          <CardLogoDecoration />
+        </div>
+      ) : null}
+      <div className={`p-4 ${!item.coverImageUrl ? "flex-1 flex flex-col justify-center" : ""}`}>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600">Music</span>
+          <span className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600">{year}</span>
+        </div>
+        <h3 className="font-bold text-steel-700 text-sm leading-snug line-clamp-2 mb-1 min-h-[2.5rem]">{item.title}</h3>
+        <p className="text-xs text-steel-500/70 mb-2 line-clamp-1">{item.album} · {item.artist}</p>
+        <div className="flex flex-wrap gap-1">
+          {item.roles.map((role) => (
+            <span key={role} className="text-[10px] px-1.5 py-0.5 rounded-sm border border-steel-200/60 bg-steel-50/70 text-steel-600 font-medium">{role}</span>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** 某一类数据为空时的占位卡，保持三列布局不塌缩 */
+function EmptySlot({ icon, text }: { icon: ReactNode; text: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[220px] rounded-sm border border-dashed border-steel-200/60 bg-white/20">
+      {icon}
+      <p className="text-xs text-steel-500/60 mt-2">{text}</p>
+    </div>
   );
 }
 
@@ -550,6 +598,14 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState<TabKey>("music");
 
   const [randomShow, setRandomShow] = useState<ShowItem | null>(null);
+  const [randomSocial, setRandomSocial] = useState<SocialPost | null>(null);
+  const [randomMusic, setRandomMusic] = useState<MusicItem | null>(null);
+  /** 换一换的序号：变化即重播三张卡的入场动画 */
+  const [pickSeq, setPickSeq] = useState(0);
+  /** 首次数据同步是否已结束（成功或失败都置 true） */
+  const [dataSynced, setDataSynced] = useState(false);
+  /** 是否已经抽过一次（此后只有点「换一换」才更新） */
+  const hasPickedRef = useRef(false);
 
   const [selectedMusic, setSelectedMusic] = useState<MusicItem | null>(null);
   const [selectedVideo, setSelectedVideo] = useState<ShowItem | null>(null);
@@ -605,7 +661,10 @@ export default function HomePage() {
         tag: "社交",
         tagColor: "bg-steel-50/70 text-steel-600 border-steel-200/60",
         title: p.author || "新动态",
-        desc: p.content.length > 40 ? p.content.slice(0, 40) + "..." : p.content,
+        desc: (() => {
+          const text = p.translation?.trim() || p.content || "";
+          return text.length > 40 ? text.slice(0, 40) + "..." : text;
+        })(),
         date: p.postDate.split("T")[0],
         link: "/social",
       }), (p) => p.postDate),
@@ -637,21 +696,40 @@ export default function HomePage() {
       buildUpdates(musicSynced, showsSynced, socialsSynced);
     }).catch(() => {}).finally(() => {
       setIsLoading(false);
+      // 同步失败也要放行：用本地数据抽一次，不至于一直空着
+      setDataSynced(true);
     });
   }, [buildUpdates]);
 
-  const pickRandomShow = useCallback(() => {
-    if (showData.length > 0) {
-      const idx = Math.floor(Math.random() * showData.length);
-      setRandomShow(showData[idx]);
-    }
-  }, [showData]);
+  /** 只从「有补充平台链接」的音乐里随机（排除空值与默认占位） */
+  const musicWithLink = useMemo(
+    () => musicData.filter((m) => m.link && m.link !== "https://music.apple.com"),
+    [musicData]
+  );
 
+  /** 从列表里随机挑一个，尽量不重复当前这个 */
+  const pickOne = useCallback(<T extends { id: string }>(list: T[], currentId?: string): T | null => {
+    if (list.length === 0) return null;
+    const pool = list.length > 1 && currentId ? list.filter((x) => x.id !== currentId) : list;
+    return pool[Math.floor(Math.random() * pool.length)];
+  }, []);
+
+  /** 一次换三张卡（视频 / 社交 / 音乐） */
+  const pickRandomAll = useCallback(() => {
+    if (showData.length > 0) setRandomShow(pickOne(showData, randomShow?.id));
+    if (socialData.length > 0) setRandomSocial(pickOne(socialData, randomSocial?.id));
+    if (musicWithLink.length > 0) setRandomMusic(pickOne(musicWithLink, randomMusic?.id));
+    setPickSeq((n) => n + 1);
+  }, [showData, socialData, musicWithLink, randomShow, randomSocial, randomMusic, pickOne]);
+
+  // 只在首次拿到数据后抽一次；之后只有点「换一换」才更新
   useEffect(() => {
-    if (showData.length > 0) {
-      pickRandomShow();
-    }
-  }, [showData.length, pickRandomShow]);
+    if (hasPickedRef.current) return;
+    if (!dataSynced) return;
+    if (showData.length === 0 && socialData.length === 0 && musicWithLink.length === 0) return;
+    hasPickedRef.current = true;
+    pickRandomAll();
+  }, [dataSynced, showData, socialData, musicWithLink, pickRandomAll]);
 
   const today = new Date();
   const todayMonth = today.getMonth() + 1;
@@ -707,6 +785,11 @@ export default function HomePage() {
     const finalItem = { ...updated, coverImageUrl: updated.coverImageUrl?.trim() };
     const newData = musicData.map((m) => (m.id === finalItem.id ? finalItem : m));
     setMusicData(newData);
+    setRandomMusic((prev) => (prev && prev.id === finalItem.id ? finalItem : prev));
+    // 链接被清空就不再属于「有补充平台链接」的候选，撤下随机卡
+    if (!finalItem.link || finalItem.link === "https://music.apple.com") {
+      setRandomMusic((prev) => (prev && prev.id === finalItem.id ? null : prev));
+    }
     setEditingTarget(null);
     toast.success("修改已保存", { description: finalItem.title });
     try {
@@ -737,6 +820,7 @@ export default function HomePage() {
   const handleSaveSocial = async (updated: SocialPost) => {
     const newData = socialData.map((p) => (p.id === updated.id ? updated : p));
     setSocialData(newData);
+    setRandomSocial((prev) => (prev && prev.id === updated.id ? updated : prev));
     setEditingTarget(null);
     toast.success("动态已更新", { description: updated.author || "社交动态" });
     try {
@@ -929,7 +1013,7 @@ export default function HomePage() {
                   {item.type === "视频" && <VideoOnThisDayCard item={item.data} year={item.year} index={i} />}
                   {item.type === "社交" && <SocialOnThisDayCard item={item.data} year={item.year} index={i} />}
                   {isAdmin && (
-                    <div className="absolute top-3 left-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                    <div className="absolute top-3 left-3 flex gap-1 opacity-70 group-hover:opacity-100 transition-opacity z-10">
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); handleEditOnThisDay(item); }}
@@ -963,8 +1047,8 @@ export default function HomePage() {
             </div>
           </div>
           <button
-            onClick={pickRandomShow}
-            disabled={showData.length === 0}
+            onClick={pickRandomAll}
+            disabled={showData.length === 0 && socialData.length === 0 && musicWithLink.length === 0}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-steel-200/60 text-[10px] font-mono uppercase tracking-[0.15em] text-steel-600 hover:bg-white/50 hover:border-steel-300/80 transition-all disabled:opacity-40"
           >
             <Shuffle className="w-3.5 h-3.5" />
@@ -972,16 +1056,22 @@ export default function HomePage() {
           </button>
         </div>
 
-        {randomShow ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-            <div
-              className="group relative bg-white/40 rounded-sm border border-steel-200/60 shadow-sm overflow-hidden hover:-translate-y-2 hover:border-steel-300/80 transition-all cursor-pointer"
+        {randomShow || randomSocial || randomMusic ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {randomShow ? (
+            <motion.div
+              key={`show-${pickSeq}`}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35 }}
+              className="group relative flex flex-col bg-white/40 rounded-sm border border-steel-200/60 shadow-sm overflow-hidden hover:-translate-y-2 hover:border-steel-300/80 transition-all cursor-pointer"
               onClick={() => setSelectedVideo(randomShow)}
             >
-              <div className="relative aspect-[16/10] overflow-hidden bg-steel-50/30">
-                {(() => {
-                  const thumbUrl = getPreferredThumbnail(randomShow);
-                  return thumbUrl ? (
+              {(() => {
+                const thumbUrl = getPreferredThumbnail(randomShow);
+                if (!thumbUrl) return null;
+                return (
+                  <div className="relative aspect-[16/10] overflow-hidden bg-steel-50/30">
                     <img
                       src={getProxiedThumbnail(thumbUrl) || thumbUrl}
                       alt={randomShow.title}
@@ -996,30 +1086,23 @@ export default function HomePage() {
                         }
                       }}
                     />
-                  ) : (
-                    <div
-                      className="w-full h-full"
-                      style={{
-                        background: `linear-gradient(135deg, ${randomShow.thumbnailFrom}, ${randomShow.thumbnailTo})`,
-                      }}
-                    />
-                  );
-                })()}
 
-                <div className="absolute bottom-3 left-3 px-2 py-0.5 rounded-sm bg-black/30 backdrop-blur-sm text-white text-[10px] font-mono uppercase tracking-[0.15em]">
-                  {randomShow.platform}
-                </div>
+                    <div className="absolute bottom-3 left-3 px-2 py-0.5 rounded-sm bg-black/30 backdrop-blur-sm text-white text-[10px] font-mono uppercase tracking-[0.15em]">
+                      {randomShow.platform}
+                    </div>
 
-                {randomShow.links.length > 1 && (
-                  <div className="absolute bottom-3 right-3 px-2 py-0.5 rounded-sm bg-black/40 backdrop-blur-sm text-white text-[10px] font-medium flex items-center gap-1">
-                    <ExternalLink className="w-2.5 h-2.5" />
-                    {randomShow.links.length} 个平台
+                    {randomShow.links.length > 1 && (
+                      <div className="absolute bottom-3 right-3 px-2 py-0.5 rounded-sm bg-black/40 backdrop-blur-sm text-white text-[10px] font-medium flex items-center gap-1">
+                        <ExternalLink className="w-2.5 h-2.5" />
+                        {randomShow.links.length} 个平台
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                );
+              })()}
 
               {isAdmin && randomShow && (
-                <div className="absolute top-3 left-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                <div className="absolute top-3 left-3 flex gap-1 opacity-70 group-hover:opacity-100 transition-opacity z-10">
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setEditingTarget({ kind: "show", item: randomShow }); }}
@@ -1031,7 +1114,7 @@ export default function HomePage() {
                 </div>
               )}
 
-              <div className="p-4">
+              <div className={`p-4 ${!getPreferredThumbnail(randomShow) ? "flex-1 flex flex-col justify-center" : ""}`}>
                 <h3 className="font-bold text-steel-700 text-sm leading-snug line-clamp-2 mb-2 min-h-[2.5rem]">
                   {randomShow.title}
                 </h3>
@@ -1060,14 +1143,78 @@ export default function HomePage() {
                   </span>
                 </div>
               </div>
-            </div>
+            </motion.div>
+            ) : (
+              <EmptySlot icon={<Film className="w-6 h-6 text-steel-400" />} text="暂无视频" />
+            )}
+
+            {/* 社交动态卡 */}
+            {randomSocial ? (
+              <motion.div
+                key={`social-${pickSeq}`}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35, delay: 0.05 }}
+                className="group relative flex flex-col bg-white/40 rounded-sm border border-steel-200/60 shadow-sm overflow-hidden hover:-translate-y-2 hover:border-steel-300/80 transition-all cursor-pointer"
+                onClick={() => { setSocialImageIdx(0); setSelectedSocial(randomSocial); }}
+              >
+                <SocialOnThisDayCard
+                  item={randomSocial}
+                  year={new Date(randomSocial.postDate).getFullYear()}
+                  index={0}
+                  hidePlaceholder
+                />
+                {isAdmin && (
+                  <div className="absolute top-3 left-3 flex gap-1 opacity-70 group-hover:opacity-100 transition-opacity z-10">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setEditingTarget({ kind: "social", item: randomSocial }); }}
+                      title="编辑这条动态"
+                      className="w-7 h-7 rounded-sm bg-white/90 backdrop-blur-sm flex items-center justify-center text-steel-600 hover:bg-white hover:text-steel-800 transition-colors border border-steel-200/60"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+              </motion.div>
+            ) : (
+              <EmptySlot icon={<MessageCircle className="w-6 h-6 text-steel-400" />} text="暂无社交动态" />
+            )}
+
+            {/* 音乐卡（只从有补充平台链接的音乐里抽） */}
+            {randomMusic ? (
+              <motion.div
+                key={`music-${pickSeq}`}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35, delay: 0.1 }}
+                className="group relative flex flex-col bg-white/40 rounded-sm border border-steel-200/60 shadow-sm overflow-hidden hover:-translate-y-2 hover:border-steel-300/80 transition-all cursor-pointer"
+                onClick={() => setSelectedMusic(randomMusic)}
+              >
+                <RandomMusicCard item={randomMusic} />
+                {isAdmin && (
+                  <div className="absolute top-3 left-3 flex gap-1 opacity-70 group-hover:opacity-100 transition-opacity z-10">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setEditingTarget({ kind: "music", item: randomMusic }); }}
+                      title="编辑这首音乐"
+                      className="w-7 h-7 rounded-sm bg-white/90 backdrop-blur-sm flex items-center justify-center text-steel-600 hover:bg-white hover:text-steel-800 transition-colors border border-steel-200/60"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+              </motion.div>
+            ) : (
+              <EmptySlot icon={<Music className="w-6 h-6 text-steel-400" />} text="暂无可收听的音乐" />
+            )}
           </div>
         ) : (
           <div className="bg-white/40 rounded-sm border border-steel-200/60 shadow-sm p-10 text-center">
             <div className="w-14 h-14 rounded-full bg-steel-50/70 border border-steel-200/60 flex items-center justify-center mb-3 mx-auto">
               <Film className="w-7 h-7 text-steel-400" />
             </div>
-            <p className="text-sm text-steel-500/70">暂无品熊视频</p>
+            <p className="text-sm text-steel-500/70">暂无可推荐内容</p>
           </div>
         )}
       </motion.section>

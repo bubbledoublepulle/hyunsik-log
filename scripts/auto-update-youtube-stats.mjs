@@ -337,9 +337,20 @@ async function main() {
 
   await runWithConcurrency(updateTasks, 5);
 
-  // ⑤ 更新 video-meta.json（只写入有有效数据的）
+  // ⑤ 更新 video-meta.json（只写入有有效数据的；以现有文件为基线合并，只覆盖 YouTube 条目）
   console.log("\n📝 更新 video-meta.json...");
+  const metaPath = resolve(ROOT, "src/data/video-meta.json");
+  let baselineCount = 0;
   const metaMap = {};
+  if (existsSync(metaPath)) {
+    try {
+      Object.assign(metaMap, JSON.parse(readFileSync(metaPath, "utf-8")));
+      baselineCount = Object.keys(metaMap).length;
+      console.log(`   已载入现有 ${baselineCount} 条元数据作为基线（合并模式，保留 Bilibili 等条目）`);
+    } catch (e) {
+      console.warn(`   ⚠️ 现有 video-meta.json 解析失败(${e.message})，将从零重建`);
+    }
+  }
   for (const [videoId, data] of allData) {
     if (!data.title) continue; // 空数据不写入
     const sec = parseISODuration(data.duration);
@@ -354,10 +365,15 @@ async function main() {
     };
   }
 
-  const metaPath = resolve(ROOT, "src/data/video-meta.json");
+  // 保护：合并后没有变多，说明本次基本没抓到，不写文件避免抹掉已有数据
+  const mergedCount = Object.keys(metaMap).length;
+  if (mergedCount < baselineCount) {
+    console.log(`   ℹ️ 合并后 ${mergedCount} < 基线 ${baselineCount}，跳过写入以保护现有数据\n`);
+    return;
+  }
   mkdirSync(dirname(metaPath), { recursive: true });
   writeFileSync(metaPath, JSON.stringify(metaMap, null, 2), "utf-8");
-  console.log(`   ✓ 写入 ${Object.keys(metaMap).length} 条元数据\n`);
+  console.log(`   ✓ 写入 ${mergedCount} 条元数据（基线 ${baselineCount} 条）\n`);
 
   // ⑥ 统计报告
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);

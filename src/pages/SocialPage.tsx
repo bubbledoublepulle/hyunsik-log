@@ -61,6 +61,7 @@ import {
   formatRelativeTime,
   formatAbsoluteTime,
   parseSmartDate,
+  getNowBeijingTimeString,
   type SocialPost,
   type SocialCategory,
   type SocialPlatform,
@@ -444,23 +445,75 @@ function BatchEditSocialModal({ open, onClose, items, onSave }: {
 }
 // ===== 批量编辑弹窗结束 =====
 // ===== 批量导入弹窗 =====
+
+/** 批量导入里的一条可编辑草稿 */
+interface ImportRow {
+  uid: string;
+  url: string;
+  success: boolean;
+  preview?: LinkPreview;
+  error?: string;
+  /** 平台标签：全局默认 → 抓取结果 → 本地域名兜底 → 面板内可覆盖 */
+  platform: SocialPlatform;
+  author: string;
+  content: string;
+  translation: string;
+  isTranslating: boolean;
+}
+
+/**
+ * 解析该条动态的平台标签。
+ * 小红书 / 微博 fetchLinkPreview 不支持（会抛错），只能靠本地域名识别兜底。
+ */
+function resolvePlatform(
+  defaultPlatform: SocialPlatform | "auto",
+  previewPlatform?: string,
+  url?: string,
+): SocialPlatform {
+  if (defaultPlatform !== "auto") return defaultPlatform;
+  if (previewPlatform && (allPlatforms as string[]).includes(previewPlatform)) {
+    return previewPlatform as SocialPlatform;
+  }
+  if (url) {
+    let host = "";
+    try {
+      host = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+    } catch {
+      host = "";
+    }
+    const isHost = (root: string) => host === root || host.endsWith(`.${root}`);
+    if (isHost("xiaohongshu.com") || isHost("xhslink.com")) return "小红书";
+    if (isHost("weibo.com") || isHost("weibo.cn")) return "微博";
+    if (isHost("instagram.com")) return "Instagram";
+    if (isHost("weverse.io")) return "Weverse";
+    if (host === "youtu.be" || isHost("youtube.com")) return "YouTube Community";
+    if (isHost("x.com") || isHost("twitter.com")) return "X";
+  }
+  return "X";
+}
+
 function BatchImportSocialModal({ open, onClose, onImport }: {
   open: boolean;
   onClose: () => void;
   onImport: (posts: SocialPost[]) => void;
 }) {
   const [category, setCategory] = useState<SocialCategory>("个人动态");
+  const [defaultPlatform, setDefaultPlatform] = useState<SocialPlatform | "auto">("auto");
   const [linksText, setLinksText] = useState("");
   const [isFetching, setIsFetching] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
-  const [results, setResults] = useState<{ success: boolean; url: string; preview?: LinkPreview; error?: string }[]>([]);
+  const [rows, setRows] = useState<ImportRow[]>([]);
+  const [expandedUid, setExpandedUid] = useState<string | null>(null);
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem(DEEPSEEK_KEY_STORAGE) || "");
 
   useEffect(() => {
     if (open) {
       setLinksText("");
-      setResults([]);
+      setRows([]);
       setProgress({ current: 0, total: 0 });
       setIsFetching(false);
+      setDefaultPlatform("auto");
+      setExpandedUid(null);
     }
   }, [open]);
 
@@ -504,64 +557,118 @@ function BatchImportSocialModal({ open, onClose, onImport }: {
 
     setIsFetching(true);
     setProgress({ current: 0, total: urls.length });
-    setResults([]);
+    setRows([]);
+    setExpandedUid(null);
 
-    const newResults: typeof results = [];
+    const newRows: ImportRow[] = [];
 
     for (let i = 0; i < urls.length; i++) {
       const url = urls[i];
       setProgress({ current: i + 1, total: urls.length });
       try {
         const preview = await fetchLinkPreview(url);
-        newResults.push({ success: true, url, preview });
+        newRows.push({
+          uid: `r_${Date.now()}_${i}`,
+          url,
+          success: true,
+          preview,
+          platform: resolvePlatform(defaultPlatform, preview.platform, url),
+          author: preview.author || "未知作者",
+          content: preview.description || "",
+          translation: "",
+          isTranslating: false,
+        });
       } catch (err: any) {
-        newResults.push({ success: false, url, error: err.message || "抓取失败" });
+        // 抓取失败也生成草稿行，可展开手动填写后再导入（小红书 / 微博只能这样）
+        newRows.push({
+          uid: `r_${Date.now()}_${i}`,
+          url,
+          success: false,
+          error: err.message || "抓取失败",
+          platform: resolvePlatform(defaultPlatform, undefined, url),
+          author: "未知作者",
+          content: "",
+          translation: "",
+          isTranslating: false,
+        });
       }
       // 间隔 300ms，避免被封
       if (i < urls.length - 1) await new Promise((r) => setTimeout(r, 300));
     }
 
-    setResults(newResults);
+    setRows(newRows);
     setIsFetching(false);
 
-    const successCount = newResults.filter((r) => r.success).length;
+    const successCount = newRows.filter((r) => r.success).length;
     if (successCount > 0) {
       toast.success(`成功抓取 ${successCount} 条动态`);
     }
     if (successCount < urls.length) {
-      toast.error(`${urls.length - successCount} 条链接抓取失败`);
+      toast.error(`${urls.length - successCount} 条链接抓取失败，可展开手动填写后导入`);
     }
   };
 
+  const patchRow = (uid: string, patch: Partial<ImportRow>) => {
+    setRows((prev) => prev.map((r) => (r.uid === uid ? { ...r, ...patch } : r)));
+  };
+
+  const removeRow = (uid: string) => {
+    setRows((prev) => prev.filter((r) => r.uid !== uid));
+    if (expandedUid === uid) setExpandedUid(null);
+  };
+
+  /** 单条 AI 翻译：失败返回空串，绝不拿原文冒充译文 */
+  const handleTranslateRow = async (uid: string) => {
+    const row = rows.find((r) => r.uid === uid);
+    if (!row) return;
+    if (!row.content.trim()) {
+      toast.error("请先填写原文再翻译");
+      return;
+    }
+    if (!apiKey.trim()) {
+      toast.error("请先填写 DeepSeek API Key");
+      return;
+    }
+    localStorage.setItem(DEEPSEEK_KEY_STORAGE, apiKey.trim());
+    patchRow(uid, { isTranslating: true });
+    const result = await translateToChinese(row.content, apiKey.trim());
+    if (result) {
+      patchRow(uid, { translation: result, isTranslating: false });
+      toast.success("翻译完成，可手动修改后再导入");
+    } else {
+      patchRow(uid, { isTranslating: false });
+      toast.error("翻译失败，请检查 API Key 或稍后重试，也可手动填写");
+    }
+  };
+
+  /** 有原文或有图片即可导入（抓取失败但手动补了原文的也算） */
+  const importableRows = rows.filter(
+    (r) => r.content.trim().length > 0 || (r.preview?.images?.length ?? 0) > 0
+  );
+
   const handleImport = () => {
-    const successResults = results.filter((r) => r.success && r.preview);
-    if (successResults.length === 0) {
+    if (importableRows.length === 0) {
       toast.error("没有可导入的动态");
       return;
     }
 
-    const posts: SocialPost[] = successResults.map((r, i) => {
-      const p = r.preview!;
-      return {
-        id: `s_${Date.now()}_${i}`,
-        category,
-        platform: p.platform as SocialPlatform,
-        author: p.author || "未知作者",
-        content: p.description || "",
-        postUrl: p.url,
-        postDate: p.date || new Date().toISOString().slice(0, 16),
-        images: p.images || [],
-        videos: [],
-        pinned: false,
-      };
-    });
+    const nowBeijing = getNowBeijingTimeString();
+    const posts: SocialPost[] = importableRows.map((r, i) => ({
+      id: `s_${Date.now()}_${i}`,
+      category,
+      platform: r.platform,
+      author: r.author.trim() || "未知作者",
+      content: r.content.trim(),
+      ...(r.translation.trim() ? { translation: r.translation.trim() } : {}),
+      postUrl: r.preview?.url || r.url,
+      postDate: r.preview?.date || nowBeijing,
+      images: r.preview?.images || [],
+      videos: [],
+      pinned: false,
+    }));
 
     onImport(posts);
     onClose();
-  };
-
-  const removeResult = (idx: number) => {
-    setResults((prev) => prev.filter((_, i) => i !== idx));
   };
 
   if (!open) return null;
@@ -600,6 +707,28 @@ function BatchImportSocialModal({ open, onClose, onImport }: {
             </div>
           </div>
 
+          {/* 平台标签 */}
+          <div>
+            <label className="text-sm font-medium text-steel-700 mb-1.5 block">
+              平台标签 <span className="text-xs text-steel-500/60 font-normal">(可选，覆盖自动识别)</span>
+            </label>
+            <select
+              value={defaultPlatform}
+              onChange={(e) => setDefaultPlatform(e.target.value as SocialPlatform | "auto")}
+              className="w-full px-3 py-2 rounded-sm border border-steel-200/60 bg-white text-sm text-steel-700 outline-none focus:border-steel-500"
+            >
+              <option value="auto">自动识别（按链接 / 抓取结果）</option>
+              {allPlatforms.map((p) => (
+                <option key={p} value={p}>
+                  {platformVisualStyles[p].label}
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] text-steel-500/60 mt-1">
+              展开每条结果可单独改平台标签；小红书 / 微博暂不支持自动抓取，可展开后手动填写原文。
+            </p>
+          </div>
+
           {/* 链接输入 */}
           <div>
             <label className="text-sm font-medium text-steel-700 mb-1.5 block">
@@ -634,44 +763,161 @@ function BatchImportSocialModal({ open, onClose, onImport }: {
             )}
           </button>
 
-          {/* 结果预览 */}
-          {results.length > 0 && (
+          {/* 结果预览（可展开编辑 / AI 翻译） */}
+          {rows.length > 0 && (
             <div className="space-y-2">
               <p className="text-sm font-bold text-steel-700">
-                抓取结果 ({results.filter((r) => r.success).length}/{results.length} 成功)
+                抓取结果 ({rows.filter((r) => r.success).length}/{rows.length} 成功 · 可导入 {importableRows.length} 条)
               </p>
-              <div className="border border-steel-200/60 rounded-sm overflow-hidden max-h-64 overflow-y-auto">
-                {results.map((r, i) => (
-                  <div key={i} className={`flex items-start gap-3 p-3 ${i > 0 ? "border-t border-steel-100/60" : ""} ${r.success ? "bg-white" : "bg-red-50/50"}`}>
-                    <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5">
-                      {r.success ? (
-                        <Check className="w-4 h-4 text-steel-500" />
-                      ) : (
-                        <X className="w-4 h-4 text-red-400" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      {r.success && r.preview ? (
-                        <>
-                          <p className="text-sm font-medium text-steel-700 line-clamp-1">{r.preview.author || "未知作者"} · {r.preview.platform}</p>
-                          <p className="text-xs text-steel-500/70 line-clamp-2 mt-0.5">{r.preview.description || "无内容"}</p>
-                          {r.preview.images.length > 0 && (
-                            <p className="text-[10px] text-steel-500/60 mt-1">{r.preview.images.length} 张图片</p>
-                          )}
-                        </>
-                      ) : (
-                        <p className="text-xs text-red-500">{r.error}</p>
-                      )}
-                      <p className="text-[10px] text-steel-500/60 mt-1 truncate">{r.url}</p>
-                    </div>
-                    <button
-                      onClick={() => removeResult(i)}
-                      className="p-1 rounded-md text-steel-500/60 hover:text-red-500 hover:bg-red-50 transition-colors"
+              <div className="border border-steel-200/60 rounded-sm overflow-y-auto max-h-[46vh]">
+                {rows.map((r) => {
+                  const expanded = expandedUid === r.uid;
+                  return (
+                    <div
+                      key={r.uid}
+                      className={`border-b border-steel-100/60 last:border-b-0 ${r.success ? "bg-white" : "bg-red-50/50"}`}
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
+                      {/* 收起态：摘要 + 展开 / 删除 */}
+                      <div className="flex items-start gap-3 p-3">
+                        <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+                          {r.success ? (
+                            <Check className="w-4 h-4 text-steel-500" />
+                          ) : (
+                            <X className="w-4 h-4 text-red-400" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-steel-700 line-clamp-1">
+                            {r.author || "未知作者"} · {platformVisualStyles[r.platform]?.label ?? r.platform}
+                          </p>
+                          <p className="text-xs text-steel-500/70 line-clamp-2 mt-0.5">
+                            {r.content || (r.success ? "无内容" : r.error)}
+                          </p>
+                          {r.translation.trim() && (
+                            <p className="text-[11px] text-steel-600 mt-0.5 line-clamp-2">译：{r.translation}</p>
+                          )}
+                          <p className="text-[10px] text-steel-500/60 mt-1 truncate">{r.url}</p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedUid(expanded ? null : r.uid)}
+                            className="px-2 py-1 rounded-sm text-[10px] font-medium border border-steel-200/60 text-steel-600 hover:bg-white transition-colors"
+                          >
+                            {expanded ? "收起" : "展开"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeRow(r.uid)}
+                            className="p-1 rounded-md text-steel-500/60 hover:text-red-500 hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* 展开态：原文可编辑 + 平台标签 + AI 翻译 */}
+                      {expanded && (
+                        <div className="px-3 pb-3 pt-1 space-y-2 bg-white/60">
+                          {r.preview?.description && (
+                            <div>
+                              <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-steel-500/70 mb-1">
+                                抓取原文（只读）
+                              </p>
+                              <div className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words text-xs text-steel-500/70 border border-steel-200/60 rounded-sm p-2 bg-white">
+                                {r.preview.description}
+                              </div>
+                            </div>
+                          )}
+
+                          <div>
+                            <label className="text-[11px] text-steel-600 mb-1 block">平台标签</label>
+                            <select
+                              value={r.platform}
+                              onChange={(e) => patchRow(r.uid, { platform: e.target.value as SocialPlatform })}
+                              className="w-full px-2 py-1.5 rounded-sm border border-steel-200/60 bg-white text-xs text-steel-700 outline-none focus:border-steel-500"
+                            >
+                              {allPlatforms.map((p) => (
+                                <option key={p} value={p}>
+                                  {platformVisualStyles[p].label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="text-[11px] text-steel-600 mb-1 block">发布者</label>
+                            <input
+                              value={r.author}
+                              onChange={(e) => patchRow(r.uid, { author: e.target.value })}
+                              className="w-full px-2 py-1.5 rounded-sm border border-steel-200/60 text-xs outline-none focus:border-steel-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[11px] text-steel-600 mb-1 block">
+                              原文（可编辑，导入以此为正文）
+                            </label>
+                            <textarea
+                              value={r.content}
+                              onChange={(e) => patchRow(r.uid, { content: e.target.value })}
+                              rows={4}
+                              className="w-full px-2 py-1.5 rounded-sm border border-steel-200/60 text-xs outline-none focus:border-steel-500 resize-y"
+                            />
+                          </div>
+
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-[11px] text-steel-600">
+                                译文（可编辑，留空则不写入译文）
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => handleTranslateRow(r.uid)}
+                                disabled={r.isTranslating}
+                                className="flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] font-medium text-steel-600 bg-steel-50/70 border border-steel-200/60 hover:bg-steel-100/70 transition-colors disabled:opacity-50"
+                              >
+                                {r.isTranslating ? (
+                                  <>
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                    翻译中
+                                  </>
+                                ) : (
+                                  <>
+                                    <Languages className="w-3 h-3" />
+                                    AI 翻译
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                            <textarea
+                              value={r.translation}
+                              onChange={(e) => patchRow(r.uid, { translation: e.target.value })}
+                              rows={3}
+                              placeholder="点「AI 翻译」自动生成，或手动填写"
+                              className="w-full px-2 py-1.5 rounded-sm border border-steel-200/60 text-xs outline-none focus:border-steel-500 resize-y"
+                            />
+                            {!apiKey.trim() && (
+                              <input
+                                type="password"
+                                value={apiKey}
+                                onChange={(e) => setApiKey(e.target.value)}
+                                placeholder="DeepSeek API Key（会保存在本地，下次自动带出）"
+                                className="w-full mt-2 px-2 py-1.5 rounded-sm border border-steel-200/60 text-xs outline-none focus:border-steel-500"
+                              />
+                            )}
+                          </div>
+
+                          {r.preview && r.preview.images.length > 0 && (
+                            <p className="text-[10px] text-steel-500/60">
+                              将导入 {r.preview.images.length} 张图片（图片不可编辑）
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -683,10 +929,10 @@ function BatchImportSocialModal({ open, onClose, onImport }: {
           </button>
           <button
             onClick={handleImport}
-            disabled={results.filter((r) => r.success).length === 0}
+            disabled={importableRows.length === 0}
             className="px-5 py-2 rounded-sm bg-steel-500 text-white text-sm font-medium hover:bg-steel-700 transition-colors disabled:opacity-50"
           >
-            确认导入 ({results.filter((r) => r.success).length} 条)
+            确认导入 ({importableRows.length} 条)
           </button>
         </div>
       </div>
@@ -822,15 +1068,16 @@ export default function SocialPage() {
   const sortedAndFilteredData = useMemo(() => {
     let result = [...socialData];
 
-    // 关键词搜索：content / author / category / platform，不区分大小写
+    // 关键词搜索：content / translation / author / category / platform，不区分大小写
     const query = searchQuery.trim().toLowerCase();
     if (query) {
       result = result.filter((post) => {
         const contentMatch = post.content?.toLowerCase().includes(query);
+        const translationMatch = post.translation?.toLowerCase().includes(query);
         const authorMatch = post.author?.toLowerCase().includes(query);
         const categoryMatch = post.category?.toLowerCase().includes(query);
         const platformMatch = post.platform?.toLowerCase().includes(query);
-        return contentMatch || authorMatch || categoryMatch || platformMatch;
+        return contentMatch || translationMatch || authorMatch || categoryMatch || platformMatch;
       });
     }
 
@@ -882,11 +1129,15 @@ export default function SocialPage() {
       return updated || item;
     });
     setSocialData(newData);
-    const { error } = await saveSocialData(newData);
-    if (error) {
-      toast.error("批量更新同步失败", { description: error });
-    } else {
-      toast.success(`已批量更新 ${updatedItems.length} 条动态`);
+    try {
+      const { error } = await saveSocialData(newData);
+      if (error) {
+        toast.error("批量更新同步失败", { description: error });
+      } else {
+        toast.success(`已批量更新 ${updatedItems.length} 条动态`);
+      }
+    } catch {
+      toast.error("保存失败，请稍后重试");
     }
     setBatchEditOpen(false);
     setBatchSelectedIds(new Set());
@@ -897,11 +1148,15 @@ export default function SocialPage() {
     userModifiedRef.current = true;
     const newData = [...posts, ...socialData];
     setSocialData(newData);
-    const { error } = await saveSocialData(newData);
-    if (error) {
-      toast.error("批量导入同步失败", { description: error });
-    } else {
-      toast.success(`成功导入 ${posts.length} 条动态`);
+    try {
+      const { error } = await saveSocialData(newData);
+      if (error) {
+        toast.error("批量导入同步失败", { description: error });
+      } else {
+        toast.success(`成功导入 ${posts.length} 条动态`);
+      }
+    } catch {
+      toast.error("保存失败，请稍后重试");
     }
     setBatchImportOpen(false);
   };
@@ -928,12 +1183,17 @@ export default function SocialPage() {
       setSocialData(newData);
       toast.success("动态已添加", { description: post.content.slice(0, 30) + "..." });
     }
-    const { error } = await saveSocialData(newData);
-    if (error) {
-      toast.error("云端同步失败", { description: error });
-    }
+    // 先关闭弹窗，再执行可能失败的云端保存（避免网络异常时窗口卡住不关）
     setFormOpen(false);
     setEditingPost(null);
+    try {
+      const { error } = await saveSocialData(newData);
+      if (error) {
+        toast.error("云端同步失败", { description: error });
+      }
+    } catch {
+      toast.error("保存失败，请稍后重试");
+    }
   };
 
   const handleDelete = async (post: SocialPost) => {

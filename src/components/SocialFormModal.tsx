@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Link2, ImageIcon, Plus, Trash2, Loader2, Languages, KeyRound } from "lucide-react";
+import { X, Link2, ImageIcon, Plus, Trash2, Loader2, Languages, KeyRound, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { translateToChinese, DEEPSEEK_KEY_STORAGE } from "@/lib/translator";
 import {
@@ -65,6 +65,10 @@ export default function SocialFormModal({
   const [fetchedFields, setFetchedFields] = useState<Set<string>>(new Set());
   /** 用户是否手动改过平台下拉（改过就不再随粘贴的链接自动切换） */
   const platformTouchedRef = useRef(false);
+  /** 打开/填充表单时的原始链接（编辑态基线：等于基线就不重复抓取） */
+  const baselineUrlRef = useRef("");
+  /** 最近一次已尝试抓取的链接，避免同一 URL 反复抓取 */
+  const fetchedUrlRef = useRef("");
 
   useEffect(() => {
     if (editingPost) {
@@ -94,55 +98,71 @@ export default function SocialFormModal({
     setIsTranslating(false);
     setShowApiKeyInput(false);
     platformTouchedRef.current = false;
+    // 记录基线链接：编辑态下只要没换链接就不重复抓取
+    baselineUrlRef.current = (editingPost?.postUrl ?? "").trim();
+    fetchedUrlRef.current = baselineUrlRef.current;
   }, [editingPost, open]);
 
-  // 粘贴链接后自动抓取
-  useEffect(() => {
-    if (!postUrl.trim() || editingPost) return;
-    const timer = setTimeout(async () => {
-      setIsFetching(true);
-      try {
-        const data: LinkPreview = await fetchLinkPreview(postUrl);
-        const fields = new Set<string>();
-        if (data.description) {
-          setContent(data.description);
-          fields.add("content");
-        }
-        if (data.author) {
-          setAuthor(data.author);
-          fields.add("author");
-        }
-        if (data.images && data.images.length > 0) {
-          setImages(data.images);
-          fields.add("images");
-        }
-        if (data.date) {
-          const d = new Date(data.date);
-          if (!isNaN(d.getTime())) {
-            setPostDate(toBeijingTimeString(data.date));
-            fields.add("postDate");
-          }
-        }
-        if (data.platform && data.platform !== "unknown") {
-          const matched = allPlatforms.find((p) =>
-            platformVisualStyles[p].label.toLowerCase() === data.platform.toLowerCase()
-          );
-          if (matched) setPlatform(matched);
-        }
-        setFetchedFields(fields);
-        if (fields.size > 0) {
-          toast.success("已自动抓取动态内容", {
-            description: `成功获取 ${fields.size} 个字段`,
-          });
-        }
-      } catch {
-        // 抓取失败静默处理
-      } finally {
-        setIsFetching(false);
+  /** 按链接抓取元数据并回填表单 */
+  const runFetch = useCallback(async (rawUrl: string) => {
+    setIsFetching(true);
+    setFetchedFields(new Set());
+    try {
+      const data: LinkPreview = await fetchLinkPreview(rawUrl);
+      const fields = new Set<string>();
+      if (data.description) {
+        setContent(data.description);
+        fields.add("content");
       }
+      if (data.author) {
+        setAuthor(data.author);
+        fields.add("author");
+      }
+      if (data.images && data.images.length > 0) {
+        setImages(data.images);
+        fields.add("images");
+      }
+      if (data.date) {
+        const d = new Date(data.date);
+        if (!isNaN(d.getTime())) {
+          setPostDate(toBeijingTimeString(data.date));
+          fields.add("postDate");
+        }
+      }
+      if (data.platform && data.platform !== "unknown") {
+        const matched = allPlatforms.find((p) =>
+          platformVisualStyles[p].label.toLowerCase() === data.platform.toLowerCase()
+        );
+        if (matched) {
+          setPlatform(matched);
+          platformTouchedRef.current = false; // 换了链接就重新允许自动切平台
+        }
+      }
+      setFetchedFields(fields);
+      if (fields.size > 0) {
+        toast.success("已自动抓取动态内容", {
+          description: `成功获取 ${fields.size} 个字段`,
+        });
+      }
+    } catch {
+      toast.error("自动抓取失败，请手动填写内容");
+    } finally {
+      setIsFetching(false);
+    }
+  }, []);
+
+  // 粘贴 / 修改链接后自动抓取（编辑态：只有换成新链接才抓）
+  useEffect(() => {
+    const url = postUrl.trim();
+    if (!url) return;
+    if (editingPost && url === baselineUrlRef.current) return;
+    if (url === fetchedUrlRef.current) return;
+    const timer = setTimeout(() => {
+      fetchedUrlRef.current = url;
+      runFetch(url);
     }, 800);
     return () => clearTimeout(timer);
-  }, [postUrl, editingPost]);
+  }, [postUrl, editingPost, runFetch]);
 
   const handleAiTranslate = async () => {
     if (!content.trim()) {
@@ -197,6 +217,7 @@ export default function SocialFormModal({
       images: images.filter((i) => i.trim()),
       videos: videos.filter((v) => v.trim()),
       pinned: editingPost?.pinned || false,
+      ...(editingPost?.member ? { member: editingPost.member } : {}),
     };
 
     onSave(post);
@@ -442,6 +463,19 @@ export default function SocialFormModal({
                 }`}
               />
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                // 标记为已抓过，避免后续任意重渲染时对同一链接重复抓取
+                fetchedUrlRef.current = postUrl.trim();
+                runFetch(postUrl.trim());
+              }}
+              disabled={!postUrl.trim() || isFetching}
+              className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-sky-600 hover:text-sky-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <RefreshCw className={`w-3 h-3 ${isFetching ? "animate-spin" : ""}`} />
+              {isFetching ? "抓取中..." : "重新抓取"}
+            </button>
           </div>
 
           {/* Images */}
