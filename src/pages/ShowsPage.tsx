@@ -132,7 +132,9 @@ export default function ShowsPage() {
   }, [searchQuery]);
 
   const [displayCount, setDisplayCount] = useState(BATCH_SIZE);
-  const loadMoreRef = useRef<HTMLDivElement>(null);
+  // 用回调 ref + state 持有哨兵节点：哨兵是条件渲染的（加载中/筛选为空时不渲染），
+  // 若用 useRef，effect 在哨兵出现前跑过一次就再也不会重跑，观察器永远不会挂上
+  const [loadMoreEl, setLoadMoreEl] = useState<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setDisplayCount(BATCH_SIZE);
@@ -181,19 +183,20 @@ export default function ShowsPage() {
 
   useEffect(() => {
     if (!hasMore) return;
-    const el = loadMoreRef.current;
+    const el = loadMoreEl;
     if (!el) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          setDisplayCount((prev) => prev + BATCH_SIZE);
+          setDisplayCount((prev) => Math.min(prev + BATCH_SIZE, filteredData.length));
         }
       },
       { rootMargin: "400px" }
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [hasMore]);
+    // displayCount 入依赖：每加载一批后重建观察器，确保"哨兵仍在视口内"时也能继续触发
+  }, [hasMore, loadMoreEl, displayCount, filteredData.length]);
 
   const scrollTargetRef = useRef<string | null>(null);
 
@@ -894,7 +897,7 @@ export default function ShowsPage() {
                 <div className="mt-6 text-center">
                   {hasMore ? (
                     <>
-                      <div ref={loadMoreRef} className="h-4" />
+                      <div ref={setLoadMoreEl} className="h-4" />
                       <p className="text-xs font-mono uppercase tracking-[0.15em] text-steel-500/60">
                         已显示 {visibleData.length} / {filteredData.length} 条 · 向下滚动加载更多
                       </p>
