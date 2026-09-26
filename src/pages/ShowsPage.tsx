@@ -361,31 +361,40 @@ export default function ShowsPage() {
 
     if (editingItem) {
       newData = showData.map((s) => (s.id === item.id ? item : s));
-      setShowData(newData);
-      toast.success("修改已保存", { description: item.title });
     } else {
       newData = [...showData, item];
-      setShowData(newData);
-      toast.success("综艺已添加", { description: item.title });
     }
+    setShowData(newData);
 
-    const { error } = await saveShowData(newData);
-    if (error) {
-      toast.error("云端同步失败", { description: error });
-    }
-
+    // 先关闭弹窗，再落库：避免云端同步抛错时窗口卡住不关
     setFormOpen(false);
     setEditingItem(null);
+    toast.success(editingItem ? "修改已保存" : "综艺已添加", { description: item.title });
+
+    try {
+      const { error } = await saveShowData(newData);
+      if (error) {
+        toast.error("云端同步失败", { description: error });
+      }
+    } catch (e) {
+      toast.error("云端同步失败", { description: String(e) });
+    }
   };
 
   const handleSaveBatch = (items: ShowItem[]) => {
     userModifiedRef.current = true;
     const newData = [...showData, ...items];
     setShowData(newData);
-    saveShowData(newData);
-    toast.success(`已批量添加 ${items.length} 条综艺`, { description: "数据正在同步到云端..." });
+
     setFormOpen(false);
     setEditingItem(null);
+    toast.success(`已批量添加 ${items.length} 条综艺`, { description: "数据正在同步到云端..." });
+
+    saveShowData(newData)
+      .then(({ error }) => {
+        if (error) toast.error("云端同步失败", { description: error });
+      })
+      .catch((e) => toast.error("云端同步失败", { description: String(e) }));
   };
 
   const handleDelete = (item: ShowItem) => {
