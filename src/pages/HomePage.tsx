@@ -20,10 +20,11 @@ import {
   X,
   Languages,
   Pencil,
+  Trash2,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
-import { loadMusicData, syncMusicData, saveMusicData, type MusicItem } from "@/lib/musicData";
+import { loadMusicData, syncMusicData, saveMusicData, deleteMusicItem, type MusicItem } from "@/lib/musicData";
 import {
   loadShowData,
   syncShowData,
@@ -33,11 +34,13 @@ import {
   getDisplayViews,
   getDisplayDate,
   memberColors,
+  deleteShowItem,
   type ShowItem,
 } from "@/lib/showData";
-import { loadSocialData, syncSocialData, saveSocialData, type SocialPost } from "@/lib/socialData";
+import { loadSocialData, syncSocialData, saveSocialData, deleteSocialPost, type SocialPost } from "@/lib/socialData";
 import { linkifyText } from "@/lib/linkify";
 import { proxiedImageUrl, retryImageOnce } from "@/lib/imageProxy";
+import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
 import DataManager from "@/components/DataManager";
 import PageLoader from "@/components/PageLoader";
 import MusicFormModal from "@/components/MusicFormModal";
@@ -186,9 +189,9 @@ function VideoOnThisDayCard({ item, year, index }: { item: ShowItem; year: numbe
   );
 }
 
-function SocialOnThisDayCard({ item, year, index, hidePlaceholder }: { item: SocialPost; year: number; index: number; hidePlaceholder?: boolean }) {
+/** 那年今日 / 随机品熊共用的社交卡；无图时不渲染占位区，正文区等高垂直居中（引言式） */
+function SocialOnThisDayCard({ item, year }: { item: SocialPost; year: number }) {
   const hasImages = item.images.length > 0;
-  const no = String(index + 1).padStart(2, '0');
   const hasTr = !!item.translation && item.translation.trim().length > 0;
   return (
     <>
@@ -211,19 +214,14 @@ function SocialOnThisDayCard({ item, year, index, hidePlaceholder }: { item: Soc
             </div>
           )}
         </div>
-      ) : !hidePlaceholder ? (
-        <div className="relative aspect-[16/10] bg-steel-50/30 flex items-center justify-center overflow-hidden">
-          <span className="font-serif italic text-3xl sm:text-4xl text-steel-400/40">Social N°{no}</span>
-          <CardLogoDecoration />
-        </div>
       ) : null}
-      <div className={`p-4 ${hidePlaceholder && !hasImages ? "flex-1 flex flex-col justify-center" : ""}`}>
+      <div className={`p-4 ${!hasImages ? "flex-1 flex flex-col justify-center" : ""}`}>
         <div className="flex items-center justify-between mb-2">
           <span className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600">Social</span>
           <span className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60 text-steel-600">{year}</span>
         </div>
         <h3 className="font-bold text-steel-700 text-sm mb-1">{item.author || "新动态"}</h3>
-        {hidePlaceholder && !hasImages && (
+        {!hasImages && (
           <span className="font-serif italic text-4xl leading-none text-steel-300/60 select-none mb-1" aria-hidden="true">“</span>
         )}
         {hasTr ? (
@@ -233,17 +231,17 @@ function SocialOnThisDayCard({ item, year, index, hidePlaceholder }: { item: Soc
                 <Languages className="w-3 h-3 text-steel-500" />
                 <span className="text-[10px] font-medium text-steel-500/80 uppercase tracking-[0.12em]">译</span>
               </div>
-              <p className={`text-steel-700 leading-relaxed break-words ${hidePlaceholder && !hasImages ? "text-[13px]" : "text-xs line-clamp-3"}`}>
-                {item.translation!.length > 60 && !hidePlaceholder ? item.translation!.slice(0, 60) + "..." : item.translation}
+              <p className={`text-steel-700 leading-relaxed break-words ${!hasImages ? "text-[13px]" : "text-xs line-clamp-3"}`}>
+                {item.translation!.length > 60 && hasImages ? item.translation!.slice(0, 60) + "..." : item.translation}
               </p>
             </div>
-            <p className={`text-steel-500/60 leading-relaxed break-words ${hidePlaceholder && !hasImages ? "text-xs" : "text-[11px] line-clamp-2"}`}>
-              {item.content.length > 60 && !hidePlaceholder ? item.content.slice(0, 60) + "..." : item.content}
+            <p className={`text-steel-500/60 leading-relaxed break-words ${!hasImages ? "text-xs" : "text-[11px] line-clamp-2"}`}>
+              {item.content.length > 60 && hasImages ? item.content.slice(0, 60) + "..." : item.content}
             </p>
           </>
         ) : (
-          <p className={`text-steel-500/70 leading-relaxed break-words ${hidePlaceholder && !hasImages ? "text-[13px]" : "text-xs line-clamp-3"}`}>
-            {item.content.length > 60 && !hidePlaceholder ? item.content.slice(0, 60) + "..." : item.content}
+          <p className={`text-steel-500/70 leading-relaxed break-words ${!hasImages ? "text-[13px]" : "text-xs line-clamp-3"}`}>
+            {item.content.length > 60 && hasImages ? item.content.slice(0, 60) + "..." : item.content}
           </p>
         )}
         {!hasImages && item.images.length > 0 && (
@@ -601,6 +599,7 @@ export default function HomePage() {
   const [selectedSocial, setSelectedSocial] = useState<SocialPost | null>(null);
   const [socialImageIdx, setSocialImageIdx] = useState(0);
   const [editingTarget, setEditingTarget] = useState<EditingTarget | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<(typeof onThisDayItems)[number] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const buildUpdates = useCallback((
@@ -763,6 +762,32 @@ export default function HomePage() {
     if (item.type === "音乐") setEditingTarget({ kind: "music", item: item.data });
     else if (item.type === "视频") setEditingTarget({ kind: "show", item: item.data });
     else setEditingTarget({ kind: "social", item: item.data });
+  };
+
+  /** 管理员删除那年今日条目：本地 state + localStorage + 云端一并删除 */
+  const handleDeleteOnThisDay = async (item: (typeof onThisDayItems)[number]) => {
+    const id = item.data.id;
+    const label = item.type === "音乐" ? item.data.title
+      : item.type === "视频" ? item.data.title
+      : item.data.author || "社交动态";
+    try {
+      if (item.type === "音乐") {
+        setMusicData((prev) => prev.filter((m) => m.id !== id));
+        setRandomMusic((prev) => (prev && prev.id === id ? null : prev));
+        await deleteMusicItem(id);
+      } else if (item.type === "视频") {
+        setShowData((prev) => prev.filter((s) => s.id !== id));
+        setRandomShow((prev) => (prev && prev.id === id ? null : prev));
+        await deleteShowItem(id);
+      } else {
+        setSocialData((prev) => prev.filter((p) => p.id !== id));
+        setRandomSocial((prev) => (prev && prev.id === id ? null : prev));
+        await deleteSocialPost(id);
+      }
+      toast.success("已删除", { description: label });
+    } catch {
+      toast.error("删除失败，请稍后重试");
+    }
   };
 
   /** 随机品熊展示的是快照对象，编辑后需同步，否则卡片仍是旧数据 */
@@ -996,11 +1021,11 @@ export default function HomePage() {
                     if (item.type === "视频") setSelectedVideo(item.data);
                     if (item.type === "社交") setSelectedSocial(item.data);
                   }}
-                  className="group relative bg-white/40 rounded-sm border border-steel-200/60 shadow-sm overflow-hidden hover:-translate-y-2 hover:border-steel-300/80 transition-all cursor-pointer"
+                  className="group relative flex flex-col bg-white/40 rounded-sm border border-steel-200/60 shadow-sm overflow-hidden hover:-translate-y-2 hover:border-steel-300/80 transition-all cursor-pointer"
                 >
                   {item.type === "音乐" && <MusicOnThisDayCard item={item.data} year={item.year} index={i} />}
                   {item.type === "视频" && <VideoOnThisDayCard item={item.data} year={item.year} index={i} />}
-                  {item.type === "社交" && <SocialOnThisDayCard item={item.data} year={item.year} index={i} />}
+                  {item.type === "社交" && <SocialOnThisDayCard item={item.data} year={item.year} />}
                   {isAdmin && (
                     <div className="absolute top-3 left-3 flex gap-1 opacity-70 group-hover:opacity-100 transition-opacity z-10">
                       <button
@@ -1010,6 +1035,14 @@ export default function HomePage() {
                         className="w-7 h-7 rounded-sm bg-white/90 backdrop-blur-sm flex items-center justify-center text-steel-600 hover:bg-white hover:text-steel-800 transition-colors border border-steel-200/60"
                       >
                         <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setDeleteTarget(item); }}
+                        title="删除这条内容"
+                        className="w-7 h-7 rounded-sm bg-white/90 backdrop-blur-sm flex items-center justify-center text-steel-600 hover:bg-red-50 hover:text-red-500 transition-colors border border-steel-200/60"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   )}
@@ -1151,8 +1184,6 @@ export default function HomePage() {
                 <SocialOnThisDayCard
                   item={randomSocial}
                   year={new Date(randomSocial.postDate).getFullYear()}
-                  index={0}
-                  hidePlaceholder
                 />
                 {isAdmin && (
                   <div className="absolute top-3 left-3 flex gap-1 opacity-70 group-hover:opacity-100 transition-opacity z-10">
@@ -1342,6 +1373,13 @@ export default function HomePage() {
         onClose={() => setEditingTarget(null)}
         onSave={handleSaveSocial}
         editingPost={editingTarget && editingTarget.kind === "social" ? editingTarget.item : null}
+      />
+      <DeleteConfirmDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && handleDeleteOnThisDay(deleteTarget)}
+        title="删除这条那年今日"
+        message="将从云端永久删除这条内容，此操作不可撤销。"
       />
       </>
       )}
