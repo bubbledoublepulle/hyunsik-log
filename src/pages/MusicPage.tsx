@@ -32,7 +32,7 @@ import {
 } from "@/lib/musicData";
 import { useAuth } from "@/context/AuthContext";
 import { proxiedImageUrl as getProxiedImageUrl } from "@/lib/imageProxy";
-import { isBtobByText } from "@/lib/cardDecor";
+import { isBtobByArtist } from "@/lib/cardDecor";
 import FilterSidebar from "@/components/FilterSidebar";
 import CoverFitImage from "@/components/CoverFitImage";
 import CardLogoDecoration from "@/components/CardLogoDecoration";
@@ -623,7 +623,7 @@ export default function MusicPage() {
                         ) : (
                           <span className="font-serif italic text-3xl sm:text-4xl text-steel-400/40">No.{String(item.albumNo ?? 1).padStart(2, "0")}</span>
                         )}
-                        <CardLogoDecoration btob={isBtobByText(item.artist, item.album, item.title)} />
+                        <CardLogoDecoration btob={isBtobByArtist(item.artist, item.album, item.title)} />
                         {item.isTitleTrack && (
                           <div className="absolute top-3 left-3 px-1.5 py-0.5 rounded-sm bg-amber-100/90 border border-amber-200/60 text-amber-700 text-[10px] font-mono uppercase tracking-wider flex items-center gap-1 z-10" title="主打曲">
                             <Crown className="w-3 h-3" />TITLE

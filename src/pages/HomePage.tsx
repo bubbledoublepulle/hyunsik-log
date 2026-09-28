@@ -40,7 +40,7 @@ import {
 import { loadSocialData, syncSocialData, saveSocialData, deleteSocialPost, type SocialPost } from "@/lib/socialData";
 import { linkifyText } from "@/lib/linkify";
 import { proxiedImageUrl, retryImageOnce } from "@/lib/imageProxy";
-import { isBtobByText, isBtobByMembers } from "@/lib/cardDecor";
+import { isBtobByText, isBtobByArtist, isBtobByMembers } from "@/lib/cardDecor";
 import CoverFitImage from "@/components/CoverFitImage";
 import CardLogoDecoration from "@/components/CardLogoDecoration";
 import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
@@ -110,7 +110,7 @@ function MusicOnThisDayCard({ item, year, index }: { item: MusicItem; year: numb
         ) : (
           <span className="font-serif italic text-3xl sm:text-4xl text-steel-400/40">Music N°{no}</span>
         )}
-        <CardLogoDecoration btob={isBtobByText(item.artist, item.album, item.title)} />
+        <CardLogoDecoration btob={isBtobByArtist(item.artist, item.album, item.title)} />
       </div>
       <div className="p-4">
         <div className="flex items-center justify-between mb-2">
@@ -283,7 +283,7 @@ function RandomMusicCard({ item }: { item: MusicItem }) {
             loading="lazy"
             onError={(e) => retryImageOnce(e.currentTarget as HTMLImageElement)}
           />
-          <CardLogoDecoration btob={isBtobByText(item.artist, item.album, item.title)} />
+          <CardLogoDecoration btob={isBtobByArtist(item.artist, item.album, item.title)} />
         </div>
       ) : null}
       <div className={`p-4 ${!item.coverImageUrl ? "flex-1 flex flex-col justify-center" : ""}`}>

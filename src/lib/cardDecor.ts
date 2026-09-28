@@ -25,10 +25,10 @@ export const DECOR_SHADOW = "drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4))";
 
 /**
  * hover 图标用哪一张？规则：
- * - 社交卡：只看**正文**（原文 + 译文）里是否出现下列关键词，作者名/id、成员字段不参与判定。
- * - 音乐卡：歌手 / 专辑 / 标题等文字里出现下列关键词 → BTOB logo。
+ * - 社交卡：只看**正文**（原文 + 译文）里是否出现下列成员关键词；作者名/id、成员字段、
+ *   以及正文里的 "BTOB" / #BTOB 字样**都不算**（比如任炫植 solo 广播带团体 tag 的情况）。
+ * - 音乐卡：歌手 / 专辑 / 标题里出现下列关键词，或歌手就是 BTOB → BTOB logo。
  * - 视频卡：只有「成员标签恰好是任炫植一个」才用行星图，其余（任炫植 + 别人、只有别人、无标签）→ BTOB logo。
- * 未命中任何关键词时（含文本里直接写了 BTOB 也算命中）才用行星图。
  */
 export const BTOB_TEXT_KEYWORDS = [
   "徐恩光",
@@ -43,15 +43,23 @@ function normalizeText(s: string): string {
   return s.toUpperCase().replace(/[\s\-_./·•,]/g, "");
 }
 
-/** 社交 / 音乐卡：文字命中关键词 → 用 BTOB logo */
+function matchesMemberKeywords(raw: string): boolean {
+  // 中文关键词按原文匹配（归一化不影响中文）
+  if (raw.includes("徐恩光") || raw.includes("李旼赫")) return true;
+  const norm = normalizeText(raw);
+  return BTOB_TEXT_KEYWORDS.filter((k) => /^[A-Z]+$/.test(k)).some((k) => norm.includes(k));
+}
+
+/** 社交卡：正文命中成员关键词才用 BTOB logo；正文里的 "BTOB" 字样不触发 */
 export function isBtobByText(...parts: (string | null | undefined)[]): boolean {
   const raw = parts.filter(Boolean).join(" ");
   if (!raw.trim()) return false;
-  const norm = normalizeText(raw);
-  if (norm.includes("BTOB")) return true;
-  // 中文关键词按原文匹配（归一化不影响中文）
-  if (raw.includes("徐恩光") || raw.includes("李旼赫")) return true;
-  return BTOB_TEXT_KEYWORDS.filter((k) => /^[A-Z]+$/.test(k)).some((k) => norm.includes(k));
+  return matchesMemberKeywords(raw);
+}
+
+/** 音乐卡：命中成员关键词，或歌手本身就是 BTOB（用户最早定的规则）→ BTOB logo */
+export function isBtobByArtist(...parts: (string | null | undefined)[]): boolean {
+  return isBtobByText(...parts) || normalizeText(parts.filter(Boolean).join(" ")).includes("BTOB");
 }
 
 /** 视频卡：仅「成员标签恰好 = 任炫植」时用行星图，其余一律 BTOB logo */
