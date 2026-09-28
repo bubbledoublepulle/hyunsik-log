@@ -555,7 +555,7 @@ export default function MusicPage() {
                   const albumYear = albumDate ? new Date(albumDate).getFullYear() : "";
                   const albumCover = group.songs.find((s) => s.coverImageUrl)?.coverImageUrl;
                   return (
-                    <motion.div key={group.album} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ delay: gi * 0.06 }}
+                    <motion.div key={group.album} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, transition: { duration: 0.15 } }} transition={{ delay: Math.min(gi * 0.03, 0.3) }}
                       className="bg-white/40 rounded-sm border border-steel-200/60 shadow-sm overflow-hidden">
                       <div className="px-3 sm:px-5 py-4 bg-steel-50/40 border-b border-steel-200/60 flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -650,7 +650,7 @@ export default function MusicPage() {
                       layout
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
+                      exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.15 } }}
                       transition={{ delay: Math.min(index * 0.03, 0.3) }}
                       className={`group relative bg-white/40 rounded-sm border border-steel-200/60 shadow-sm overflow-hidden hover:-translate-y-2 hover:border-steel-300/80 transition-all ${flashId === item.id ? "flash-highlight" : ""}`}
                     >
