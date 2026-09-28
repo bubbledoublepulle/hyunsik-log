@@ -25,7 +25,7 @@ import { toast } from "sonner";
 import { fetchLinkPreview, type LinkPreview } from "@/lib/linkPreviewFetcher";
 import { translateToChinese, DEEPSEEK_KEY_STORAGE } from "@/lib/translator";
 import { linkifyText } from "@/lib/linkify";
-import { proxiedImageUrl as getProxiedImageUrl } from "@/lib/imageProxy";
+import { proxiedImageUrl as getProxiedImageUrl, retryImageOnce } from "@/lib/imageProxy";
 import {
   saveSocialData,
   syncSocialData,
@@ -1765,7 +1765,7 @@ function ImageGrid({ images }: { images: string[] }) {
   if (images.length === 2) {
     return (
       <div className="grid grid-cols-2 gap-1 rounded-sm overflow-hidden">
-        {images.map((img, i) => <img key={i} src={getProxiedImageUrl(img)} alt={`动态图片 ${i + 1}`} loading="lazy" className="w-full h-48 object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />)}
+        {images.map((img, i) => <img key={i} src={getProxiedImageUrl(img)} alt={`动态图片 ${i + 1}`} loading="lazy" className="w-full h-48 object-cover" onError={(e) => { const t = e.currentTarget as HTMLImageElement; if (!retryImageOnce(t)) t.style.display = "none"; }} />)}
       </div>
     );
   }
@@ -1773,9 +1773,9 @@ function ImageGrid({ images }: { images: string[] }) {
   if (images.length === 3) {
     return (
       <div className="grid grid-cols-2 gap-1 rounded-sm overflow-hidden">
-        <img src={getProxiedImageUrl(images[0])} alt="动态图片 1" loading="lazy" className="w-full h-48 object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
-        <img src={getProxiedImageUrl(images[1])} alt="动态图片 2" loading="lazy" className="w-full h-48 object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
-        <img src={getProxiedImageUrl(images[2])} alt="动态图片 3" loading="lazy" className="w-full h-48 object-cover col-span-2" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+        <img src={getProxiedImageUrl(images[0])} alt="动态图片 1" loading="lazy" className="w-full h-48 object-cover" onError={(e) => { const t = e.currentTarget as HTMLImageElement; if (!retryImageOnce(t)) t.style.display = "none"; }} />
+        <img src={getProxiedImageUrl(images[1])} alt="动态图片 2" loading="lazy" className="w-full h-48 object-cover" onError={(e) => { const t = e.currentTarget as HTMLImageElement; if (!retryImageOnce(t)) t.style.display = "none"; }} />
+        <img src={getProxiedImageUrl(images[2])} alt="动态图片 3" loading="lazy" className="w-full h-48 object-cover col-span-2" onError={(e) => { const t = e.currentTarget as HTMLImageElement; if (!retryImageOnce(t)) t.style.display = "none"; }} />
       </div>
     );
   }
@@ -1784,7 +1784,7 @@ function ImageGrid({ images }: { images: string[] }) {
     <div className="grid grid-cols-2 gap-1 rounded-sm overflow-hidden">
       {images.slice(0, 4).map((img, i) => (
         <div key={i} className="relative">
-          <img src={getProxiedImageUrl(img)} alt={`动态图片 ${i + 1}`} loading="lazy" className="w-full h-40 object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+          <img src={getProxiedImageUrl(img)} alt={`动态图片 ${i + 1}`} loading="lazy" className="w-full h-40 object-cover" onError={(e) => { const t = e.currentTarget as HTMLImageElement; if (!retryImageOnce(t)) t.style.display = "none"; }} />
           {i === 3 && images.length > 4 && <div className="absolute inset-0 bg-black/50 flex items-center justify-center"><span className="text-white text-lg font-bold">+{images.length - 4}</span></div>}
         </div>
       ))}

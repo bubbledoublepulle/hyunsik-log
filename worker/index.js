@@ -491,9 +491,15 @@ async function handleImageProxy(url) {
       headers.set("Content-Type", "image/jpeg");
     }
 
-    const resp = new Response(imageResp.body, {
-      status: imageResp.status,
-      statusText: imageResp.statusText,
+    // 完整读入内存后再返回：流式转发在部分网络环境下会被截断，
+    // 导致浏览器拿到 image/jpeg 头却解不出图像（白屏 / 触发 onError 隐藏图片）
+    const buffer = await imageResp.arrayBuffer();
+    if (!buffer || buffer.byteLength === 0) {
+      return new Response("Empty image response", { status: 502 });
+    }
+
+    const resp = new Response(buffer, {
+      status: 200,
       headers,
     });
 

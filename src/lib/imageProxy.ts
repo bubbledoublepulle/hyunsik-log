@@ -67,3 +67,23 @@ export function proxiedImageUrl(url: string | null | undefined): string {
   if (!needsImageProxy(url)) return url;
   return `/api/image-proxy?url=${encodeURIComponent(url)}`;
 }
+
+/**
+ * <img> onError 兜底：先带一个随机参数原样重试一次（绕开被截断/损坏的响应），
+ * 仍失败才返回 false，由调用方隐藏图片。
+ *
+ * @returns true 表示已安排重试，本次不要隐藏图片
+ */
+export function retryImageOnce(img: HTMLImageElement | null | undefined): boolean {
+  if (!img) return false;
+  if (img.dataset.imgRetried === "1") return false;
+  img.dataset.imgRetried = "1";
+  try {
+    const u = new URL(img.src, window.location.href);
+    u.searchParams.set("_r", Date.now().toString());
+    img.src = u.toString();
+    return true;
+  } catch {
+    return false;
+  }
+}

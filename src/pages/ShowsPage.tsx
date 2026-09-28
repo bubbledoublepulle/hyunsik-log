@@ -37,7 +37,7 @@ import {
   type ShowMember,
 } from "@/lib/showData";
 import { useAuth } from "@/context/AuthContext";
-import { proxiedImageUrl } from "@/lib/imageProxy";
+import { proxiedImageUrl, retryImageOnce } from "@/lib/imageProxy";
 
 function getProxiedThumbnail(url: string | null | undefined): string | null {
   return proxiedImageUrl(url) || null;
@@ -798,6 +798,7 @@ export default function ShowsPage() {
                               className="w-full h-full object-cover"
                               onError={(e) => {
                                 const target = e.currentTarget;
+                                if (retryImageOnce(target)) return;
                                 target.style.display = "none";
                                 if (target.parentElement) {
                                   target.parentElement.style.background = `linear-gradient(135deg, ${item.thumbnailFrom}, ${item.thumbnailTo})`;

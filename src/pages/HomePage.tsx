@@ -37,7 +37,7 @@ import {
 } from "@/lib/showData";
 import { loadSocialData, syncSocialData, saveSocialData, type SocialPost } from "@/lib/socialData";
 import { linkifyText } from "@/lib/linkify";
-import { proxiedImageUrl } from "@/lib/imageProxy";
+import { proxiedImageUrl, retryImageOnce } from "@/lib/imageProxy";
 import DataManager from "@/components/DataManager";
 import PageLoader from "@/components/PageLoader";
 import MusicFormModal from "@/components/MusicFormModal";
@@ -1068,6 +1068,7 @@ export default function HomePage() {
                       className="w-full h-full object-cover"
                       onError={(e) => {
                         const target = e.currentTarget as HTMLImageElement;
+                        if (retryImageOnce(target)) return;
                         target.style.display = "none";
                         if (target.parentElement) {
                           const fromColor = /^https?:\/\//.test(randomShow.thumbnailFrom) ? "#4682B4" : randomShow.thumbnailFrom;

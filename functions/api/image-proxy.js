@@ -95,7 +95,13 @@ export async function onRequestGet(context) {
     // 防止被 SPA 回退改写：显式声明这是图片响应
     headers.set("X-Content-Type-Options", "nosniff");
 
-    const resp = new Response(imageResp.body, { status: 200, headers });
+    // 完整读入内存后再返回，避免流式转发被截断（浏览器拿到 jpeg 头却解不出图像）
+    const buffer = await imageResp.arrayBuffer();
+    if (!buffer || buffer.byteLength === 0) {
+      return new Response("Empty image response", { status: 502 });
+    }
+
+    const resp = new Response(buffer, { status: 200, headers });
     try {
       context.waitUntil(cache.put(cacheKey, resp.clone()));
     } catch {
