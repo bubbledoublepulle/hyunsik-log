@@ -31,6 +31,9 @@ async function handleApi(url, request, env) {
   if (url.pathname === "/api/image-proxy") {
     return handleImageProxy(url);
   }
+  if (url.pathname.startsWith("/api/db")) {
+    return handleDbProxy(url, request, env);
+  }
   if (url.pathname === "/api/refresh-show") {
     return jsonResponse(await handleRefreshShow(url, env), false);
   }
@@ -333,6 +336,66 @@ async function fetchYouTubeInternalAPI(videoId) {
     thumbnail,
     author: vd?.author || "",
   };
+}
+
+/**
+ * Supabase 只读代理（/api/db/<table>?<query>）
+ *
+ * 目的：supabase.co 国内直连慢且不稳定，页面首屏会一直转圈。
+ * 改为前端请求同域 /api/db，由 Worker 在海外节点回源 Supabase，链路大幅缩短。
+ *
+ * 安全约束：
+ * - 仅允许 GET / HEAD（写操作仍由前端直连，行为不变）
+ * - 仅允许白名单表
+ * - 使用 anon key（受 RLS 约束），仅在 anon 缺失时回落到 service key
+ * - 不缓存，避免管理员改动后看到旧数据
+ */
+const ALLOWED_DB_TABLES = new Set(["shows", "social_posts", "music"]);
+
+async function handleDbProxy(url, request, env) {
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return Response.json({ error: "method not allowed" }, { status: 405 });
+  }
+
+  const rest = url.pathname.slice("/api/db".length).replace(/^\/+/, "");
+  const table = rest.split("/")[0];
+  if (!ALLOWED_DB_TABLES.has(table)) {
+    return Response.json({ error: "table not allowed" }, { status: 403 });
+  }
+
+  const base = env.SUPABASE_URL;
+  const anonKey = env.SUPABASE_ANON_KEY || env.SUPABASE_SERVICE_KEY;
+  if (!base || !anonKey) {
+    return Response.json({ error: "supabase not configured" }, { status: 500 });
+  }
+
+  const headers = new Headers();
+  headers.set("apikey", anonKey);
+  headers.set("Authorization", `Bearer ${anonKey}`);
+  headers.set("Accept", request.headers.get("Accept") || "application/json");
+  const prefer = request.headers.get("Prefer");
+  if (prefer) headers.set("Prefer", prefer);
+  const range = request.headers.get("Range"); // supabase-js 的分页走 Range 头
+  if (range) headers.set("Range", range);
+  const acceptProfile = request.headers.get("Accept-Profile");
+  if (acceptProfile) headers.set("Accept-Profile", acceptProfile);
+
+  try {
+    const resp = await fetch(`${base}/rest/v1/${rest}${url.search}`, {
+      method: request.method,
+      headers,
+    });
+    const out = new Headers(resp.headers);
+    out.set("Cache-Control", "no-store");
+    out.set("Access-Control-Allow-Origin", "*");
+    return new Response(request.method === "HEAD" ? null : resp.body, {
+      status: resp.status,
+      statusText: resp.statusText,
+      headers: out,
+    });
+  } catch (e) {
+    return Response.json({ error: e.message }, { status: 502 });
+  }
 }
 
 /**

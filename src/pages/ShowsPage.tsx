@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import {
   saveShowData,
   syncShowData,
+  loadShowData,
   fromDbRow,
   memberColors,
   getPreferredThumbnail,
@@ -110,7 +111,8 @@ export default function ShowsPage() {
   const { isAdmin } = useAuth();
   const { data: rtShowData } = useRealtimeData("shows");
 
-  const [showData, setShowData] = useState<ShowItem[]>([]);
+  // 首屏先用 localStorage 快照渲染，避免等待 Supabase 导致整页空白
+  const [showData, setShowData] = useState<ShowItem[]>(() => loadShowData());
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortBy>("date-desc");
@@ -119,7 +121,7 @@ export default function ShowsPage() {
 
 
   const [flashId, setFlashId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => loadShowData().length === 0);
 
   const [expandedYear, setExpandedYear] = useState<number | null>(null);
   const [expandedMonth, setExpandedMonth] = useState<{ year: number; month: number } | null>(null);
@@ -252,6 +254,8 @@ export default function ShowsPage() {
 
   const initialLoadRef = useRef(true);
   const userModifiedRef = useRef(false);
+  // 记录最近一次"从云端同步回来的"数组引用，避免把同步结果又自动写回云端
+  const lastSyncedRef = useRef<ShowItem[] | null>(null);
 
   const prevRtShowCountRef = useRef(0);
   const rtShowNotifiedRef = useRef(false);
@@ -260,6 +264,7 @@ export default function ShowsPage() {
     if (!rtShowData || rtShowData.length === 0) return;
     if (!userModifiedRef.current) {
       const items = rtShowData.map((row: any) => fromDbRow(row));
+      lastSyncedRef.current = items;
       setShowData(items);
       try {
         localStorage.setItem("hsik_shows_data", JSON.stringify(items));
@@ -275,10 +280,11 @@ export default function ShowsPage() {
   }, [rtShowData, isAdmin]);
 
   useEffect(() => {
-    setIsLoading(true);
+    setIsLoading(loadShowData().length === 0);
     syncShowData()
       .then((synced) => {
         if (!userModifiedRef.current) {
+          lastSyncedRef.current = synced;
           setShowData(synced);
         }
       })
@@ -293,6 +299,8 @@ export default function ShowsPage() {
         initialLoadRef.current = false;
         return;
       }
+      // 来自本地快照或云端同步的数据不回写云端，只有真实修改才保存
+      if (lastSyncedRef.current === showData) return;
       userModifiedRef.current = true;
       saveShowData(showData).then(({ error }) => {
         if (error) {

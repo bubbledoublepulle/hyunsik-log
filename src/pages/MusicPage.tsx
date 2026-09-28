@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import {
   saveMusicData,
   syncMusicData,
+  loadMusicData,
   fromDbRow,
   allTypes,
   allRoles,
@@ -62,7 +63,8 @@ export default function MusicPage() {
   const { isAdmin } = useAuth();
   const { data: rtMusicData } = useRealtimeData("music");
 
-  const [musicData, setMusicData] = useState<MusicItem[]>([]);
+  // 首屏先用 localStorage 快照渲染，避免等待 Supabase 导致整页空白
+  const [musicData, setMusicData] = useState<MusicItem[]>(() => loadMusicData());
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortBy>("date-desc");
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
@@ -73,7 +75,7 @@ export default function MusicPage() {
   const [onlySelfComposed, setOnlySelfComposed] = useState(false);
 
   const [flashId, setFlashId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => loadMusicData().length === 0);
 
   useEffect(() => {
     const hash = window.location.hash.slice(1);
@@ -97,6 +99,8 @@ export default function MusicPage() {
 
   const initialLoadRef = useRef(true);
   const userModifiedRef = useRef(false);
+  // 记录最近一次"从云端同步回来的"数组引用，避免把同步结果又自动写回云端
+  const lastSyncedRef = useRef<MusicItem[] | null>(null);
 
   const prevRtMusicCountRef = useRef(0);
   const rtMusicNotifiedRef = useRef(false);
@@ -104,6 +108,7 @@ export default function MusicPage() {
     if (!rtMusicData || rtMusicData.length === 0) return;
     if (!userModifiedRef.current) {
       const items = rtMusicData.map((row: any) => fromDbRow(row));
+      lastSyncedRef.current = items;
       setMusicData(items);
       try {
         localStorage.setItem("hsik_music_data", JSON.stringify(items));
@@ -117,10 +122,13 @@ export default function MusicPage() {
   }, [rtMusicData, isAdmin]);
 
   useEffect(() => {
-    setIsLoading(true);
+    setIsLoading(loadMusicData().length === 0);
     syncMusicData()
       .then((data) => {
-        if (!userModifiedRef.current) setMusicData(data);
+        if (!userModifiedRef.current) {
+          lastSyncedRef.current = data;
+          setMusicData(data);
+        }
       })
       .catch(() => {})
       .finally(() => setIsLoading(false));
@@ -132,6 +140,8 @@ export default function MusicPage() {
         initialLoadRef.current = false;
         return;
       }
+      // 来自本地快照或云端同步的数据不回写云端，只有真实修改才保存
+      if (lastSyncedRef.current === musicData) return;
       userModifiedRef.current = true;
       saveMusicData(musicData).then(({ error }) => {
         if (error) toast.error("云端同步失败", { description: error });

@@ -29,6 +29,7 @@ import { proxiedImageUrl as getProxiedImageUrl } from "@/lib/imageProxy";
 import {
   saveSocialData,
   syncSocialData,
+  loadSocialData,
   socialCategories,
   categoryStyles,
   platformVisualStyles,
@@ -919,7 +920,8 @@ function BatchImportSocialModal({ open, onClose, onImport }: {
 export default function SocialPage() {
   const { isAdmin } = useAuth();
 
-  const [socialData, setSocialData] = useState<SocialPost[]>([]);
+  // 首屏先用 localStorage 快照渲染，避免等待 Supabase 导致整页空白；同步完成后再覆盖
+  const [socialData, setSocialData] = useState<SocialPost[]>(() => loadSocialData());
   const [selectedCategories, setSelectedCategories] = useState<Set<SocialCategory>>(new Set());
   const [selectedPlatforms, setSelectedPlatforms] = useState<Set<SocialPlatform>>(new Set());
     const [selectedYear, setSelectedYear] = useState<number | null>(null);
@@ -955,10 +957,11 @@ export default function SocialPage() {
 
   const initialLoadRef = useRef(true);
   const userModifiedRef = useRef(false);
-  const [isLoading, setIsLoading] = useState(true);
+  // 有本地快照时不再显示整页 loading（后台静默同步），仅首次访问无缓存时才转圈
+  const [isLoading, setIsLoading] = useState(() => loadSocialData().length === 0);
 
   useEffect(() => {
-    setIsLoading(true);
+    setIsLoading(loadSocialData().length === 0);
     syncSocialData()
       .then((data) => {
         if (!userModifiedRef.current) {
