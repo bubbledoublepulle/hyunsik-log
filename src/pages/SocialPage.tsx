@@ -435,6 +435,8 @@ interface ImportRow {
   content: string;
   translation: string;
   isTranslating: boolean;
+  /** 库里已存在同一条动态（按归一化链接判断），默认不导入；可在面板里手动改为强制导入 */
+  duplicate?: boolean;
 }
 
 /**
@@ -468,10 +470,37 @@ function resolvePlatform(
   return "X";
 }
 
-function BatchImportSocialModal({ open, onClose, onImport }: {
+/**
+ * 归一化帖子链接，用于「是否同一条动态」的判断。
+ * 忽略 www / 查询参数（igsh、s、t 等追踪参数）/ 末尾斜杠，twitter.com 与 x.com 视为同一站；
+ * X 取 status 数字 ID、Instagram 取短码，避免同一帖子因链接写法不同被判成两条。
+ */
+function normalizePostUrlKey(raw: string | null | undefined): string {
+  const s = (raw ?? "").trim();
+  if (!s) return "";
+  try {
+    const u = new URL(s);
+    let host = u.hostname.replace(/^www\./, "").toLowerCase();
+    if (host === "twitter.com") host = "x.com";
+    if (host === "instagr.am") host = "instagram.com";
+    const path = u.pathname.replace(/\/+$/, "");
+    const xId = path.match(/\/status(?:es)?\/(\d+)/);
+    if (xId) return `${host}#${xId[1]}`;
+    const igId = path.match(/\/(?:p|reel|reels|tv)\/([\w-]+)/);
+    if (igId) return `${host}#${igId[1]}`;
+    const storyId = path.match(/\/stories\/[\w.@-]+\/(\d+)/);
+    if (storyId) return `${host}#${storyId[1]}`;
+    return `${host}${path}`.toLowerCase();
+  } catch {
+    return s.toLowerCase().replace(/\/+$/, "");
+  }
+}
+
+function BatchImportSocialModal({ open, onClose, onImport, existingPosts }: {
   open: boolean;
   onClose: () => void;
   onImport: (posts: SocialPost[]) => void;
+  existingPosts: SocialPost[];
 }) {
   const [category, setCategory] = useState<SocialCategory>("个人动态");
   const [defaultPlatform, setDefaultPlatform] = useState<SocialPlatform | "auto">("auto");
@@ -481,6 +510,16 @@ function BatchImportSocialModal({ open, onClose, onImport }: {
   const [rows, setRows] = useState<ImportRow[]>([]);
   const [expandedUid, setExpandedUid] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState(() => localStorage.getItem(DEEPSEEK_KEY_STORAGE) || "");
+
+  /** 库里已有动态的链接指纹，导入时用于跳过重复 */
+  const existingKeys = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of existingPosts) {
+      const k = normalizePostUrlKey(p.postUrl);
+      if (k) set.add(k);
+    }
+    return set;
+  }, [existingPosts]);
 
   useEffect(() => {
     if (open) {
@@ -505,30 +544,43 @@ function BatchImportSocialModal({ open, onClose, onImport }: {
       return;
     }
 
-    // ② 去重：基于 URL 本身（去掉末尾斜杠和查询参数后比较）
+    // ② 三重去重：库里已存在的跳过 / 本次列表内重复的剔除 / 保留原始 URL
     const seen = new Set<string>();
     const urls: string[] = [];
+    let dupCount = 0;      // 本次列表内重复
+    let existingCount = 0; // 库里已经存在
     for (const url of rawUrls) {
-      try {
-        const u = new URL(url);
-        // 去掉末尾斜杠，忽略查询参数（如 tracking_id 等）
-        const key = `${u.origin}${u.pathname}`.replace(/\/+$/, "");
-        if (!seen.has(key)) {
-          seen.add(key);
-          urls.push(url); // 保留原始 URL（带查询参数）
-        }
-      } catch {
-        // URL 解析失败，用原始字符串去重
-        if (!seen.has(url)) {
-          seen.add(url);
-          urls.push(url);
-        }
+      const key = normalizePostUrlKey(url);
+      if (!key) {
+        urls.push(url);
+        continue;
       }
+      if (existingKeys.has(key)) {
+        existingCount++;
+        continue; // 同一条动态已在库里，直接跳过，不再发请求
+      }
+      if (seen.has(key)) {
+        dupCount++;
+        continue;
+      }
+      seen.add(key);
+      urls.push(url); // 保留原始 URL（带查询参数）
     }
 
-    const dupCount = rawUrls.length - urls.length;
+    if (urls.length === 0) {
+      toast.info(
+        existingCount > 0
+          ? `这 ${existingCount} 条链接都已存在于库中，无需重复导入`
+          : "请输入至少一个有效的链接"
+      );
+      return;
+    }
+
     if (dupCount > 0) {
-      toast.info(`已剔除 ${dupCount} 条重复链接`);
+      toast.info(`已剔除 ${dupCount} 条列表内重复链接`);
+    }
+    if (existingCount > 0) {
+      toast.info(`已跳过 ${existingCount} 条库中已有的链接`);
     }
 
     setIsFetching(true);
@@ -537,12 +589,17 @@ function BatchImportSocialModal({ open, onClose, onImport }: {
     setExpandedUid(null);
 
     const newRows: ImportRow[] = [];
+    let dupAfterFetch = 0;
 
     for (let i = 0; i < urls.length; i++) {
       const url = urls[i];
       setProgress({ current: i + 1, total: urls.length });
       try {
         const preview = await fetchLinkPreview(url);
+        // 短链（youtu.be / b23.tv 等）展开后才知道最终地址，抓取完成再判一次重复
+        const finalKey = normalizePostUrlKey(preview.url);
+        const isDup = !!finalKey && existingKeys.has(finalKey);
+        if (isDup) dupAfterFetch++;
         newRows.push({
           uid: `r_${Date.now()}_${i}`,
           url,
@@ -553,6 +610,7 @@ function BatchImportSocialModal({ open, onClose, onImport }: {
           content: preview.description || "",
           translation: "",
           isTranslating: false,
+          duplicate: isDup,
         });
       } catch (err: any) {
         // 抓取失败也生成草稿行，可展开手动填写后再导入（小红书 / 微博只能这样）
@@ -566,6 +624,7 @@ function BatchImportSocialModal({ open, onClose, onImport }: {
           content: "",
           translation: "",
           isTranslating: false,
+          duplicate: false,
         });
       }
       // 间隔 300ms，避免被封
@@ -581,6 +640,9 @@ function BatchImportSocialModal({ open, onClose, onImport }: {
     }
     if (successCount < urls.length) {
       toast.error(`${urls.length - successCount} 条链接抓取失败，可展开手动填写后导入`);
+    }
+    if (dupAfterFetch > 0) {
+      toast.info(`已跳过 ${dupAfterFetch} 条库中已有的动态（链接跳转后指向同一条）`);
     }
   };
 
@@ -617,10 +679,11 @@ function BatchImportSocialModal({ open, onClose, onImport }: {
     }
   };
 
-  /** 有原文或有图片即可导入（抓取失败但手动补了原文的也算） */
+  /** 有原文或有图片即可导入（抓取失败但手动补了原文的也算）；库里已存在的默认跳过 */
   const importableRows = rows.filter(
-    (r) => r.content.trim().length > 0 || (r.preview?.images?.length ?? 0) > 0
+    (r) => !r.duplicate && (r.content.trim().length > 0 || (r.preview?.images?.length ?? 0) > 0)
   );
+  const skippedRows = rows.filter((r) => r.duplicate);
 
   const handleImport = () => {
     if (importableRows.length === 0) {
@@ -744,6 +807,11 @@ function BatchImportSocialModal({ open, onClose, onImport }: {
             <div className="space-y-2">
               <p className="text-sm font-bold text-steel-700">
                 抓取结果 ({rows.filter((r) => r.success).length}/{rows.length} 成功 · 可导入 {importableRows.length} 条)
+                {skippedRows.length > 0 && (
+                  <span className="ml-1 text-steel-500/70 font-normal">
+                    （{skippedRows.length} 条库中已存在，已跳过）
+                  </span>
+                )}
               </p>
               <div className="border border-steel-200/60 rounded-sm overflow-y-auto max-h-[46vh]">
                 {rows.map((r) => {
@@ -751,7 +819,9 @@ function BatchImportSocialModal({ open, onClose, onImport }: {
                   return (
                     <div
                       key={r.uid}
-                      className={`border-b border-steel-100/60 last:border-b-0 ${r.success ? "bg-white" : "bg-red-50/50"}`}
+                      className={`border-b border-steel-100/60 last:border-b-0 ${
+                        r.duplicate ? "bg-amber-50/60" : r.success ? "bg-white" : "bg-red-50/50"
+                      }`}
                     >
                       {/* 收起态：摘要 + 展开 / 删除 */}
                       <div className="flex items-start gap-3 p-3">
@@ -765,6 +835,11 @@ function BatchImportSocialModal({ open, onClose, onImport }: {
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-steel-700 line-clamp-1">
                             {r.author || "未知作者"} · {platformVisualStyles[r.platform]?.label ?? r.platform}
+                            {r.duplicate && (
+                              <span className="ml-1.5 px-1.5 py-0.5 rounded-sm text-[10px] font-medium bg-amber-100 text-amber-700">
+                                库中已存在
+                              </span>
+                            )}
                           </p>
                           <p className="text-xs text-steel-500/70 line-clamp-2 mt-0.5">
                             {r.content || (r.success ? "无内容" : r.error)}
@@ -775,6 +850,16 @@ function BatchImportSocialModal({ open, onClose, onImport }: {
                           <p className="text-[10px] text-steel-500/60 mt-1 truncate">{r.url}</p>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
+                          {r.duplicate && (
+                            <button
+                              type="button"
+                              onClick={() => patchRow(r.uid, { duplicate: false })}
+                              title="忽略重复，仍然导入这条"
+                              className="px-2 py-1 rounded-sm text-[10px] font-medium border border-amber-300/70 text-amber-700 hover:bg-amber-100 transition-colors"
+                            >
+                              仍要导入
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => setExpandedUid(expanded ? null : r.uid)}
@@ -1123,15 +1208,36 @@ export default function SocialPage() {
   };
 
   const handleBatchImport = async (posts: SocialPost[]) => {
+    // 兜底去重：再过滤一次库里已有的链接与本次批次内的重复，避免并发/跳转导致重复落库
+    const knownKeys = new Set(
+      socialData.map((p) => normalizePostUrlKey(p.postUrl)).filter((k): k is string => !!k)
+    );
+    const seen = new Set<string>();
+    const fresh: SocialPost[] = [];
+    for (const p of posts) {
+      const k = normalizePostUrlKey(p.postUrl);
+      if (k && (knownKeys.has(k) || seen.has(k))) continue;
+      if (k) seen.add(k);
+      fresh.push(p);
+    }
+    const skipped = posts.length - fresh.length;
+    if (fresh.length === 0) {
+      toast.info("这些动态已全部存在于库中，无需重复导入");
+      setBatchImportOpen(false);
+      return;
+    }
+
     userModifiedRef.current = true;
-    const newData = [...posts, ...socialData];
+    const newData = [...fresh, ...socialData];
     setSocialData(newData);
     try {
       const { error } = await saveSocialData(newData);
       if (error) {
         toast.error("批量导入同步失败", { description: error });
       } else {
-        toast.success(`成功导入 ${posts.length} 条动态`);
+        toast.success(
+          `成功导入 ${fresh.length} 条动态${skipped > 0 ? `（已跳过 ${skipped} 条重复）` : ""}`
+        );
       }
     } catch {
       toast.error("保存失败，请稍后重试");
@@ -1157,6 +1263,10 @@ export default function SocialPage() {
       setSocialData(newData);
       toast.success("动态已更新", { description: post.content.slice(0, 30) + "..." });
     } else {
+      const key = normalizePostUrlKey(post.postUrl);
+      if (key && socialData.some((p) => normalizePostUrlKey(p.postUrl) === key)) {
+        toast.info("该链接在库中已存在", { description: "仍已保存这条动态，可在列表里手动删除重复项" });
+      }
       newData = [post, ...socialData];
       setSocialData(newData);
       toast.success("动态已添加", { description: post.content.slice(0, 30) + "..." });
@@ -1622,6 +1732,7 @@ export default function SocialPage() {
         open={batchImportOpen}
         onClose={() => setBatchImportOpen(false)}
         onImport={handleBatchImport}
+        existingPosts={socialData}
       />
       <DeleteConfirmDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => deleteTarget && handleDelete(deleteTarget)} title="删除动态" message={`确定要删除这条动态吗？此操作不可撤销。`} />
       <ScrollToTop />
