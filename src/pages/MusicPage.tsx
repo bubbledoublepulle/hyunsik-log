@@ -46,14 +46,23 @@ type ViewMode = "cards" | "table" | "album";
 
 const CARD_ASPECT = "aspect-[4/3]";
 
-function CardLogoDecoration() {
+/** BTOB 官方 logo（namu.wiki SVG），hover 装饰按歌手区分时使用 */
+const BTOB_LOGO_URL = "https://i.namu.wiki/i/14t5IA_Qe9uTwXIvv3HwBvb2b86G0v24OU1OT-aB2aOBWhHBeoPnKNmi-wOfp_8vz99CiYa9opDoADHw4ybMd2qJlo30WtgGX6SmEZkKX5wK3nBs-OR-4LdxYXB7xN81U2jlltxCRpMhERl5Xgcy2A.svg";
+
+function CardLogoDecoration({ artist }: { artist?: string }) {
+  // 歌手为 BTOB 时换成 BTOB logo；源图是黑色 path，转白以匹配现有装饰风格并加投影保证可见
+  const isBtob = (artist ?? "").toUpperCase().includes("BTOB");
   return (
     <div className="absolute top-3 right-3 w-8 h-8 opacity-0 scale-50 -rotate-12 group-hover:opacity-100 group-hover:scale-100 group-hover:rotate-0 transition-all duration-300 pointer-events-none">
       <img
-        src="/logo.svg"
+        src={isBtob ? getProxiedImageUrl(BTOB_LOGO_URL) : "/logo.svg"}
         alt=""
         className="w-full h-full object-contain"
-        style={{ filter: 'brightness(1.1) hue-rotate(10deg) saturate(1.2)' }}
+        style={
+          isBtob
+            ? { filter: "brightness(0) invert(1) drop-shadow(0 1px 2px rgba(0,0,0,0.35))" }
+            : { filter: "brightness(1.1) hue-rotate(10deg) saturate(1.2)" }
+        }
       />
     </div>
   );
@@ -633,7 +642,7 @@ export default function MusicPage() {
                         ) : (
                           <span className="font-serif italic text-3xl sm:text-4xl text-steel-400/40">No.{String(item.albumNo ?? 1).padStart(2, "0")}</span>
                         )}
-                        <CardLogoDecoration />
+                        <CardLogoDecoration artist={item.artist} />
                         {item.isTitleTrack && (
                           <div className="absolute top-3 left-3 px-1.5 py-0.5 rounded-sm bg-amber-100/90 border border-amber-200/60 text-amber-700 text-[10px] font-mono uppercase tracking-wider flex items-center gap-1 z-10" title="主打曲">
                             <Crown className="w-3 h-3" />TITLE
