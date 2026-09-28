@@ -102,7 +102,8 @@ function MusicOnThisDayCard({ item, year, index }: { item: MusicItem; year: numb
   const no = String(index + 1).padStart(2, '0');
   return (
     <>
-      <div className="relative aspect-[4/3] bg-steel-50/30 flex items-center justify-center overflow-hidden">
+      {/* 与社交/视频卡统一 16:10，保证那年今日三张卡图片区下缘对齐 */}
+      <div className="relative aspect-[16/10] bg-steel-50/30 flex items-center justify-center overflow-hidden">
         {item.coverImageUrl ? (
           <CoverFitImage src={proxiedImageUrl(item.coverImageUrl)} alt={item.title} loading="lazy" />
         ) : (
