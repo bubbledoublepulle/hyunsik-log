@@ -481,7 +481,7 @@ function normalizePostUrlKey(raw: string | null | undefined): string {
   try {
     const u = new URL(s);
     let host = u.hostname.replace(/^www\./, "").toLowerCase();
-    if (host === "twitter.com") host = "x.com";
+    if (host === "twitter.com" || host === "mobile.twitter.com") host = "x.com";
     if (host === "instagr.am") host = "instagram.com";
     const path = u.pathname.replace(/\/+$/, "");
     const xId = path.match(/\/status(?:es)?\/(\d+)/);
