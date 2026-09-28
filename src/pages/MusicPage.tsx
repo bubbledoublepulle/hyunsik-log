@@ -49,20 +49,24 @@ const CARD_ASPECT = "aspect-[4/3]";
 /** BTOB 官方 logo（已下载为本地静态资源 public/btob-logo.svg），hover 装饰按歌手区分时使用 */
 const BTOB_LOGO_URL = "/btob-logo.svg";
 
+/**
+ * 卡片 hover 右上角装饰图标：以 BTOB logo 为标准 ——
+ * 同一 24×24 正方容器（object-contain）、同为白色、同一款投影。
+ * 行星 logo 源图本身是白色线条（透明底），无需转色，只加同款投影。
+ */
 function CardLogoDecoration({ artist }: { artist?: string }) {
-  // 歌手为 BTOB 时换成 BTOB logo；源图是黑色 path，转白以匹配现有装饰风格并加投影保证可见
   const isBtob = (artist ?? "").toUpperCase().includes("BTOB");
   return (
-    <div className="absolute top-3 right-3 w-8 h-8 opacity-0 scale-50 -rotate-12 group-hover:opacity-100 group-hover:scale-100 group-hover:rotate-0 transition-all duration-300 pointer-events-none">
+    <div className="absolute top-3 right-3 w-6 h-6 flex items-center justify-center opacity-0 scale-50 -rotate-12 group-hover:opacity-100 group-hover:scale-100 group-hover:rotate-0 transition-all duration-300 pointer-events-none">
       <img
         src={isBtob ? BTOB_LOGO_URL : "/logo.svg"}
         alt=""
-        className="w-full h-full object-contain"
-        style={
-          isBtob
-            ? { filter: "brightness(0) invert(1) drop-shadow(0 1px 2px rgba(0,0,0,0.35))" }
-            : { filter: "brightness(1.1) hue-rotate(10deg) saturate(1.2)" }
-        }
+        className="max-w-full max-h-full object-contain"
+        style={{
+          filter: isBtob
+            ? "brightness(0) invert(1) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4))"
+            : "drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4))",
+        }}
       />
     </div>
   );
