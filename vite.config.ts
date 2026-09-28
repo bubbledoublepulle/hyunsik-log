@@ -235,6 +235,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/youtube/, ''),
       },
+      // 开发环境没有 Worker，把图片代理转发到线上 Worker，行为与生产一致
+      '/api/image-proxy': {
+        target: 'https://siklog.work',
+        changeOrigin: true,
+      },
     },
   },
 })

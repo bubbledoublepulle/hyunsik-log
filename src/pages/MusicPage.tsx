@@ -30,6 +30,7 @@ import {
   type MusicRole,
 } from "@/lib/musicData";
 import { useAuth } from "@/context/AuthContext";
+import { proxiedImageUrl as getProxiedImageUrl } from "@/lib/imageProxy";
 import FilterSidebar from "@/components/FilterSidebar";
 import MusicFormModal from "@/components/MusicFormModal";
 import BatchImportModal from "@/components/BatchImportModal";
@@ -522,7 +523,7 @@ export default function MusicPage() {
                       <div className="px-3 sm:px-5 py-4 bg-steel-50/40 border-b border-steel-200/60 flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           {albumCover ? (
-                            <img src={albumCover} alt={group.album} className="w-12 h-12 rounded-sm object-cover border border-steel-200/60 bg-steel-50/30" />
+                            <img src={getProxiedImageUrl(albumCover)} alt={group.album} loading="lazy" className="w-12 h-12 rounded-sm object-cover border border-steel-200/60 bg-steel-50/30" />
                           ) : (
                             <div className="w-10 h-10 rounded-sm bg-steel-100 flex items-center justify-center">
                               <Album className="w-5 h-5 text-steel-500" />
@@ -618,7 +619,7 @@ export default function MusicPage() {
                     >
                       <div className={`relative ${CARD_ASPECT} bg-steel-50/30 flex items-center justify-center overflow-hidden`}>
                         {item.coverImageUrl ? (
-                          <img src={item.coverImageUrl} alt={item.title} className="absolute inset-0 w-full h-full object-cover" />
+                          <img src={getProxiedImageUrl(item.coverImageUrl)} alt={item.title} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
                         ) : (
                           <span className="font-serif italic text-3xl sm:text-4xl text-steel-400/40">No.{String(item.albumNo ?? 1).padStart(2, "0")}</span>
                         )}

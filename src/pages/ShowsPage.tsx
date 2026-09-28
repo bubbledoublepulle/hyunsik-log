@@ -36,10 +36,10 @@ import {
   type ShowMember,
 } from "@/lib/showData";
 import { useAuth } from "@/context/AuthContext";
+import { proxiedImageUrl } from "@/lib/imageProxy";
 
 function getProxiedThumbnail(url: string | null | undefined): string | null {
-  if (!url) return null;
-  return `https://images.weserv.nl/?url=${encodeURIComponent(url)}&n=-1`;
+  return proxiedImageUrl(url) || null;
 }
 
 const CARD_ASPECT = "aspect-video";

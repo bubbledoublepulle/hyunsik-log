@@ -1,29 +1,3 @@
-// 图片代理工具函数：使用 images.weserv.nl 全球 CDN，国内可访问
-function getProxiedImageUrl(originalUrl: string): string {
-  if (!originalUrl) return '';
-
-  const foreignDomains = [
-    'pbs.twimg.com',
-    'instagram.com',
-    'instagram.fs',
-    'fbcdn.net',
-    'twimg.com',
-    'twitter.com',
-    'x.com',
-    'fbcdn.net',
-  ];
-
-  const isForeign = foreignDomains.some(domain =>
-    originalUrl.toLowerCase().includes(domain)
-  );
-
-  if (isForeign) {
-    return `https://images.weserv.nl/?url=${encodeURIComponent(originalUrl)}&n=-1`;
-  }
-
-  return originalUrl;
-}
-
 import { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -51,6 +25,7 @@ import { toast } from "sonner";
 import { fetchLinkPreview, type LinkPreview } from "@/lib/linkPreviewFetcher";
 import { translateToChinese, DEEPSEEK_KEY_STORAGE } from "@/lib/translator";
 import { linkifyText } from "@/lib/linkify";
+import { proxiedImageUrl as getProxiedImageUrl } from "@/lib/imageProxy";
 import {
   saveSocialData,
   syncSocialData,
