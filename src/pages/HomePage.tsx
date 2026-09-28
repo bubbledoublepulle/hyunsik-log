@@ -211,9 +211,8 @@ function SocialOnThisDayCard({
             alt={item.author || "社交动态"}
             loading="lazy"
           />
-          <CardLogoDecoration
-            btob={isBtobByText(item.author, item.content, item.translation, item.member)}
-          />
+          {/* 社交只看正文（原文 + 译文），作者名/id、成员字段不算 */}
+          <CardLogoDecoration btob={isBtobByText(item.content, item.translation)} />
           <div className="absolute bottom-3 left-3 px-2 py-0.5 rounded-sm bg-black/30 backdrop-blur-sm text-white text-[10px] font-mono uppercase tracking-[0.15em]">
             {item.platform}
           </div>
