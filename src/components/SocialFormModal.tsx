@@ -9,7 +9,8 @@ import {
   platformVisualStyles,
   allPlatforms,
   toBeijingTimeString,
-  getNowBeijingTimeString, 
+  getNowBeijingTimeString,
+  parseSmartDate,
   type SocialPost,
   type SocialPlatform,
   type SocialCategory,
@@ -33,6 +34,18 @@ function detectPlatformFromUrl(rawUrl: string): SocialPlatform | null {
   if (isHost("weverse.io")) return "Weverse";
   if (isHost("youtube.com") || host === "youtu.be") return "YouTube Community";
   return null;
+}
+
+/**
+ * 把任意日期写法归一成 `<input type="datetime-local">` 能识别的 `YYYY-MM-DDTHH:mm`（北京时间）。
+ * 历史数据里既有 `2017-09-28T15:01:29.000Z`（带时区），也有 `2013-09-28T17:11`（naive，按北京时间存）；
+ * datetime-local 一旦收到带 Z 后缀的值就判定非法，输入框会直接显示空白。
+ */
+function toDatetimeLocalValue(dateStr: string): string {
+  if (!dateStr) return "";
+  const d = parseSmartDate(dateStr);
+  if (isNaN(d.getTime())) return "";
+  return toBeijingTimeString(d.toISOString());
 }
 
 interface SocialFormModalProps {
@@ -78,7 +91,7 @@ export default function SocialFormModal({
       setContent(editingPost.content);
       setTranslation(editingPost.translation || "");
       setPostUrl(editingPost.postUrl);
-      setPostDate(editingPost.postDate);
+      setPostDate(toDatetimeLocalValue(editingPost.postDate));
       setImages(editingPost.images.length > 0 ? [...editingPost.images] : [""]);
       setVideos(editingPost.videos || []);
     } else {
