@@ -178,21 +178,27 @@ export const initialMusicData: MusicItem[] = [
 
 const STORAGE_KEY = "hsik_music_data";
 
+/**
+ * 写入行：所有 NOT NULL 列都做兜底。
+ * 注意 album_no 在库里是 NOT NULL，早期写法 `item.albumNo ?? null` 会在
+ * 前端对象缺少 albumNo 时写成 null，导致整批 upsert 报 23502 而失败。
+ * 兜底值 1 与读取侧 normalizeAlbumNo / 展示侧 `albumNo ?? 1` 保持一致。
+ */
 function toDbRow(item: MusicItem) {
   return {
-    id: item.id,
-    title: item.title,
-    artist: item.artist,
-    album: item.album,
-    album_no: item.albumNo ?? null,
-    is_title_track: item.isTitleTrack ?? false,
+    id: String(item.id ?? ""),
+    title: String(item.title ?? ""),
+    artist: String(item.artist ?? ""),
+    album: String(item.album ?? ""),
+    album_no: normalizeAlbumNo(item.albumNo),
+    is_title_track: Boolean(item.isTitleTrack),
     cover_image_url: item.coverImageUrl || null,
-    release_date: item.releaseDate,
-    type: item.type,
-    roles: item.roles,
-    plays: item.plays,
-    link: item.link,
-    is_self_composed: item.isSelfComposed,
+    release_date: String(item.releaseDate ?? ""),
+    type: normalizeType(item.type),
+    roles: normalizeRoles(item.roles),
+    plays: String(item.plays ?? ""),
+    link: String(item.link ?? ""),
+    is_self_composed: Boolean(item.isSelfComposed),
   };
 }
 
@@ -352,13 +358,20 @@ export async function saveMusicData(data: MusicItem[]): Promise<{ error: string 
     const BATCH_SIZE = 20;
     const rows = data.map(toDbRow);
 
+    // 单批失败不再中断：继续跑完剩余批次，最后汇总报错，避免部分数据永远写不进去
+    const failedBatches: string[] = [];
+    let lastError = "";
     for (let i = 0; i < rows.length; i += BATCH_SIZE) {
       const batch = rows.slice(i, i + BATCH_SIZE);
       const { error } = await supabase.from("music").upsert(batch, { onConflict: "id" });
       if (error) {
         console.warn(`[music] upsert batch ${i + 1}-${Math.min(i + BATCH_SIZE, rows.length)} failed:`, error.message);
-        return { error: `保存批次 ${Math.floor(i / BATCH_SIZE) + 1} 失败: ${error.message}` };
+        failedBatches.push(String(Math.floor(i / BATCH_SIZE) + 1));
+        lastError = error.message;
       }
+    }
+    if (failedBatches.length > 0) {
+      return { error: `保存批次 ${failedBatches.join("、")} 失败: ${lastError}` };
     }
 
     const currentIds = new Set(data.map((d) => d.id));
