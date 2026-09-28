@@ -70,9 +70,15 @@ export function isBtobByText(...parts: (string | null | undefined)[]): boolean {
   return matchesMemberKeywords(raw);
 }
 
-/** 音乐卡：命中成员关键词，或歌手本身就是 BTOB（用户最早定的规则）→ BTOB logo */
-export function isBtobByArtist(...parts: (string | null | undefined)[]): boolean {
-  return isBtobByText(...parts) || normalizeText(parts.filter(Boolean).join(" ")).includes("BTOB");
+/**
+ * 音乐卡：成员关键词看歌手/专辑/标题；「BTOB」字样**只在歌手本身是 BTOB 时才算**——
+ * 标题里的 feat 标注（如「다시 (With.임현식 of BTOB)」）不算，那是个人合作曲。
+ */
+export function isBtobByArtist(
+  artist: string | null | undefined,
+  ...more: (string | null | undefined)[]
+): boolean {
+  return isBtobByText(artist, ...more) || normalizeText(artist ?? "").includes("BTOB");
 }
 
 /** 视频卡：仅「成员标签恰好 = 任炫植」时用行星图，其余一律 BTOB logo */
