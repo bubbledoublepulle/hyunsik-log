@@ -41,6 +41,7 @@ import { loadSocialData, syncSocialData, saveSocialData, deleteSocialPost, type 
 import { linkifyText } from "@/lib/linkify";
 import { proxiedImageUrl, retryImageOnce } from "@/lib/imageProxy";
 import CoverFitImage from "@/components/CoverFitImage";
+import CardLogoDecoration from "@/components/CardLogoDecoration";
 import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
 import DataManager from "@/components/DataManager";
 import PageLoader from "@/components/PageLoader";
@@ -96,18 +97,6 @@ function getPlatformStyleLocal(platform: string) {
   return styles[platform] || styles["其他"];
 }
 
-function CardLogoDecoration() {
-  return (
-    <div className="absolute top-3 right-3 w-8 h-8 opacity-0 scale-50 -rotate-12 group-hover:opacity-100 group-hover:scale-100 group-hover:rotate-0 transition-all duration-300 pointer-events-none">
-      <img
-        src="/logo.svg"
-        alt=""
-        className="w-full h-full object-contain"
-        style={{ filter: 'brightness(1.1) hue-rotate(10deg) saturate(1.2)' }}
-      />
-    </div>
-  );
-}
 
 function MusicOnThisDayCard({ item, year, index }: { item: MusicItem; year: number; index: number }) {
   const no = String(index + 1).padStart(2, '0');
@@ -119,7 +108,7 @@ function MusicOnThisDayCard({ item, year, index }: { item: MusicItem; year: numb
         ) : (
           <span className="font-serif italic text-3xl sm:text-4xl text-steel-400/40">Music N°{no}</span>
         )}
-        <CardLogoDecoration />
+        <CardLogoDecoration artist={item.artist} />
       </div>
       <div className="p-4">
         <div className="flex items-center justify-between mb-2">
@@ -253,20 +242,20 @@ function SocialOnThisDayCard({ item, year }: { item: SocialPost; year: number })
   );
 }
 
-/** 随机品熊用的音乐卡（样式对齐 MusicOnThisDayCard）；无封面时不渲染占位区 */
+/** 随机品熊用的音乐卡（封面样式与装饰图标均已与音乐档案页对齐） */
 function RandomMusicCard({ item }: { item: MusicItem }) {
   const year = new Date(item.releaseDate).getFullYear();
   return (
     <>
       {item.coverImageUrl ? (
         <div className="relative aspect-[16/10] overflow-hidden bg-steel-50/30">
-          <img
-            src={item.coverImageUrl}
+          <CoverFitImage
+            src={proxiedImageUrl(item.coverImageUrl)}
             alt={item.title}
             loading="lazy"
-            className="absolute inset-0 w-full h-full object-cover"
+            onError={(e) => retryImageOnce(e.currentTarget as HTMLImageElement)}
           />
-          <CardLogoDecoration />
+          <CardLogoDecoration artist={item.artist} />
         </div>
       ) : null}
       <div className={`p-4 ${!item.coverImageUrl ? "flex-1 flex flex-col justify-center" : ""}`}>
@@ -324,7 +313,11 @@ function MusicDetailModal({ item, onClose }: { item: MusicItem; onClose: () => v
         <div className="flex-1 overflow-y-auto p-6">
           {item.coverImageUrl && (
             <div className="relative aspect-[16/10] rounded-sm overflow-hidden bg-steel-50/30 border border-steel-200/60 mb-5">
-              <CoverFitImage src={item.coverImageUrl} alt={item.title} />
+              <CoverFitImage
+                src={proxiedImageUrl(item.coverImageUrl)}
+                alt={item.title}
+                onError={(e) => retryImageOnce(e.currentTarget as HTMLImageElement)}
+              />
             </div>
           )}
           <div className="flex items-center gap-2 mb-4">

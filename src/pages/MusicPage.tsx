@@ -34,6 +34,7 @@ import { useAuth } from "@/context/AuthContext";
 import { proxiedImageUrl as getProxiedImageUrl } from "@/lib/imageProxy";
 import FilterSidebar from "@/components/FilterSidebar";
 import CoverFitImage from "@/components/CoverFitImage";
+import CardLogoDecoration from "@/components/CardLogoDecoration";
 import MusicFormModal from "@/components/MusicFormModal";
 import BatchImportModal from "@/components/BatchImportModal";
 import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
@@ -46,46 +47,6 @@ type SortBy = "date-desc" | "date-asc" | "title-asc";
 type ViewMode = "cards" | "table" | "album";
 
 const CARD_ASPECT = "aspect-[4/3]";
-
-/** BTOB 官方 logo（已下载为本地静态资源 public/btob-logo.svg），hover 装饰按歌手区分时使用 */
-const BTOB_LOGO_URL = "/btob-logo.svg";
-
-/**
- * 装饰图标统一以 BTOB logo 的显示高度（24px）为基准。
- * 行星图（logo.svg，334×196）除了中间的圆球，左右还有伸出的斜轨道，
- * 实测圆球外沿直径约 163px（上下壁 y15→179、左右壁 x87→248），仅占画布宽度的 48.8%。
- * 所以要让「圆球」看起来和 BTOB 图标一样大，必须按这个比例反推整图宽度。
- */
-const DECOR_BTOB_HEIGHT = 24;
-const PLANET_BALL_RATIO = 163 / 334;
-const PLANET_WIDTH = Math.round(DECOR_BTOB_HEIGHT / PLANET_BALL_RATIO); // ≈ 49px
-
-/** 两种图标共用的投影：白色图形在任何封面上都清晰 */
-const DECOR_SHADOW = "drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4))";
-
-/**
- * 卡片 hover 右上角装饰图标：以 BTOB logo 为标准 ——
- * 中间主体（BTOB 整图 / 行星的圆球）都是 24px，同为白色、同一款投影，
- * 容器固定 52×32 并居中，保证两种图标的视觉中心重合。
- * 行星 logo 源图本身是白色线条（透明底），无需转色，只加同款投影。
- */
-function CardLogoDecoration({ artist }: { artist?: string }) {
-  const isBtob = (artist ?? "").toUpperCase().includes("BTOB");
-  return (
-    <div className="absolute top-3 right-3 w-[52px] h-8 flex items-center justify-center opacity-0 scale-50 -rotate-12 group-hover:opacity-100 group-hover:scale-100 group-hover:rotate-0 transition-all duration-300 pointer-events-none">
-      <img
-        src={isBtob ? BTOB_LOGO_URL : "/logo.svg"}
-        alt=""
-        className="block"
-        style={
-          isBtob
-            ? { height: DECOR_BTOB_HEIGHT, width: "auto", filter: `brightness(0) invert(1) ${DECOR_SHADOW}` }
-            : { width: PLANET_WIDTH, height: "auto", filter: DECOR_SHADOW }
-        }
-      />
-    </div>
-  );
-}
 
 export default function MusicPage() {
   const { isAdmin } = useAuth();
