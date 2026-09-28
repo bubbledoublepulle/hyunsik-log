@@ -40,6 +40,7 @@ import {
 import { loadSocialData, syncSocialData, saveSocialData, deleteSocialPost, type SocialPost } from "@/lib/socialData";
 import { linkifyText } from "@/lib/linkify";
 import { proxiedImageUrl, retryImageOnce } from "@/lib/imageProxy";
+import CoverFitImage from "@/components/CoverFitImage";
 import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
 import DataManager from "@/components/DataManager";
 import PageLoader from "@/components/PageLoader";
@@ -114,7 +115,7 @@ function MusicOnThisDayCard({ item, year, index }: { item: MusicItem; year: numb
     <>
       <div className="relative aspect-[4/3] bg-steel-50/30 flex items-center justify-center overflow-hidden">
         {item.coverImageUrl ? (
-          <img src={item.coverImageUrl} alt={item.title} className="absolute inset-0 w-full h-full object-cover" />
+          <CoverFitImage src={proxiedImageUrl(item.coverImageUrl)} alt={item.title} loading="lazy" />
         ) : (
           <span className="font-serif italic text-3xl sm:text-4xl text-steel-400/40">Music N°{no}</span>
         )}
@@ -149,11 +150,10 @@ function VideoOnThisDayCard({ item, year, index }: { item: ShowItem; year: numbe
     <>
       <div className="relative aspect-[16/10] overflow-hidden bg-steel-50/30">
         {thumbUrl ? (
-          <img
+          <CoverFitImage
             src={getProxiedThumbnail(thumbUrl) || thumbUrl}
             alt={item.title}
             loading="lazy"
-            className="w-full h-full object-cover"
           />
         ) : (
           <div
@@ -197,11 +197,10 @@ function SocialOnThisDayCard({ item, year }: { item: SocialPost; year: number })
     <>
       {hasImages ? (
         <div className="relative aspect-[16/10] overflow-hidden bg-steel-50/30">
-          <img
+          <CoverFitImage
             src={getProxiedImageUrl(item.images[0])}
             alt={item.author || "社交动态"}
             loading="lazy"
-            className="w-full h-full object-cover"
           />
           <CardLogoDecoration />
           <div className="absolute bottom-3 left-3 px-2 py-0.5 rounded-sm bg-black/30 backdrop-blur-sm text-white text-[10px] font-mono uppercase tracking-[0.15em]">
@@ -325,7 +324,7 @@ function MusicDetailModal({ item, onClose }: { item: MusicItem; onClose: () => v
         <div className="flex-1 overflow-y-auto p-6">
           {item.coverImageUrl && (
             <div className="relative aspect-[16/10] rounded-sm overflow-hidden bg-steel-50/30 border border-steel-200/60 mb-5">
-              <img src={item.coverImageUrl} alt={item.title} className="w-full h-full object-cover" />
+              <CoverFitImage src={item.coverImageUrl} alt={item.title} />
             </div>
           )}
           <div className="flex items-center gap-2 mb-4">
@@ -396,10 +395,9 @@ function VideoDetailModal({ item, onClose }: { item: ShowItem; onClose: () => vo
 
         <div className="relative aspect-[16/10] overflow-hidden bg-steel-50/30">
           {thumbUrl ? (
-            <img
+            <CoverFitImage
               src={getProxiedThumbnail(thumbUrl) || thumbUrl}
               alt={item.title}
-              className="w-full h-full object-cover"
             />
           ) : (
             <div
@@ -1094,19 +1092,19 @@ export default function HomePage() {
                 if (!thumbUrl) return null;
                 return (
                   <div className="relative aspect-[16/10] overflow-hidden bg-steel-50/30">
-                    <img
+                    <CoverFitImage
                       src={getProxiedThumbnail(thumbUrl) || thumbUrl}
                       alt={randomShow.title}
                       loading="lazy"
-                      className="w-full h-full object-cover"
                       onError={(e) => {
                         const target = e.currentTarget as HTMLImageElement;
-                        if (retryImageOnce(target)) return;
+                        if (retryImageOnce(target)) return true;
                         target.style.display = "none";
                         if (target.parentElement) {
                           const fromColor = /^https?:\/\//.test(randomShow.thumbnailFrom) ? "#4682B4" : randomShow.thumbnailFrom;
                           target.parentElement.style.background = `linear-gradient(135deg, ${fromColor}, ${randomShow.thumbnailTo})`;
                         }
+                        return false;
                       }}
                     />
 

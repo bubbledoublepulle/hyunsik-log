@@ -33,6 +33,7 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { proxiedImageUrl as getProxiedImageUrl } from "@/lib/imageProxy";
 import FilterSidebar from "@/components/FilterSidebar";
+import CoverFitImage from "@/components/CoverFitImage";
 import MusicFormModal from "@/components/MusicFormModal";
 import BatchImportModal from "@/components/BatchImportModal";
 import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
@@ -656,7 +657,7 @@ export default function MusicPage() {
                     >
                       <div className={`relative ${CARD_ASPECT} bg-steel-50/30 flex items-center justify-center overflow-hidden`}>
                         {item.coverImageUrl ? (
-                          <img src={getProxiedImageUrl(item.coverImageUrl)} alt={item.title} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+                          <CoverFitImage src={getProxiedImageUrl(item.coverImageUrl)} alt={item.title} loading="lazy" />
                         ) : (
                           <span className="font-serif italic text-3xl sm:text-4xl text-steel-400/40">No.{String(item.albumNo ?? 1).padStart(2, "0")}</span>
                         )}
