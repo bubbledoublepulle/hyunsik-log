@@ -40,6 +40,7 @@ import {
 import { loadSocialData, syncSocialData, saveSocialData, deleteSocialPost, type SocialPost } from "@/lib/socialData";
 import { linkifyText } from "@/lib/linkify";
 import { proxiedImageUrl, retryImageOnce } from "@/lib/imageProxy";
+import { isBtobByText, isBtobByMembers } from "@/lib/cardDecor";
 import CoverFitImage from "@/components/CoverFitImage";
 import CardLogoDecoration from "@/components/CardLogoDecoration";
 import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
@@ -109,7 +110,7 @@ function MusicOnThisDayCard({ item, year, index }: { item: MusicItem; year: numb
         ) : (
           <span className="font-serif italic text-3xl sm:text-4xl text-steel-400/40">Music N°{no}</span>
         )}
-        <CardLogoDecoration artist={item.artist} />
+        <CardLogoDecoration btob={isBtobByText(item.artist, item.album, item.title)} />
       </div>
       <div className="p-4">
         <div className="flex items-center justify-between mb-2">
@@ -156,7 +157,7 @@ function VideoOnThisDayCard({ item, year, index }: { item: ShowItem; year: numbe
             Video N°{no}
           </span>
         )}
-        <CardLogoDecoration />
+        <CardLogoDecoration btob={isBtobByMembers(item.members)} />
         <div className="absolute bottom-3 left-3 px-2 py-0.5 rounded-sm bg-black/30 backdrop-blur-sm text-white text-[10px] font-mono uppercase tracking-[0.15em]">
           {item.platform}
         </div>
@@ -210,7 +211,9 @@ function SocialOnThisDayCard({
             alt={item.author || "社交动态"}
             loading="lazy"
           />
-          <CardLogoDecoration />
+          <CardLogoDecoration
+            btob={isBtobByText(item.author, item.content, item.translation, item.member)}
+          />
           <div className="absolute bottom-3 left-3 px-2 py-0.5 rounded-sm bg-black/30 backdrop-blur-sm text-white text-[10px] font-mono uppercase tracking-[0.15em]">
             {item.platform}
           </div>
@@ -281,7 +284,7 @@ function RandomMusicCard({ item }: { item: MusicItem }) {
             loading="lazy"
             onError={(e) => retryImageOnce(e.currentTarget as HTMLImageElement)}
           />
-          <CardLogoDecoration artist={item.artist} />
+          <CardLogoDecoration btob={isBtobByText(item.artist, item.album, item.title)} />
         </div>
       ) : null}
       <div className={`p-4 ${!item.coverImageUrl ? "flex-1 flex flex-col justify-center" : ""}`}>
@@ -1126,6 +1129,8 @@ export default function HomePage() {
                         return false;
                       }}
                     />
+
+                    <CardLogoDecoration btob={isBtobByMembers(randomShow.members)} />
 
                     <div className="absolute bottom-3 left-3 px-2 py-0.5 rounded-sm bg-black/30 backdrop-blur-sm text-white text-[10px] font-mono uppercase tracking-[0.15em]">
                       {randomShow.platform}

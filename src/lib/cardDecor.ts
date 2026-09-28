@@ -22,3 +22,40 @@ export const PLANET_WIDTH = Math.round(
 
 /** 两种图标共用的投影：白色图形在任何封面上都清晰 */
 export const DECOR_SHADOW = "drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4))";
+
+/**
+ * hover 图标用哪一张？规则：
+ * - 社交 / 音乐卡：文字里出现下列关键词（或本来就写了 BTOB）→ BTOB logo；否则行星图。
+ * - 视频卡：只有「成员标签恰好是任炫植一个」才用行星图，其余（任炫植 + 别人、只有别人、无标签）→ BTOB logo。
+ */
+export const BTOB_TEXT_KEYWORDS = [
+  "徐恩光",
+  "SEOEUNKWANG",
+  "李旼赫",
+  "LEEMINHYUK",
+  "PENIEL",
+] as const;
+
+/** 归一：英文转大写并去掉空格/连字符等，让 "Seo Eunkwang"、"SEO-EUNKWANG" 都能命中 */
+function normalizeText(s: string): string {
+  return s.toUpperCase().replace(/[\s\-_./·•,]/g, "");
+}
+
+/** 社交 / 音乐卡：文字命中关键词 → 用 BTOB logo */
+export function isBtobByText(...parts: (string | null | undefined)[]): boolean {
+  const raw = parts.filter(Boolean).join(" ");
+  if (!raw.trim()) return false;
+  const norm = normalizeText(raw);
+  if (norm.includes("BTOB")) return true;
+  // 中文关键词按原文匹配（归一化不影响中文）
+  if (raw.includes("徐恩光") || raw.includes("李旼赫")) return true;
+  return BTOB_TEXT_KEYWORDS.filter((k) => /^[A-Z]+$/.test(k)).some((k) => norm.includes(k));
+}
+
+/** 视频卡：仅「成员标签恰好 = 任炫植」时用行星图，其余一律 BTOB logo */
+export const SOLO_MEMBER = "任炫植";
+export function isBtobByMembers(members?: readonly string[] | null): boolean {
+  const list = (members ?? []).map((m) => m.trim()).filter(Boolean);
+  if (list.length === 0) return true;
+  return !(list.length === 1 && list[0] === SOLO_MEMBER);
+}

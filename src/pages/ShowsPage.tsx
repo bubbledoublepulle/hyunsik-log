@@ -38,25 +38,14 @@ import {
 } from "@/lib/showData";
 import { useAuth } from "@/context/AuthContext";
 import { proxiedImageUrl, retryImageOnce } from "@/lib/imageProxy";
+import CardLogoDecoration from "@/components/CardLogoDecoration";
+import { isBtobByMembers } from "@/lib/cardDecor";
 
 function getProxiedThumbnail(url: string | null | undefined): string | null {
   return proxiedImageUrl(url) || null;
 }
 
 const CARD_ASPECT = "aspect-video";
-
-function CardLogoDecoration() {
-  return (
-    <div className="absolute top-3 right-3 w-8 h-8 opacity-0 scale-50 -rotate-12 group-hover:opacity-100 group-hover:scale-100 group-hover:rotate-0 transition-all duration-300 pointer-events-none">
-      <img
-        src="/logo.svg"
-        alt=""
-        className="w-full h-full object-contain"
-        style={{ filter: 'brightness(1.1) hue-rotate(10deg) saturate(1.2)' }}
-      />
-    </div>
-  );
-}
 
 function LazyCard({ children, id, className }: { children: React.ReactNode; id: string; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -811,7 +800,7 @@ export default function ShowsPage() {
                             </span>
                           )}
 
-                          <CardLogoDecoration />
+                          <CardLogoDecoration btob={isBtobByMembers(item.members)} />
 
                           {batchEditMode && (
                             <div className="absolute top-3 left-3 z-20">
