@@ -179,10 +179,28 @@ function VideoOnThisDayCard({ item, year, index }: { item: ShowItem; year: numbe
   );
 }
 
-/** 那年今日 / 随机品熊共用的社交卡；无图时不渲染占位区，正文区等高垂直居中（引言式） */
-function SocialOnThisDayCard({ item, year }: { item: SocialPost; year: number }) {
+/**
+ * 那年今日 / 随机品熊共用的社交卡；无图时不渲染占位区，正文区等高垂直居中（引言式）。
+ * clamped=true（随机品熊）：卡片高度必须稳定，译文/原文一律按行截断，长文不再把卡片撑高，
+ * 被截断时给一行「查看全文」提示，点卡片进弹窗看完整内容。
+ */
+function SocialOnThisDayCard({
+  item,
+  year,
+  clamped = false,
+}: {
+  item: SocialPost;
+  year: number;
+  clamped?: boolean;
+}) {
   const hasImages = item.images.length > 0;
   const hasTr = !!item.translation && item.translation.trim().length > 0;
+  // 截断只作用于「无图」场景（有图时本来就是 3 行 / 2 行截断）
+  const clampTr = clamped && !hasImages ? "line-clamp-4" : "";
+  const clampContent = clamped && !hasImages ? "line-clamp-2" : "";
+  const clampMain = clamped && !hasImages ? "line-clamp-5" : "";
+  const truncated =
+    clamped && ((item.translation?.length ?? 0) > 90 || item.content.length > 90);
   return (
     <>
       {hasImages ? (
@@ -220,23 +238,30 @@ function SocialOnThisDayCard({ item, year }: { item: SocialPost; year: number })
                 <Languages className="w-3 h-3 text-steel-500" />
                 <span className="text-[10px] font-medium text-steel-500/80 uppercase tracking-[0.12em]">译</span>
               </div>
-              <p className={`text-steel-700 leading-relaxed break-words ${!hasImages ? "text-[13px]" : "text-xs line-clamp-3"}`}>
+              <p className={`text-steel-700 leading-relaxed break-words ${!hasImages ? `text-[13px] ${clampTr}` : "text-xs line-clamp-3"}`}>
                 {item.translation!.length > 60 && hasImages ? item.translation!.slice(0, 60) + "..." : item.translation}
               </p>
+              {truncated && (
+                <p className="mt-1.5 text-[10px] text-steel-500/70 flex items-center gap-0.5">
+                  查看全文<ChevronRight className="w-3 h-3" />
+                </p>
+              )}
             </div>
-            <p className={`text-steel-500/60 leading-relaxed break-words ${!hasImages ? "text-xs" : "text-[11px] line-clamp-2"}`}>
+            <p className={`text-steel-500/60 leading-relaxed break-words ${!hasImages ? `text-xs ${clampContent}` : "text-[11px] line-clamp-2"}`}>
               {item.content.length > 60 && hasImages ? item.content.slice(0, 60) + "..." : item.content}
             </p>
           </>
         ) : (
-          <p className={`text-steel-500/70 leading-relaxed break-words ${!hasImages ? "text-[13px]" : "text-xs line-clamp-3"}`}>
-            {item.content.length > 60 && hasImages ? item.content.slice(0, 60) + "..." : item.content}
-          </p>
-        )}
-        {!hasImages && item.images.length > 0 && (
-          <p className="text-[10px] text-steel-500/70 mt-2 flex items-center gap-1">
-            <ImageIcon className="w-3 h-3" />{item.images.length} 张图片
-          </p>
+          <>
+            <p className={`text-steel-500/70 leading-relaxed break-words ${!hasImages ? `text-[13px] ${clampMain}` : "text-xs line-clamp-3"}`}>
+              {item.content.length > 60 && hasImages ? item.content.slice(0, 60) + "..." : item.content}
+            </p>
+            {truncated && (
+              <p className="mt-1.5 text-[10px] text-steel-500/70 flex items-center gap-0.5">
+                查看全文<ChevronRight className="w-3 h-3" />
+              </p>
+            )}
+          </>
         )}
       </div>
     </>
@@ -1176,6 +1201,7 @@ export default function HomePage() {
                 <SocialOnThisDayCard
                   item={randomSocial}
                   year={new Date(randomSocial.postDate).getFullYear()}
+                  clamped
                 />
                 {isAdmin && (
                   <div className="absolute top-3 left-3 flex gap-1 opacity-70 group-hover:opacity-100 transition-opacity z-10">
