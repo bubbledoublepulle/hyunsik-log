@@ -31,11 +31,22 @@ export const DECOR_SHADOW = "drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4))";
  * - 视频卡：只有「成员标签恰好是任炫植一个」才用行星图，其余（任炫植 + 别人、只有别人、无标签）→ BTOB logo。
  */
 export const BTOB_TEXT_KEYWORDS = [
+  // 恩光 / 旼赫 / Peniel
   "徐恩光",
   "SEOEUNKWANG",
   "李旼赫",
   "LEEMINHYUK",
   "PENIEL",
+  // 昌燮（韩文全名 + 名字片段 + 中文名/简称）
+  "이창섭",
+  "창섭",
+  "李昌燮",
+  "昌燮",
+  // 星材
+  "육성재",
+  "성재",
+  "陆星材",
+  "星材",
 ] as const;
 
 /** 归一：英文转大写并去掉空格/连字符等，让 "Seo Eunkwang"、"SEO-EUNKWANG" 都能命中 */
@@ -44,10 +55,12 @@ function normalizeText(s: string): string {
 }
 
 function matchesMemberKeywords(raw: string): boolean {
-  // 中文关键词按原文匹配（归一化不影响中文）
-  if (raw.includes("徐恩光") || raw.includes("李旼赫")) return true;
   const norm = normalizeText(raw);
-  return BTOB_TEXT_KEYWORDS.filter((k) => /^[A-Z]+$/.test(k)).some((k) => norm.includes(k));
+  return BTOB_TEXT_KEYWORDS.some((k) => {
+    const key = k.trim(); // 兼容 " 창섭" 这类带空格的写法
+    // 英文关键词：忽略大小写与空格/连字符；中韩文：按原文包含匹配
+    return /^[A-Z]+$/.test(key) ? norm.includes(key) : raw.includes(key);
+  });
 }
 
 /** 社交卡：正文命中成员关键词才用 BTOB logo；正文里的 "BTOB" 字样不触发 */
